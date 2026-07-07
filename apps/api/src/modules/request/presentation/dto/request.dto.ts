@@ -42,3 +42,48 @@ export class OutboxQueryDto {
   @IsOptional()
   limit?: number;
 }
+
+export class SubmitRequestDto {
+  @IsOptional()
+  @IsUUID()
+  routeTemplateId?: string;
+}
+
+export class ApproveRequestDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  comment?: string;
+}
+
+export class RejectRequestDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2000)
+  reason!: string;
+}
+
+export class CancelRequestDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  reason?: string;
+}
+
+export class RequestInfoDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2000)
+  message!: string;
+}
+
+export class ProvideInfoDto {
+  @IsOptional()
+  @IsObject()
+  fields?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  comment?: string;
+}

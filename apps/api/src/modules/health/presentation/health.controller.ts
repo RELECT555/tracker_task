@@ -16,7 +16,7 @@ export class HealthController {
 
   @Get('ready')
   async ready() {
-    const db = this.prisma.isConnected;
+    const db = await this.prisma.ping();
     return {
       status: db ? 'ok' : 'degraded',
       db,

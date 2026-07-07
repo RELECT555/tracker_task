@@ -339,17 +339,20 @@ Append-only: UPDATE и DELETE запрещены на уровне прилож�
 
 ## Миграции
 
-- Инструмент: **Prisma Migrate** (или Flyway).
-- Именование: `YYYYMMDDHHMMSS_description.sql`.
-- Каждая миграция — атомарная, обратимая (down migration).
-- Seed-данные: роли, admin-пользователь, тестовые типы запросов.
+Полное руководство: **[12 — БД и окружения](12-database-and-environments.md)**.
+
+| Команда | Назначение |
+|---------|------------|
+| `npm run db:migrate` | Dev: создать + применить новую миграцию |
+| `npm run db:migrate:deploy` | CI/Prod: применить существующие миграции |
+| `npm run db:seed` | Dev-данные (блокируется в production) |
 
 ```bash
-# Создание миграции
-npx prisma migrate dev --name init
+# Локальная инициализация
+npm run db:setup
 
-# Seed
-npx prisma db seed
+# Новая миграция после изменения schema.prisma
+npm run db:migrate -w @tracker/api -- --name description_here
 ```
 
 ## Seed-данные (минимум)
@@ -368,3 +371,4 @@ INSERT INTO roles (code, name) VALUES
 - [Доменная модель](02-domain-model.md)
 - [API](05-api-specification.md)
 - [Гайд по разработке](09-development-guide.md)
+- [БД и окружения](12-database-and-environments.md)

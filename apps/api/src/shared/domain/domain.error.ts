@@ -31,3 +31,9 @@ export class ValidationError extends DomainError {
     super(message, 'VALIDATION_ERROR');
   }
 }
+
+export class BusinessRuleViolationError extends DomainError {
+  constructor(message: string) {
+    super(message, 'BUSINESS_RULE_VIOLATION');
+  }
+}

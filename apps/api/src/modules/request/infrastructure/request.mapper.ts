@@ -1,6 +1,7 @@
 import type { Request as PrismaRequest, RequestType, User } from '@prisma/client';
-import type { RequestPriority, RequestStatus } from '@tracker/shared';
+import type { RequestPriority, RequestStatus, RouteSnapshot } from '@tracker/shared';
 import { Request } from '../domain/request.entity';
+import { computeAvailableActions } from '../domain/request.actions';
 
 type PrismaRequestWithRelations = PrismaRequest & {
   type?: RequestType;
@@ -43,7 +44,9 @@ export class RequestMapper {
     };
   }
 
-  static toDetail(record: PrismaRequestWithRelations) {
+  static toDetail(record: PrismaRequestWithRelations, actorId?: string) {
+    const route = record.routeSnapshot as RouteSnapshot | null;
+
     return {
       id: record.id,
       typeId: record.typeId,
@@ -54,11 +57,18 @@ export class RequestMapper {
       status: record.status as RequestStatus,
       fields: record.fields as Record<string, unknown>,
       priority: record.priority as RequestPriority,
-      route: record.routeSnapshot,
+      route,
       currentStepIndex: record.currentStepIndex,
       author: record.author
         ? { id: record.author.id, fullName: record.author.fullName }
         : { id: record.authorId, fullName: '—' },
+      availableActions: computeAvailableActions({
+        status: record.status,
+        authorId: record.authorId,
+        routeSnapshot: route,
+        currentStepIndex: record.currentStepIndex,
+        actorId,
+      }),
       createdAt: record.createdAt.toISOString(),
       updatedAt: record.updatedAt.toISOString(),
       submittedAt: record.submittedAt?.toISOString() ?? null,

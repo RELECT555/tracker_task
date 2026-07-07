@@ -19,14 +19,36 @@ export class PrismaService
   }
 
   async onModuleInit(): Promise<void> {
+    await this.tryConnect();
+  }
+
+  async tryConnect(): Promise<boolean> {
     try {
       await this.$connect();
       this.connected = true;
+      return true;
     } catch (error) {
+      this.connected = false;
       this.logger.warn(
-        'PostgreSQL unavailable — API starts in degraded mode. Run: docker compose up -d',
+        'PostgreSQL unavailable — API starts in degraded mode. See docs/12-database-and-environments.md',
       );
       this.logger.debug(error);
+      return false;
+    }
+  }
+
+  async ping(): Promise<boolean> {
+    if (!this.connected) {
+      await this.tryConnect();
+    }
+    if (!this.connected) return false;
+
+    try {
+      await this.$queryRaw`SELECT 1`;
+      return true;
+    } catch {
+      this.connected = false;
+      return false;
     }
   }
 

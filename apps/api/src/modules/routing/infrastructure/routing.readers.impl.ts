@@ -33,6 +33,7 @@ export class PrismaRequestTypeReader extends RequestTypeReader {
     description: string | null;
     fieldSchema: unknown;
     isActive: boolean;
+    defaultRouteTemplateId: string | null;
   }): RequestTypeRecord {
     return {
       id: record.id,
@@ -41,6 +42,7 @@ export class PrismaRequestTypeReader extends RequestTypeReader {
       description: record.description,
       fieldSchema: record.fieldSchema,
       isActive: record.isActive,
+      defaultRouteTemplateId: record.defaultRouteTemplateId,
     };
   }
 }
@@ -55,5 +57,20 @@ export class PrismaUserReader extends UserReader {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) return null;
     return { id: user.id, fullName: user.fullName, email: user.email };
+  }
+
+  async findAuthorContext(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, orgUnitId: true, managerId: true, isActive: true },
+    });
+
+    if (!user || !user.isActive) return null;
+
+    return {
+      id: user.id,
+      orgUnitId: user.orgUnitId,
+      managerId: user.managerId,
+    };
   }
 }

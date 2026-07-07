@@ -245,6 +245,37 @@
 
 ## Компоненты
 
+### UI Kit (`shared/ui/`)
+
+| Компонент | Файл | Назначение |
+|-----------|------|------------|
+| `Button` | `button.tsx` | 6 variants: default, destructive, outline, secondary, ghost, link |
+| `Input` | `input.tsx` | Текстовые поля с focus ring |
+| `Select` | `select.tsx` | Native select с иконкой chevron |
+| `Label` | `label.tsx` | Подписи полей форм |
+| `Card` | `card.tsx` | Card, Header, Title, Description, Content, Footer |
+| `Alert` | `alert.tsx` | default, destructive, warning, success |
+| `Skeleton` | `skeleton.tsx` | Shimmer + TableSkeleton, FormSkeleton |
+| `EmptyState` | `empty-state.tsx` | Пустые списки с иконкой и action |
+| `PageContainer` | `page-container.tsx` | max-w-7xl + fade-in анимация |
+
+Утилита `cn()` — `shared/lib/utils.ts` (clsx + tailwind-merge).
+
+### Layout
+
+| Компонент | Ширина / поведение |
+|-----------|-------------------|
+| Sidebar | 256px (`--sidebar-width`), sticky, user footer |
+| Header | h-16, backdrop-blur, subtitle опционально |
+| Content | max-w-7xl, px responsive, page enter animation |
+
+### Анимации (`globals.css`)
+
+- `fade-in`, `slide-in-from-bottom-2`, `zoom-in-95` — вход страниц
+- `skeleton-shimmer` — загрузка
+- `animate-spin` — кнопки submit
+- Theme transition 200ms на `html`
+
 ### RequestStatusBadge
 
 ```typescript

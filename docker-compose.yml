@@ -1,22 +1,28 @@
 services:
   postgres:
     image: postgres:16-alpine
+    container_name: tracker-postgres
+    restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     environment:
-      POSTGRES_USER: tracker
-      POSTGRES_PASSWORD: tracker
-      POSTGRES_DB: tracker
+      POSTGRES_USER: ${POSTGRES_USER:-tracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tracker}
+      POSTGRES_DB: ${POSTGRES_DB:-tracker}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tracker -d tracker"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tracker} -d ${POSTGRES_DB:-tracker}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
 
   redis:
+    profiles: ["full"]
     image: redis:7-alpine
+    container_name: tracker-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     healthcheck:
@@ -26,13 +32,16 @@ services:
       retries: 5
 
   minio:
+    profiles: ["full"]
     image: minio/minio
+    container_name: tracker-minio
+    restart: unless-stopped
     ports:
       - "9000:9000"
       - "9001:9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data

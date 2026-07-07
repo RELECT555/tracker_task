@@ -33,6 +33,13 @@ export interface RequestTypeRecord {
   description: string | null;
   fieldSchema: unknown;
   isActive: boolean;
+  defaultRouteTemplateId: string | null;
+}
+
+export interface AuthorContext {
+  id: string;
+  orgUnitId: string;
+  managerId: string | null;
 }
 
 export interface UserSummary {
@@ -43,4 +50,5 @@ export interface UserSummary {
 
 export abstract class UserReader {
   abstract findById(id: string): Promise<UserSummary | null>;
+  abstract findAuthorContext(id: string): Promise<AuthorContext | null>;
 }

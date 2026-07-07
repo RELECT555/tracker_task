@@ -4,7 +4,7 @@
 
 ## Статус проекта
 
-**Этап 0 (Foundation) — в работе.** Monorepo поднят: NestJS API, Next.js Web, shared-пакет, Prisma-схема, Docker Compose.
+**Foundation + Request CRUD + Routing (submit) — готово.** Monorepo: NestJS API, Next.js Web, Prisma, Docker Compose для локальной БД.
 
 ## Документация
 
@@ -21,6 +21,7 @@
 | [09 — Гайд по разработке](docs/09-development-guide.md) | Структура репозитория, CI, этапы |
 | [10 — Design System](docs/10-design-system.md) | Темы, токены, компоненты, типографика |
 | [11 — Архитектурные правила](docs/11-architecture-rules.md) | Clean + FSD, anti-patterns, чеклисты |
+| [12 — БД и окружения](docs/12-database-and-environments.md) | Локальная PostgreSQL, миграции, production |
 
 ## Рекомендуемый стек
 
@@ -60,26 +61,23 @@ tracker_task/
 ## Быстрый старт
 
 ```bash
-# 1. Инфраструктура (PostgreSQL, Redis, MinIO)
-docker compose up -d
-
-# 2. Зависимости
 npm install
 
-# 3. Env
-cp apps/api/.env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env.local
+# Локальная БД (Docker) — одной командой
+npm run db:setup
 
-# 4. БД
-npm run db:generate
-npm run db:migrate -w @tracker/api -- --name init
-npm run db:seed
+# Или вручную:
+# cp apps/api/.env.example apps/api/.env
+# cp apps/web/.env.example apps/web/.env.local
+# docker compose up -d postgres
+# npm run db:generate && npm run db:migrate:deploy && npm run db:seed
 
-# 5. Запуск
 npm run dev
 ```
 
-- API: http://localhost:3001/api/v1/health
+- API: http://localhost:3001/api/v1/health/ready
 - Web: http://localhost:3000
 
-Подробности — в [гайде по разработке](docs/09-development-guide.md).
+**Без Docker?** — [12 — БД и окружения](docs/12-database-and-environments.md#локально-без-docker-windows)
+
+Подробности — в [гайде по разработке](docs/09-development-guide.md) и [документации по БД](docs/12-database-and-environments.md).

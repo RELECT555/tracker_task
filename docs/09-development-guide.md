@@ -102,21 +102,27 @@ volumes:
 
 ### Environment Variables
 
+См. полное руководство: **[12 — БД и окружения](12-database-and-environments.md)**.
+
 ```bash
-# apps/api/.env
-DATABASE_URL=postgresql://tracker:tracker@localhost:5432/tracker
-JWT_SECRET=change-me-in-production
-JWT_ACCESS_EXPIRES=15m
-JWT_REFRESH_EXPIRES=7d
-REDIS_URL=redis://localhost:6379
-S3_ENDPOINT=http://localhost:9000
-S3_ACCESS_KEY=minioadmin
-S3_SECRET_KEY=minioadmin
-S3_BUCKET=tracker-attachments
+# apps/api/.env (local)
+cp apps/api/.env.example apps/api/.env
+
+# apps/web/.env.local
+cp apps/web/.env.example apps/web/.env.local
+```
+
+```bash
+# apps/api/.env — ключевые переменные
+DATABASE_URL=postgresql://tracker:tracker@localhost:5432/tracker?schema=public
+DEV_USER_ID=00000000-0000-4000-8000-000000000002
+PORT=3001
 
 # apps/web/.env.local
 NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
 ```
+
+Production — `apps/api/.env.production.example` (секреты только в vault/CI).
 
 ## Этап 1: Backend Foundation
 
