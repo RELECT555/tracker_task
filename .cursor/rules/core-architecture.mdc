@@ -1,0 +1,28 @@
+---
+description: Core architecture rules — Clean Architecture (backend) + FSD (frontend). Always apply.
+alwaysApply: true
+---
+
+# Architecture Rules
+
+Read `docs/11-architecture-rules.md` for full spec.
+
+## Approach
+- **Backend**: Clean Architecture (lite) + DDD-lite + one-handler-per-use-case
+- **Frontend**: Feature-Sliced Design — imports only downward: app → widgets → features → entities → shared
+
+## Never (neuroslop)
+- Business logic in controllers or React components
+- Prisma/SQL in handlers or domain layer
+- God services (`RequestService` with 20+ methods)
+- `utils.ts` / `helpers.ts` dump files — use named modules in correct layer
+- `fetch`/`axios` directly in UI components — use entity API + TanStack Query hooks
+- Abstractions with single use — inline until 2+ cases
+- Cross-layer imports (domain → infrastructure, shared → entities)
+
+## Always
+- Backend flow: `Controller → Handler → Domain Entity → Repository`
+- Domain methods for state changes: `request.approve()`, not `request.status = 'approved'`
+- Side effects via domain events, not inline email/notify in handlers
+- Shared types/schemas in `packages/shared`
+- Minimal diff — match existing module structure in `docs/03-architecture.md`

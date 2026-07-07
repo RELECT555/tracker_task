@@ -1,0 +1,39 @@
+---
+description: Frontend FSD layer rules for Next.js web app
+globs: apps/web/**/*
+alwaysApply: false
+---
+
+# Frontend FSD
+
+Import direction: `app → widgets → features → entities → shared` only.
+
+## Where code lives
+| Logic | Path |
+|-------|------|
+| API calls | `entities/*/api/` |
+| useQuery/useMutation | `features/*/model/` |
+| User actions UI | `features/*/ui/` |
+| Composite blocks | `widgets/` |
+| shadcn, client, utils | `shared/` |
+
+## State
+- Server data → TanStack Query (never duplicate in Zustand)
+- UI filters/modals → Zustand or useState
+- Forms → React Hook Form + Zod from `packages/shared`
+
+## Never
+- `fetch`/`axios` in components — use entity API + feature hook
+- Import features from entities, or entities from shared
+- Hardcoded colors — use design tokens from `docs/10-design-system.md`
+- `useEffect` + fetch instead of `useQuery`
+
+## Example
+```tsx
+// ✅ feature hook
+const approve = useApproveRequest(requestId);
+<Button onClick={() => approve.mutate()} />
+
+// ❌ inline fetch in component
+await fetch(`/api/v1/requests/${id}/approve`, { method: 'POST' });
+```

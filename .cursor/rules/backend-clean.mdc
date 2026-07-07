@@ -1,0 +1,40 @@
+---
+description: Backend Clean Architecture layer rules for NestJS API
+globs: apps/api/**/*
+alwaysApply: false
+---
+
+# Backend Layers
+
+```
+presentation/ → application/ → domain/ ← infrastructure/
+```
+
+## domain/
+- Entities, value objects, domain errors, events, repository interfaces
+- NO: `@nestjs/*`, `@prisma/client`, HTTP, `@Injectable` on entities
+
+## application/
+- `commands/*.handler.ts`, `queries/*.handler.ts` — one use case per file
+- Orchestration + policy checks + transactions
+- NO: PrismaClient, `@Body()`, `@Res()`, raw SQL
+
+## infrastructure/
+- `*.repository.impl.ts`, mappers (Prisma ↔ Domain)
+- NO: business rules, status transitions
+
+## presentation/
+- Controllers, DTOs, guards — max ~15 lines per endpoint
+- NO: `request.approve()`, direct Prisma calls
+
+## Example
+```typescript
+// ✅ Controller
+await this.approveHandler.execute({ requestId: id, actorId: user.id });
+
+// ❌ Controller
+const req = await this.prisma.request.findUnique(...);
+req.status = 'approved';
+```
+
+Side effects: domain events → event handlers. Not inline in handler.
