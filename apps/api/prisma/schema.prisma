@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id          String     @id @default(uuid()) @db.Uuid
+  code        String     @unique @db.VarChar(50)
+  name        String     @db.VarChar(100)
+  description String?
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model OrgUnit {
+  id       String    @id @default(uuid()) @db.Uuid
+  name     String    @db.VarChar(255)
+  parentId String?   @map("parent_id") @db.Uuid
+  headId   String?   @map("head_id") @db.Uuid
+  path     String    @db.VarChar(1000)
+  parent   OrgUnit?  @relation("OrgHierarchy", fields: [parentId], references: [id])
+  children OrgUnit[] @relation("OrgHierarchy")
+  head     User?     @relation("OrgUnitHead", fields: [headId], references: [id])
+  users    User[]    @relation("UserOrgUnit")
+
+  @@index([parentId])
+  @@index([path])
+  @@map("org_units")
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique @db.VarChar(255)
+  passwordHash String?   @map("password_hash") @db.VarChar(255)
+  fullName     String    @map("full_name") @db.VarChar(255)
+  orgUnitId    String    @map("org_unit_id") @db.Uuid
+  managerId    String?   @map("manager_id") @db.Uuid
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  orgUnit      OrgUnit   @relation("UserOrgUnit", fields: [orgUnitId], references: [id])
+  manager      User?     @relation("UserManager", fields: [managerId], references: [id])
+  subordinates User[]    @relation("UserManager")
+  roles        UserRole[]
+  headedUnits  OrgUnit[] @relation("OrgUnitHead")
+  requests     Request[]
+
+  @@index([orgUnitId])
+  @@index([managerId])
+  @@index([email])
+  @@map("users")
+}
+
+model RouteTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(255)
+  version     Int      @default(1)
+  isPublished Boolean  @default(false) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@unique([id, version])
+  @@map("route_templates")
+}
+
+model RequestType {
+  id                     String   @id @default(uuid()) @db.Uuid
+  code                   String   @unique @db.VarChar(50)
+  name                   String   @db.VarChar(255)
+  description            String?
+  fieldSchema            Json     @default("[]") @map("field_schema")
+  defaultRouteTemplateId String?  @map("default_route_template_id") @db.Uuid
+  allowedManualRoutes    String[] @default([]) @map("allowed_manual_routes") @db.Uuid
+  isActive               Boolean  @default(true) @map("is_active")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  requests               Request[]
+
+  @@map("request_types")
+}
+
+model Request {
+  id               String      @id @default(uuid()) @db.Uuid
+  typeId           String      @map("type_id") @db.Uuid
+  authorId         String      @map("author_id") @db.Uuid
+  title            String      @db.VarChar(500)
+  fields           Json        @default("{}")
+  status           String      @default("draft") @db.VarChar(30)
+  priority         String      @default("normal") @db.VarChar(20)
+  routeSnapshot    Json?       @map("route_snapshot")
+  currentStepIndex Int?        @map("current_step_index")
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz()
+  submittedAt      DateTime?   @map("submitted_at") @db.Timestamptz()
+  completedAt      DateTime?   @map("completed_at") @db.Timestamptz()
+  type             RequestType @relation(fields: [typeId], references: [id])
+  author           User        @relation(fields: [authorId], references: [id])
+
+  @@index([authorId])
+  @@index([status])
+  @@index([typeId])
+  @@index([createdAt(sort: Desc)])
+  @@map("requests")
+}

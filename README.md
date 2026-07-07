@@ -4,7 +4,7 @@
 
 ## Статус проекта
 
-На текущем этапе — **проектирование и документация**. Код ещё не написан; документация задаёт архитектуру для последующей реализации бэкенда и фронтенда.
+**Этап 0 (Foundation) — в работе.** Monorepo поднят: NestJS API, Next.js Web, shared-пакет, Prisma-схема, Docker Compose.
 
 ## Документация
 
@@ -57,17 +57,29 @@ tracker_task/
 └── README.md
 ```
 
-## Быстрый старт (после реализации)
+## Быстрый старт
 
 ```bash
-# Поднять инфраструктуру
+# 1. Инфраструктура (PostgreSQL, Redis, MinIO)
 docker compose up -d
 
-# Backend
-cd apps/api && npm install && npm run migrate && npm run dev
+# 2. Зависимости
+npm install
 
-# Frontend
-cd apps/web && npm install && npm run dev
+# 3. Env
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env.local
+
+# 4. БД
+npm run db:generate
+npm run db:migrate -w @tracker/api -- --name init
+npm run db:seed
+
+# 5. Запуск
+npm run dev
 ```
+
+- API: http://localhost:3001/api/v1/health
+- Web: http://localhost:3000
 
 Подробности — в [гайде по разработке](docs/09-development-guide.md).

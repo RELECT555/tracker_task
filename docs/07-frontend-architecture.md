@@ -22,14 +22,16 @@
 apps/web/
 ├── public/
 ├── src/
-│   ├── app/                          # Next.js App Router
+│   ├── views/                        # Композиция экранов (InboxPage, AdminPage…)
+│   │   ├── inbox/ui/InboxPage.tsx
+│   │   └── ...
+│   ├── app/                          # Next.js App Router — только роутинг
 │   │   ├── (auth)/
-│   │   │   ├── login/page.tsx
+│   │   │   ├── login/page.tsx        # re-export → views/login/ui/LoginPage
 │   │   │   └── layout.tsx
 │   │   ├── (dashboard)/
-│   │   │   ├── layout.tsx            # Sidebar + Header
-│   │   │   ├── page.tsx              # Dashboard (redirect → inbox)
-│   │   │   ├── inbox/page.tsx
+│   │   │   ├── layout.tsx
+│   │   │   ├── inbox/page.tsx        # re-export → views/inbox/ui/InboxPage
 │   │   │   ├── outbox/page.tsx
 │   │   │   ├── requests/
 │   │   │   │   ├── new/page.tsx
@@ -119,7 +121,9 @@ apps/web/
 
 ```
 ┌─────────────────────────────────────────────┐
-│  app          Pages, layouts, providers     │
+│  app          Роутинг Next.js (page.tsx)    │
+├─────────────────────────────────────────────┤
+│  views        InboxPage, AdminPage…         │
 ├─────────────────────────────────────────────┤
 │  widgets      RequestCard, InboxTable       │
 ├─────────────────────────────────────────────┤
@@ -131,6 +135,17 @@ apps/web/
 └─────────────────────────────────────────────┘
 
 Импорт только вниз ↑
+app → views → widgets → features → entities → shared
+```
+
+### App Router: почему `page.tsx`?
+
+Next.js **требует** имя `page.tsx` — это точка входа маршрута, переименовать нельзя.  
+Папку **`src/pages/` не используем** — Next.js путает её с Pages Router. Экраны живут в **`src/views/`**.
+
+```typescript
+// app/(dashboard)/inbox/page.tsx  ← только роутинг
+export { InboxPage as default } from '@/views/inbox/ui/InboxPage';
 ```
 
 ## API Client

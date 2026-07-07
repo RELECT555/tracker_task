@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Frontend FSD
 
-Import direction: `app → widgets → features → entities → shared` only.
+Import direction: `app → views → widgets → features → entities → shared` only.
 
 ## Where code lives
 | Logic | Path |
