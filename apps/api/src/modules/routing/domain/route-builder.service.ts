@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { RouteSnapshot } from '@tracker/shared';
+import type { RouteSnapshot, RouteStepAction } from '@tracker/shared';
 import { BusinessRuleViolationError } from '../../../shared/domain/domain.error';
 import { PrismaService } from '../../../shared/infrastructure/prisma/prisma.service';
 import { AssigneeResolver } from './assignee.resolver';
@@ -75,6 +75,7 @@ export class RouteBuilder {
           status: isActive ? ('active' as const) : ('pending' as const),
           slaHours: stepTemplate.slaHours,
           dueAt,
+          actions: stepTemplate.actions as RouteStepAction[],
         };
       }),
     );

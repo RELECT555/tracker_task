@@ -4,6 +4,7 @@ export interface RouteStepTemplateRecord {
   assigneeType: string;
   assigneeRef: string;
   slaHours: number | null;
+  actions: string[];
 }
 
 export interface RouteTemplateRecord {

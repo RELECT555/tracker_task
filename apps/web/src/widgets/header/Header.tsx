@@ -24,7 +24,7 @@ export function Header({ title, description }: { title: string; description?: st
     !mounted ? Monitor : theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-border bg-card/80 px-6 backdrop-blur-md">
+    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-border/60 bg-background/90 px-6 backdrop-blur-md supports-[backdrop-filter]:bg-background/75 dark:border-border/30 dark:bg-background/95">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
         {description && (

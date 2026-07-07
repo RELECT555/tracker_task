@@ -1,4 +1,5 @@
 import { apiFetch } from '@/shared/api/client';
+import type { FieldSchemaItem } from '../model/field-schema';
 
 export interface RequestTypeItem {
   id: string;
@@ -8,12 +9,7 @@ export interface RequestTypeItem {
   fieldSchema: FieldSchemaItem[];
 }
 
-export interface FieldSchemaItem {
-  key: string;
-  label: string;
-  type: string;
-  required: boolean;
-}
+export type { FieldSchemaItem };
 
 export const requestTypeApi = {
   list: () =>

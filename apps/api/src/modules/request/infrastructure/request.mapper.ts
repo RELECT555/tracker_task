@@ -51,7 +51,12 @@ export class RequestMapper {
       id: record.id,
       typeId: record.typeId,
       type: record.type
-        ? { id: record.type.id, name: record.type.name, code: record.type.code }
+        ? {
+            id: record.type.id,
+            name: record.type.name,
+            code: record.type.code,
+            fieldSchema: (record.type.fieldSchema as object[]) ?? [],
+          }
         : null,
       title: record.title,
       status: record.status as RequestStatus,

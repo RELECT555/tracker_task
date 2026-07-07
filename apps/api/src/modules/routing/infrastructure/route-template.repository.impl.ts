@@ -32,6 +32,7 @@ export class PrismaRouteTemplateRepository extends RouteTemplateRepository {
         assigneeType: step.assigneeType,
         assigneeRef: step.assigneeRef,
         slaHours: step.slaHours,
+        actions: step.actions,
       })),
     };
   }

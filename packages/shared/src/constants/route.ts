@@ -18,6 +18,10 @@ export interface RouteAssigneeSnapshot {
   fullName: string;
 }
 
+export const ROUTE_STEP_ACTIONS = ['approve', 'reject', 'escalate', 'request_info'] as const;
+
+export type RouteStepAction = (typeof ROUTE_STEP_ACTIONS)[number];
+
 export interface RouteStepSnapshot {
   index: number;
   name: string;
@@ -25,6 +29,7 @@ export interface RouteStepSnapshot {
   status: RouteStepStatus;
   slaHours: number | null;
   dueAt: string | null;
+  actions?: RouteStepAction[];
 }
 
 export interface RouteSnapshot {

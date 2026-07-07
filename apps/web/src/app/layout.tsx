@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import { Inter } from 'next/font/google';
 import { Providers } from './providers';
 import './globals.css';
@@ -22,7 +23,10 @@ export default function RootLayout({
     <html lang="ru" suppressHydrationWarning>
       <body className={`${inter.variable} antialiased`}>
         <Providers>{children}</Providers>
-      </body>
+        {/* impeccable-live-start */}
+        <Script src="http://localhost:8400/live.js" strategy="afterInteractive" />
+        {/* impeccable-live-end */}
+</body>
     </html>
   );
 }

@@ -37,3 +37,9 @@ export class BusinessRuleViolationError extends DomainError {
     super(message, 'BUSINESS_RULE_VIOLATION');
   }
 }
+
+export class UnauthorizedError extends DomainError {
+  constructor(message = 'Unauthorized') {
+    super(message, 'UNAUTHORIZED');
+  }
+}

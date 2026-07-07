@@ -1,44 +1,45 @@
 'use client';
 
 import Link from 'next/link';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Ban, Loader2, MessageCircleQuestion, Send, X } from 'lucide-react';
-import { useState } from 'react';
-import type { RouteStepStatus } from '@tracker/shared';
+import { useQuery } from '@tanstack/react-query';
+import {
+  ArrowLeft,
+  ArrowUpCircle,
+  Ban,
+  Check,
+  FileText,
+  GitBranch,
+  History,
+  Loader2,
+  MessageCircleQuestion,
+  MessageSquare,
+  Send,
+  Settings2,
+  X,
+} from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import { requestApi } from '@/entities/request/api/requestApi';
 import { RequestStatusBadge } from '@/entities/request/ui/RequestStatusBadge';
+import {
+  getAvailableActions,
+  useRequestActions,
+} from '@/features/request-actions/model/useRequestActions';
+import { FieldSchemaForm } from '@/features/request-fields/ui/FieldSchemaForm';
+import { RequestFieldsView } from '@/features/request-fields/ui/RequestFieldsView';
+import { validateFieldSchema } from '@/entities/request-type/model/field-schema';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { routes } from '@/shared/config/routes';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Button } from '@/shared/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Card, CardContent, CardTitle } from '@/shared/ui/card';
+import { DetailSection, MetaItem } from '@/shared/ui/detail-section';
 import { Label } from '@/shared/ui/label';
 import { DashboardShell } from '@/widgets/dashboard-shell/DashboardShell';
-
-const STEP_STATUS_LABELS: Record<RouteStepStatus, string> = {
-  pending: 'Ожидает',
-  active: 'В работе',
-  completed: 'Завершён',
-  skipped: 'Пропущен',
-};
-
-function RouteStepStatusBadge({ status }: { status: RouteStepStatus }) {
-  const styles: Record<RouteStepStatus, string> = {
-    pending: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
-    active: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300',
-    completed: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300',
-    skipped: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-500',
-  };
-
-  return (
-    <span className={`inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status]}`}>
-      {STEP_STATUS_LABELS[status]}
-    </span>
-  );
-}
+import { RouteTimeline } from '@/widgets/route-timeline/RouteTimeline';
+import { RequestComments } from '@/widgets/request-comments/RequestComments';
+import { RequestHistoryTimeline } from '@/widgets/request-history/RequestHistoryTimeline';
 
 export function RequestDetailPage({ requestId }: { requestId: string }) {
-  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
@@ -46,425 +47,500 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [infoMessage, setInfoMessage] = useState('');
   const [showRequestInfoForm, setShowRequestInfoForm] = useState(false);
+  const [provideFields, setProvideFields] = useState<Record<string, unknown>>({});
   const [provideFieldsJson, setProvideFieldsJson] = useState('');
   const [provideComment, setProvideComment] = useState('');
   const [showProvideInfoForm, setShowProvideInfoForm] = useState(false);
+  const [escalateReason, setEscalateReason] = useState('');
+  const [showEscalateForm, setShowEscalateForm] = useState(false);
 
   const { data, isLoading, error: loadError } = useQuery({
     queryKey: queryKeys.requests.detail(requestId),
     queryFn: () => requestApi.getById(requestId),
   });
 
-  const invalidateRequest = () => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.requests.detail(requestId) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.requests.outbox() });
-    queryClient.invalidateQueries({ queryKey: queryKeys.requests.inbox() });
-  };
+  const actions = useRequestActions(requestId);
+  const can = getAvailableActions(data);
+  const hasActions =
+    can.submit ||
+    can.approve ||
+    can.reject ||
+    can.request_info ||
+    can.provide_info ||
+    can.escalate ||
+    can.cancel;
 
-  const submitMutation = useMutation({
-    mutationFn: () => requestApi.submit(requestId),
-    onSuccess: () => {
-      invalidateRequest();
-      setError(null);
-    },
-    onError: (err: Error) => setError(err.message),
-  });
-
-  const approveMutation = useMutation({
-    mutationFn: () => requestApi.approve(requestId),
-    onSuccess: () => {
-      invalidateRequest();
-      setError(null);
-    },
-    onError: (err: Error) => setError(err.message),
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: (reason: string) => requestApi.reject(requestId, reason),
-    onSuccess: () => {
-      invalidateRequest();
-      setError(null);
-      setRejectReason('');
-      setShowRejectForm(false);
-    },
-    onError: (err: Error) => setError(err.message),
-  });
-
-  const cancelMutation = useMutation({
-    mutationFn: (reason?: string) => requestApi.cancel(requestId, reason),
-    onSuccess: () => {
-      invalidateRequest();
-      setError(null);
-      setCancelReason('');
-      setShowCancelForm(false);
-    },
-    onError: (err: Error) => setError(err.message),
-  });
-
-  const requestInfoMutation = useMutation({
-    mutationFn: (message: string) => requestApi.requestInfo(requestId, message),
-    onSuccess: () => {
-      invalidateRequest();
-      setError(null);
-      setInfoMessage('');
-      setShowRequestInfoForm(false);
-    },
-    onError: (err: Error) => setError(err.message),
-  });
-
-  const provideInfoMutation = useMutation({
-    mutationFn: (input: { fields?: Record<string, unknown>; comment?: string }) =>
-      requestApi.provideInfo(requestId, input),
-    onSuccess: () => {
-      invalidateRequest();
-      setError(null);
-      setProvideComment('');
-      setShowProvideInfoForm(false);
-    },
-    onError: (err: Error) => setError(err.message),
-  });
-
-  const canSubmit = data?.availableActions.includes('submit');
-  const canApprove = data?.availableActions.includes('approve');
-  const canReject = data?.availableActions.includes('reject');
-  const canRequestInfo = data?.availableActions.includes('request_info');
-  const canProvideInfo = data?.availableActions.includes('provide_info');
-  const canCancel = data?.availableActions.includes('cancel');
+  const onError = (err: Error) => setError(err.message);
+  const onSuccess = () => setError(null);
 
   const openProvideInfoForm = () => {
+    setProvideFields({ ...(data?.fields ?? {}) });
     setProvideFieldsJson(JSON.stringify(data?.fields ?? {}, null, 2));
     setShowProvideInfoForm(true);
   };
 
+  const fieldSchema = data?.type?.fieldSchema ?? [];
+
   const handleProvideInfo = () => {
+    setError(null);
+
+    if (fieldSchema.length > 0) {
+      const validationError = validateFieldSchema(fieldSchema, provideFields);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+
+      actions.provideInfo.mutate(
+        { fields: provideFields, comment: provideComment.trim() || undefined },
+        {
+          onSuccess: () => {
+            onSuccess();
+            setProvideComment('');
+            setShowProvideInfoForm(false);
+          },
+          onError,
+        },
+      );
+      return;
+    }
+
     try {
       const fields = provideFieldsJson.trim()
         ? (JSON.parse(provideFieldsJson) as Record<string, unknown>)
         : undefined;
-      provideInfoMutation.mutate({
-        fields,
-        comment: provideComment.trim() || undefined,
-      });
+      actions.provideInfo.mutate(
+        { fields, comment: provideComment.trim() || undefined },
+        {
+          onSuccess: () => {
+            onSuccess();
+            setProvideComment('');
+            setShowProvideInfoForm(false);
+          },
+          onError,
+        },
+      );
     } catch {
       setError('Некорректный JSON в полях запроса');
     }
   };
 
+  const transitions = data?.transitions ?? [];
+  const showHistory = transitions.length > 0;
+  const showComments =
+    data?.commentPermissions.canComment || (data?.comments.length ?? 0) > 0;
+  const showSidebar = Boolean(data?.route) || hasActions;
+
   return (
-    <DashboardShell title={data?.title ?? 'Запрос'}>
-      <Link href={routes.outbox} className="mb-4 inline-block text-sm text-primary hover:underline">
-        ← Назад к исходящим
+    <DashboardShell title={data?.title ?? 'Запрос'} containerClassName="max-w-screen-2xl">
+      <Link
+        href={routes.outbox}
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Назад к исходящим
       </Link>
 
-      {isLoading && <p className="text-muted-foreground">Загрузка...</p>}
+      {isLoading && <p className="mt-6 text-muted-foreground">Загрузка...</p>}
       {loadError && (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="mt-6">
           <AlertDescription>{(loadError as Error).message}</AlertDescription>
         </Alert>
       )}
 
       {data && (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader className="flex flex-row items-start justify-between gap-4">
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-3">
-                  <RequestStatusBadge status={data.status} />
-                  {data.type && (
-                    <span className="text-sm text-muted-foreground">{data.type.name}</span>
-                  )}
-                </div>
-                <CardTitle>{data.title}</CardTitle>
-                <CardDescription>Автор: {data.author.fullName}</CardDescription>
+        <div className="mt-6 space-y-5">
+          <Card className="overflow-hidden">
+            <div className="px-6 py-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <RequestStatusBadge status={data.status} />
+                {data.type ? (
+                  <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    {data.type.name}
+                  </span>
+                ) : null}
               </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
-                {canSubmit && (
-                  <Button onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending}>
-                    {submitMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                    Отправить на согласование
-                  </Button>
-                )}
-                {canApprove && (
-                  <Button
-                    variant="default"
-                    onClick={() => approveMutation.mutate()}
-                    disabled={approveMutation.isPending}
-                  >
-                    {approveMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Check className="h-4 w-4" />
-                    )}
-                    Согласовать
-                  </Button>
-                )}
-                {canReject && !showRejectForm && (
-                  <Button
-                    variant="destructive"
-                    onClick={() => setShowRejectForm(true)}
-                    disabled={rejectMutation.isPending}
-                  >
-                    <X className="h-4 w-4" />
-                    Отклонить
-                  </Button>
-                )}
-                {canRequestInfo && !showRequestInfoForm && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowRequestInfoForm(true)}
-                    disabled={requestInfoMutation.isPending}
-                  >
-                    <MessageCircleQuestion className="h-4 w-4" />
-                    Запросить уточнение
-                  </Button>
-                )}
-                {canProvideInfo && !showProvideInfoForm && (
-                  <Button onClick={openProvideInfoForm} disabled={provideInfoMutation.isPending}>
-                    <MessageCircleQuestion className="h-4 w-4" />
-                    Ответить на уточнение
-                  </Button>
-                )}
-                {canCancel && !showCancelForm && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowCancelForm(true)}
-                    disabled={cancelMutation.isPending}
-                  >
-                    <Ban className="h-4 w-4" />
-                    Отменить запрос
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-              {data.status === 'pending_info' && (
+              <CardTitle className="mt-3 text-2xl">{data.title}</CardTitle>
+
+              <dl className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+                <MetaItem label="Автор" value={data.author.fullName} />
+                <MetaItem
+                  label="Создан"
+                  value={new Date(data.createdAt).toLocaleString('ru-RU')}
+                />
+                {data.submittedAt ? (
+                  <MetaItem
+                    label="Отправлен"
+                    value={new Date(data.submittedAt).toLocaleString('ru-RU')}
+                  />
+                ) : null}
+              </dl>
+            </div>
+
+            {data.status === 'pending_info' ? (
+              <CardContent className="border-t border-border/60 bg-muted/20 px-6 py-4 dark:bg-muted/10">
                 <Alert>
                   <AlertDescription>
                     Ожидается уточнение от автора запроса. После ответа согласование продолжится.
                   </AlertDescription>
                 </Alert>
-              )}
-              {showRequestInfoForm && canRequestInfo && (
-                <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
-                  <Label htmlFor="info-message">Что нужно уточнить?</Label>
-                  <textarea
-                    id="info-message"
-                    value={infoMessage}
-                    onChange={(e) => setInfoMessage(e.target.value)}
-                    rows={3}
-                    placeholder="Например: уточните даты командировки..."
-                    className="flex min-h-[80px] w-full rounded-md border border-input bg-field px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      disabled={!infoMessage.trim() || requestInfoMutation.isPending}
-                      onClick={() => requestInfoMutation.mutate(infoMessage.trim())}
-                    >
-                      {requestInfoMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <MessageCircleQuestion className="h-4 w-4" />
-                      )}
-                      Отправить запрос
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setShowRequestInfoForm(false);
-                        setInfoMessage('');
-                      }}
-                    >
-                      Закрыть
-                    </Button>
-                  </div>
-                </div>
-              )}
-              {showProvideInfoForm && canProvideInfo && (
-                <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
-                  <Label htmlFor="provide-fields">Обновлённые поля (JSON)</Label>
-                  <textarea
-                    id="provide-fields"
-                    value={provideFieldsJson}
-                    onChange={(e) => setProvideFieldsJson(e.target.value)}
-                    rows={6}
-                    className="flex min-h-[120px] w-full rounded-md border border-input bg-field px-3 py-2 font-mono text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                  />
-                  <Label htmlFor="provide-comment">Комментарий (необязательно)</Label>
-                  <textarea
-                    id="provide-comment"
-                    value={provideComment}
-                    onChange={(e) => setProvideComment(e.target.value)}
-                    rows={2}
-                    placeholder="Пояснение к изменениям..."
-                    className="flex min-h-[60px] w-full rounded-md border border-input bg-field px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      disabled={provideInfoMutation.isPending}
-                      onClick={handleProvideInfo}
-                    >
-                      {provideInfoMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Check className="h-4 w-4" />
-                      )}
-                      Отправить ответ
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setShowProvideInfoForm(false);
-                        setProvideComment('');
-                      }}
-                    >
-                      Закрыть
-                    </Button>
-                  </div>
-                </div>
-              )}
-              {showRejectForm && canReject && (
-                <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-                  <Label htmlFor="reject-reason">Причина отклонения</Label>
-                  <textarea
-                    id="reject-reason"
-                    value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                    rows={3}
-                    placeholder="Укажите причину отклонения..."
-                    className="flex min-h-[80px] w-full rounded-md border border-input bg-field px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      variant="destructive"
-                      disabled={!rejectReason.trim() || rejectMutation.isPending}
-                      onClick={() => rejectMutation.mutate(rejectReason.trim())}
-                    >
-                      {rejectMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <X className="h-4 w-4" />
-                      )}
-                      Подтвердить отклонение
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setShowRejectForm(false);
-                        setRejectReason('');
-                      }}
-                    >
-                      Закрыть
-                    </Button>
-                  </div>
-                </div>
-              )}
-              {showCancelForm && canCancel && (
-                <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
-                  <Label htmlFor="cancel-reason">Причина отмены (необязательно)</Label>
-                  <textarea
-                    id="cancel-reason"
-                    value={cancelReason}
-                    onChange={(e) => setCancelReason(e.target.value)}
-                    rows={3}
-                    placeholder="Например: больше не актуально..."
-                    className="flex min-h-[80px] w-full rounded-md border border-input bg-field px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      variant="destructive"
-                      disabled={cancelMutation.isPending}
-                      onClick={() =>
-                        cancelMutation.mutate(cancelReason.trim() || undefined)
-                      }
-                    >
-                      {cancelMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Ban className="h-4 w-4" />
-                      )}
-                      Подтвердить отмену
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setShowCancelForm(false);
-                        setCancelReason('');
-                      }}
-                    >
-                      Закрыть
-                    </Button>
-                  </div>
-                </div>
-              )}
-              {data.submittedAt && (
-                <p className="text-sm text-muted-foreground">
-                  Отправлен: {new Date(data.submittedAt).toLocaleString('ru-RU')}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          {data.route && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Маршрут согласования</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ol className="space-y-3">
-                  {data.route.steps.map((step) => (
-                    <li
-                      key={step.index}
-                      className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${
-                        step.status === 'active'
-                          ? 'border-primary/40 bg-primary/5'
-                          : 'border-border'
-                      }`}
-                    >
-                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
-                        {step.index + 1}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium">{step.name}</p>
-                        <p className="text-sm text-muted-foreground">{step.assignee.fullName}</p>
-                        {step.dueAt && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            SLA: {new Date(step.dueAt).toLocaleString('ru-RU')}
-                          </p>
-                        )}
-                      </div>
-                      <RouteStepStatusBadge status={step.status} />
-                    </li>
-                  ))}
-                </ol>
               </CardContent>
-            </Card>
-          )}
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Поля запроса</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {Object.keys(data.fields).length === 0 ? (
-                <p className="text-sm text-muted-foreground">Дополнительные поля не заполнены.</p>
-              ) : (
-                <pre className="overflow-auto rounded-md bg-muted p-3 text-xs">
-                  {JSON.stringify(data.fields, null, 2)}
-                </pre>
-              )}
-            </CardContent>
+            ) : null}
           </Card>
+
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start xl:grid-cols-[minmax(0,1.15fr)_400px] xl:gap-6">
+            <Card className="divide-y divide-border/60 overflow-hidden">
+              <DetailSection title="Поля запроса" icon={FileText}>
+                <RequestFieldsView
+                  fields={data.fields}
+                  schema={data.type?.fieldSchema ?? []}
+                />
+              </DetailSection>
+
+              {showHistory ? (
+                <DetailSection title="История изменений" icon={History}>
+                  <RequestHistoryTimeline embedded transitions={transitions} />
+                </DetailSection>
+              ) : null}
+
+              {showComments ? (
+                <DetailSection
+                  title="Комментарии"
+                  icon={MessageSquare}
+                  badge={
+                    data.comments.length > 0 ? (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">
+                        {data.comments.length}
+                      </span>
+                    ) : null
+                  }
+                >
+                  <RequestComments
+                    embedded
+                    requestId={requestId}
+                    comments={data.comments}
+                    permissions={data.commentPermissions}
+                  />
+                </DetailSection>
+              ) : null}
+            </Card>
+
+            {showSidebar ? (
+              <Card className="divide-y divide-border/60 overflow-hidden lg:sticky lg:top-6">
+                {data.route ? (
+                  <DetailSection title="Маршрут согласования" icon={GitBranch}>
+                    <RouteTimeline embedded route={data.route} />
+                  </DetailSection>
+                ) : null}
+
+                {hasActions ? (
+                  <DetailSection title="Действия" icon={Settings2}>
+                    <div className="space-y-4">
+                      {error ? (
+                        <Alert variant="destructive">
+                          <AlertDescription>{error}</AlertDescription>
+                        </Alert>
+                      ) : null}
+
+                      <div className="flex flex-col gap-2">
+                      {can.submit && (
+                        <Button
+                          className="w-full justify-start"
+                          onClick={() => actions.submit.mutate(undefined, { onSuccess, onError })}
+                          disabled={actions.submit.isPending}
+                        >
+                          {actions.submit.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="h-4 w-4" />
+                          )}
+                          Отправить на согласование
+                        </Button>
+                      )}
+                      {can.approve && (
+                        <Button
+                          className="w-full justify-start"
+                          onClick={() => actions.approve.mutate(undefined, { onSuccess, onError })}
+                          disabled={actions.approve.isPending}
+                        >
+                          {actions.approve.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Check className="h-4 w-4" />
+                          )}
+                          Согласовать
+                        </Button>
+                      )}
+                      {can.reject && !showRejectForm && (
+                        <Button
+                          variant="destructive"
+                          className="w-full justify-start"
+                          onClick={() => setShowRejectForm(true)}
+                        >
+                          <X className="h-4 w-4" />
+                          Отклонить
+                        </Button>
+                      )}
+                      {can.request_info && !showRequestInfoForm && (
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start"
+                          onClick={() => setShowRequestInfoForm(true)}
+                        >
+                          <MessageCircleQuestion className="h-4 w-4" />
+                          Запросить уточнение
+                        </Button>
+                      )}
+                      {can.escalate && !showEscalateForm && (
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start"
+                          onClick={() => setShowEscalateForm(true)}
+                        >
+                          <ArrowUpCircle className="h-4 w-4" />
+                          Эскалировать
+                        </Button>
+                      )}
+                      {can.provide_info && !showProvideInfoForm && (
+                        <Button className="w-full justify-start" onClick={openProvideInfoForm}>
+                          <MessageCircleQuestion className="h-4 w-4" />
+                          Ответить на уточнение
+                        </Button>
+                      )}
+                      {can.cancel && !showCancelForm && (
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start"
+                          onClick={() => setShowCancelForm(true)}
+                        >
+                          <Ban className="h-4 w-4" />
+                          Отменить запрос
+                        </Button>
+                      )}
+                    </div>
+
+                    {showEscalateForm && can.escalate && (
+                      <ActionForm
+                        id="escalate-reason"
+                        label="Причина эскалации"
+                        value={escalateReason}
+                        onChange={setEscalateReason}
+                        placeholder="Например: требуется решение вышестоящего руководителя..."
+                        onClose={() => {
+                          setShowEscalateForm(false);
+                          setEscalateReason('');
+                        }}
+                        onConfirm={() =>
+                          actions.escalate.mutate(escalateReason.trim(), {
+                            onSuccess: () => {
+                              onSuccess();
+                              setEscalateReason('');
+                              setShowEscalateForm(false);
+                            },
+                            onError,
+                          })
+                        }
+                        confirmLabel="Эскалировать"
+                        confirmIcon={<ArrowUpCircle className="h-4 w-4" />}
+                        isPending={actions.escalate.isPending}
+                        required
+                      />
+                    )}
+
+                    {showRequestInfoForm && can.request_info && (
+                      <ActionForm
+                        id="info-message"
+                        label="Что нужно уточнить?"
+                        value={infoMessage}
+                        onChange={setInfoMessage}
+                        placeholder="Например: уточните даты командировки..."
+                        onClose={() => {
+                          setShowRequestInfoForm(false);
+                          setInfoMessage('');
+                        }}
+                        onConfirm={() =>
+                          actions.requestInfo.mutate(infoMessage.trim(), {
+                            onSuccess: () => {
+                              onSuccess();
+                              setInfoMessage('');
+                              setShowRequestInfoForm(false);
+                            },
+                            onError,
+                          })
+                        }
+                        confirmLabel="Отправить запрос"
+                        confirmIcon={<MessageCircleQuestion className="h-4 w-4" />}
+                        isPending={actions.requestInfo.isPending}
+                        required
+                      />
+                    )}
+
+                    {showProvideInfoForm && can.provide_info && (
+                      <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                        {fieldSchema.length > 0 ? (
+                          <FieldSchemaForm
+                            schema={fieldSchema}
+                            values={provideFields}
+                            onChange={setProvideFields}
+                            idPrefix="provide"
+                          />
+                        ) : (
+                          <>
+                            <Label htmlFor="provide-fields">Обновлённые поля (JSON)</Label>
+                            <textarea
+                              id="provide-fields"
+                              value={provideFieldsJson}
+                              onChange={(e) => setProvideFieldsJson(e.target.value)}
+                              rows={6}
+                              className="flex min-h-[120px] w-full rounded-md border border-input bg-field px-3 py-2 font-mono text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                            />
+                          </>
+                        )}
+                        <Label htmlFor="provide-comment">Комментарий (необязательно)</Label>
+                        <textarea
+                          id="provide-comment"
+                          value={provideComment}
+                          onChange={(e) => setProvideComment(e.target.value)}
+                          rows={2}
+                          className="flex min-h-[60px] w-full rounded-md border border-input bg-field px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                        />
+                        <div className="flex gap-2">
+                          <Button disabled={actions.provideInfo.isPending} onClick={handleProvideInfo}>
+                            {actions.provideInfo.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Check className="h-4 w-4" />
+                            )}
+                            Отправить ответ
+                          </Button>
+                          <Button variant="outline" onClick={() => setShowProvideInfoForm(false)}>
+                            Закрыть
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {showRejectForm && can.reject && (
+                      <ActionForm
+                        id="reject-reason"
+                        label="Причина отклонения"
+                        value={rejectReason}
+                        onChange={setRejectReason}
+                        variant="destructive"
+                        onClose={() => {
+                          setShowRejectForm(false);
+                          setRejectReason('');
+                        }}
+                        onConfirm={() =>
+                          actions.reject.mutate(rejectReason.trim(), {
+                            onSuccess: () => {
+                              onSuccess();
+                              setRejectReason('');
+                              setShowRejectForm(false);
+                            },
+                            onError,
+                          })
+                        }
+                        confirmLabel="Подтвердить отклонение"
+                        confirmIcon={<X className="h-4 w-4" />}
+                        isPending={actions.reject.isPending}
+                        required
+                      />
+                    )}
+
+                    {showCancelForm && can.cancel && (
+                      <ActionForm
+                        id="cancel-reason"
+                        label="Причина отмены (необязательно)"
+                        value={cancelReason}
+                        onChange={setCancelReason}
+                        onClose={() => {
+                          setShowCancelForm(false);
+                          setCancelReason('');
+                        }}
+                        onConfirm={() =>
+                          actions.cancel.mutate(cancelReason.trim() || undefined, {
+                            onSuccess: () => {
+                              onSuccess();
+                              setCancelReason('');
+                              setShowCancelForm(false);
+                            },
+                            onError,
+                          })
+                        }
+                        confirmLabel="Подтвердить отмену"
+                        confirmIcon={<Ban className="h-4 w-4" />}
+                        isPending={actions.cancel.isPending}
+                      />
+                    )}
+                    </div>
+                  </DetailSection>
+                ) : null}
+              </Card>
+            ) : null}
+          </div>
         </div>
       )}
     </DashboardShell>
+  );
+}
+
+function ActionForm({
+  id,
+  label,
+  value,
+  onChange,
+  placeholder,
+  onClose,
+  onConfirm,
+  confirmLabel,
+  confirmIcon,
+  isPending,
+  required,
+  variant,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  onClose: () => void;
+  onConfirm: () => void;
+  confirmLabel: string;
+  confirmIcon: ReactNode;
+  isPending: boolean;
+  required?: boolean;
+  variant?: 'destructive';
+}) {
+  const borderClass =
+    variant === 'destructive'
+      ? 'border-destructive/30 bg-destructive/5 dark:bg-destructive/10'
+      : 'border-border/70 bg-muted/40 dark:bg-accent/20';
+
+  return (
+    <div className={`space-y-3 rounded-lg border p-4 ${borderClass}`}>
+      <Label htmlFor={id}>{label}</Label>
+      <textarea
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={3}
+        placeholder={placeholder}
+        className="flex min-h-[80px] w-full rounded-md border border-input bg-field px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+      />
+      <div className="flex gap-2">
+        <Button
+          variant={variant === 'destructive' ? 'destructive' : 'default'}
+          disabled={(required && !value.trim()) || isPending}
+          onClick={onConfirm}
+        >
+          {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : confirmIcon}
+          {confirmLabel}
+        </Button>
+        <Button variant="outline" onClick={onClose}>
+          Закрыть
+        </Button>
+      </div>
+    </div>
   );
 }

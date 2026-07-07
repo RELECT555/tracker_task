@@ -73,4 +73,14 @@ export class PrismaUserReader extends UserReader {
       managerId: user.managerId,
     };
   }
+
+  async findManagerId(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { managerId: true, isActive: true },
+    });
+
+    if (!user?.isActive || !user.managerId) return null;
+    return user.managerId;
+  }
 }

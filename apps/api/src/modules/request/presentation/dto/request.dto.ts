@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEnum,
   IsObject,
   IsOptional,
@@ -86,4 +87,22 @@ export class ProvideInfoDto {
   @IsString()
   @MaxLength(2000)
   comment?: string;
+}
+
+export class EscalateRequestDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2000)
+  reason!: string;
+}
+
+export class AddCommentDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(4000)
+  body!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isInternal?: boolean;
 }

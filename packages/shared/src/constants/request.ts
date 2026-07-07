@@ -40,3 +40,14 @@ export const PRIORITY_LABELS: Record<RequestPriority, string> = {
   high: 'Высокий',
   urgent: 'Срочный',
 };
+
+export const TRANSITION_ACTION_LABELS: Record<string, string> = {
+  submit: 'Отправка на согласование',
+  approve: 'Согласование',
+  reject: 'Отклонение',
+  cancel: 'Отмена',
+  request_info: 'Запрос уточнения',
+  provide_info: 'Ответ на уточнение',
+  escalate: 'Эскалация',
+  sla_escalate: 'Автоэскалация по SLA',
+};

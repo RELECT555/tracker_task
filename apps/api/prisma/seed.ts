@@ -1,9 +1,12 @@
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
+const DEV_PASSWORD = 'tracker';
 
 const DEV_ADMIN_ID = '00000000-0000-4000-8000-000000000002';
 const DEV_MANAGER_ID = '00000000-0000-4000-8000-000000000003';
+const DEV_DIRECTOR_ID = '00000000-0000-4000-8000-000000000004';
 const DEV_ORG_ID = '00000000-0000-4000-8000-000000000001';
 const TYPE_VACATION_ID = '00000000-0000-4000-8000-000000000101';
 const TYPE_PURCHASE_ID = '00000000-0000-4000-8000-000000000102';
@@ -52,15 +55,37 @@ async function main() {
   const managerRole = await prisma.role.findUniqueOrThrow({
     where: { code: 'manager' },
   });
+  const directorRole = await prisma.role.findUniqueOrThrow({
+    where: { code: 'director' },
+  });
+
+  const passwordHash = await bcrypt.hash(DEV_PASSWORD, 10);
+
+  await prisma.user.upsert({
+    where: { id: DEV_DIRECTOR_ID },
+    update: { passwordHash },
+    create: {
+      id: DEV_DIRECTOR_ID,
+      email: 'director@tracker.local',
+      fullName: 'Директор',
+      orgUnitId: DEV_ORG_ID,
+      passwordHash,
+      roles: {
+        create: [{ roleId: directorRole.id }, { roleId: employeeRole.id }],
+      },
+    },
+  });
 
   await prisma.user.upsert({
     where: { id: DEV_MANAGER_ID },
-    update: {},
+    update: { managerId: DEV_DIRECTOR_ID, passwordHash },
     create: {
       id: DEV_MANAGER_ID,
       email: 'manager@tracker.local',
       fullName: 'Руководитель отдела',
       orgUnitId: DEV_ORG_ID,
+      managerId: DEV_DIRECTOR_ID,
+      passwordHash,
       roles: {
         create: [{ roleId: managerRole.id }, { roleId: employeeRole.id }],
       },
@@ -69,13 +94,14 @@ async function main() {
 
   await prisma.user.upsert({
     where: { id: DEV_ADMIN_ID },
-    update: { managerId: DEV_MANAGER_ID },
+    update: { managerId: DEV_MANAGER_ID, passwordHash },
     create: {
       id: DEV_ADMIN_ID,
       email: 'admin@tracker.local',
       fullName: 'Администратор',
       orgUnitId: DEV_ORG_ID,
       managerId: DEV_MANAGER_ID,
+      passwordHash,
       roles: {
         create: [{ roleId: adminRole.id }, { roleId: employeeRole.id }],
       },

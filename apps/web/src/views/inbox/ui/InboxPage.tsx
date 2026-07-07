@@ -45,7 +45,7 @@ export function InboxPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border bg-muted/40">
+                <tr className="border-b border-border bg-muted/50 dark:bg-muted/25">
                   <th className="px-5 py-3.5 text-left font-medium text-muted-foreground">Название</th>
                   <th className="px-5 py-3.5 text-left font-medium text-muted-foreground">Автор</th>
                   <th className="px-5 py-3.5 text-left font-medium text-muted-foreground">Шаг</th>
@@ -55,7 +55,7 @@ export function InboxPage() {
               </thead>
               <tbody className="divide-y divide-border">
                 {data.data.map((item) => (
-                  <tr key={item.id} className="transition-colors hover:bg-muted/30">
+                  <tr key={item.id} className="transition-colors hover:bg-muted/40 dark:hover:bg-accent/25">
                     <td className="px-5 py-4">
                       <Link
                         href={routes.request(item.id)}

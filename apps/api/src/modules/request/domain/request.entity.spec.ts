@@ -252,4 +252,34 @@ describe('Request', () => {
 
     expect(() => request.provideInfo('other-user', {})).toThrow(AccessDeniedError);
   });
+
+  it('escalates to new assignee on current step', () => {
+    const request = Request.create({
+      id: 'req-1',
+      typeId: 'type-1',
+      authorId: 'user-1',
+      title: 'Test',
+    });
+    request.submitWithRoute(sampleRoute);
+
+    const result = request.escalate('mgr-1', { id: 'dir-1', fullName: 'Director' });
+
+    expect(request.status).toBe('in_progress');
+    expect(result.newAssigneeId).toBe('dir-1');
+    expect((request.routeSnapshot as RouteSnapshot).steps[0]?.assignee.id).toBe('dir-1');
+  });
+
+  it('denies escalate to same assignee', () => {
+    const request = Request.create({
+      id: 'req-1',
+      typeId: 'type-1',
+      authorId: 'user-1',
+      title: 'Test',
+    });
+    request.submitWithRoute(sampleRoute);
+
+    expect(() => request.escalate('mgr-1', { id: 'mgr-1', fullName: 'Manager' })).toThrow(
+      InvalidTransitionError,
+    );
+  });
 });

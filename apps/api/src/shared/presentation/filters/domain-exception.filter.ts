@@ -15,6 +15,7 @@ export class DomainExceptionFilter implements ExceptionFilter {
 
     const statusMap: Record<string, HttpStatus> = {
       NOT_FOUND: HttpStatus.NOT_FOUND,
+      UNAUTHORIZED: HttpStatus.UNAUTHORIZED,
       ACCESS_DENIED: HttpStatus.FORBIDDEN,
       INVALID_TRANSITION: HttpStatus.CONFLICT,
       VALIDATION_ERROR: HttpStatus.BAD_REQUEST,

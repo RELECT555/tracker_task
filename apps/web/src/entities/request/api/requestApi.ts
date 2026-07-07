@@ -1,4 +1,5 @@
 import type { RequestPriority, RequestStatus, RouteSnapshot } from '@tracker/shared';
+import type { FieldSchemaItem } from '@/entities/request-type/model/field-schema';
 import { apiFetch } from '@/shared/api/client';
 
 export interface RequestListItem {
@@ -29,18 +30,52 @@ export type RequestAction =
   | 'reject'
   | 'request_info'
   | 'provide_info'
+  | 'escalate'
   | 'cancel';
+
+export interface RequestComment {
+  id: string;
+  body: string;
+  isInternal: boolean;
+  author: { id: string; fullName: string };
+  createdAt: string;
+}
+
+export interface CommentPermissions {
+  canComment: boolean;
+  canInternalComment: boolean;
+}
+
+export interface RequestTransition {
+  id: string;
+  fromStatus: RequestStatus | null;
+  toStatus: RequestStatus;
+  fromStep: number | null;
+  toStep: number | null;
+  action: string;
+  actor: { id: string; fullName: string } | null;
+  comment: string | null;
+  createdAt: string;
+}
 
 export interface RequestDetail {
   id: string;
   title: string;
   status: RequestStatus;
-  type: { id: string; name: string; code: string } | null;
+  type: {
+    id: string;
+    name: string;
+    code: string;
+    fieldSchema: FieldSchemaItem[];
+  } | null;
   fields: Record<string, unknown>;
   route: RouteSnapshot | null;
   currentStepIndex: number | null;
   author: { id: string; fullName: string };
   availableActions: RequestAction[];
+  transitions: RequestTransition[];
+  comments: RequestComment[];
+  commentPermissions: CommentPermissions;
   createdAt: string;
   submittedAt: string | null;
 }
@@ -106,6 +141,18 @@ export const requestApi = {
     apiFetch<RequestDetail>(`/requests/${id}/provide-info`, {
       method: 'POST',
       body: JSON.stringify(input),
+    }),
+
+  escalate: (id: string, reason: string) =>
+    apiFetch<RequestDetail>(`/requests/${id}/escalate`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+
+  addComment: (id: string, body: string, isInternal?: boolean) =>
+    apiFetch<RequestComment>(`/requests/${id}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body, isInternal }),
     }),
 
   getById: (id: string) => apiFetch<RequestDetail>(`/requests/${id}`),

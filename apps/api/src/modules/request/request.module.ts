@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
 import { RoutingModule } from '../routing/routing.module';
+import { AddCommentHandler } from './application/commands/add-comment.handler';
+import { EscalateRequestHandler } from './application/commands/escalate-request.handler';
+import { EscalationService } from './application/services/escalation.service';
 import { ApproveRequestHandler } from './application/commands/approve-request.handler';
 import { CancelRequestHandler } from './application/commands/cancel-request.handler';
 import { ProvideInfoHandler } from './application/commands/provide-info.handler';
@@ -33,6 +36,9 @@ import {
     CancelRequestHandler,
     RequestInfoHandler,
     ProvideInfoHandler,
+    EscalateRequestHandler,
+    EscalationService,
+    AddCommentHandler,
     GetRequestHandler,
     ListOutboxHandler,
     ListInboxHandler,
@@ -43,5 +49,6 @@ import {
     PrismaUserReader,
     { provide: UserReader, useExisting: PrismaUserReader },
   ],
+  exports: [EscalationService, UserReader],
 })
 export class RequestModule {}

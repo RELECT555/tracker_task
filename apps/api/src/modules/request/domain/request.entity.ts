@@ -7,7 +7,9 @@ import {
   approveRouteStep,
   assertActiveAssignee,
   cancelRouteOnCancel,
+  escalateRouteStep,
   type ApproveStepResult,
+  type EscalateStepResult,
   type ProvideInfoResult,
 } from './request.actions';
 
@@ -250,5 +252,30 @@ export class Request extends AggregateRoot {
       assigneeId: step.assignee.id,
       dueAt: step.dueAt ? new Date(step.dueAt) : null,
     };
+  }
+
+  escalate(
+    actorId: string,
+    newAssignee: { id: string; fullName: string },
+  ): EscalateStepResult {
+    if (this.props.status !== 'in_progress') {
+      throw new InvalidTransitionError('Only in-progress requests can be escalated');
+    }
+
+    const routeSnapshot = this.props.routeSnapshot as RouteSnapshot;
+    assertActiveAssignee(routeSnapshot, this.props.currentStepIndex, actorId);
+
+    if (newAssignee.id === actorId) {
+      throw new InvalidTransitionError('Cannot escalate to the same assignee');
+    }
+
+    const result = escalateRouteStep(
+      routeSnapshot,
+      this.props.currentStepIndex!,
+      newAssignee,
+    );
+    this.props.routeSnapshot = result.routeSnapshot;
+    this.props.updatedAt = new Date();
+    return result;
   }
 }

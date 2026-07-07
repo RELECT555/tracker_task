@@ -7,7 +7,15 @@ export type RequestAction =
   | 'reject'
   | 'request_info'
   | 'provide_info'
+  | 'escalate'
   | 'cancel';
+
+const DEFAULT_STEP_ACTIONS: readonly string[] = ['approve', 'reject', 'request_info'];
+
+function stepAllows(stepActions: string[] | undefined, action: string): boolean {
+  const actions = stepActions ?? DEFAULT_STEP_ACTIONS;
+  return actions.includes(action);
+}
 
 export interface ApproveStepResult {
   kind: 'advanced' | 'completed';
@@ -92,6 +100,47 @@ export interface ProvideInfoResult {
   dueAt: Date | null;
 }
 
+export interface EscalateStepResult {
+  routeSnapshot: RouteSnapshot;
+  stepIndex: number;
+  newAssigneeId: string;
+  newDueAt: Date | null;
+}
+
+export function escalateRouteStep(
+  routeSnapshot: RouteSnapshot,
+  currentStepIndex: number,
+  newAssignee: { id: string; fullName: string },
+): EscalateStepResult {
+  const step = routeSnapshot.steps[currentStepIndex];
+  if (!step) {
+    throw new InvalidTransitionError('Current route step not found');
+  }
+
+  const dueAt =
+    step.slaHours != null
+      ? new Date(Date.now() + step.slaHours * 60 * 60 * 1000)
+      : null;
+
+  const steps = routeSnapshot.steps.map((routeStep, index) =>
+    index === currentStepIndex
+      ? {
+          ...routeStep,
+          assignee: { id: newAssignee.id, fullName: newAssignee.fullName },
+          dueAt: dueAt?.toISOString() ?? null,
+          status: 'active' as const,
+        }
+      : routeStep,
+  );
+
+  return {
+    routeSnapshot: { ...routeSnapshot, steps },
+    stepIndex: currentStepIndex,
+    newAssigneeId: newAssignee.id,
+    newDueAt: dueAt,
+  };
+}
+
 export function computeAvailableActions(input: {
   status: string;
   authorId: string;
@@ -110,7 +159,10 @@ export function computeAvailableActions(input: {
   if (input.status === 'in_progress' && input.routeSnapshot && input.currentStepIndex !== null) {
     const step = input.routeSnapshot.steps[input.currentStepIndex];
     if (step?.status === 'active' && step.assignee.id === input.actorId) {
-      actions.push('approve', 'reject', 'request_info');
+      if (stepAllows(step.actions, 'approve')) actions.push('approve');
+      if (stepAllows(step.actions, 'reject')) actions.push('reject');
+      if (stepAllows(step.actions, 'request_info')) actions.push('request_info');
+      if (stepAllows(step.actions, 'escalate')) actions.push('escalate');
     }
   }
 

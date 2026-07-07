@@ -9,6 +9,8 @@ import {
   DefaultValuePipe,
 } from '@nestjs/common';
 import type { RequestStatus } from '@tracker/shared';
+import { AddCommentHandler } from '../application/commands/add-comment.handler';
+import { EscalateRequestHandler } from '../application/commands/escalate-request.handler';
 import { ApproveRequestHandler } from '../application/commands/approve-request.handler';
 import { CancelRequestHandler } from '../application/commands/cancel-request.handler';
 import { ProvideInfoHandler } from '../application/commands/provide-info.handler';
@@ -21,8 +23,10 @@ import { ListInboxHandler } from '../application/queries/list-inbox.handler';
 import { ListOutboxHandler } from '../application/queries/list-outbox.handler';
 import {
   ApproveRequestDto,
+  AddCommentDto,
   CancelRequestDto,
   CreateRequestDto,
+  EscalateRequestDto,
   ProvideInfoDto,
   RejectRequestDto,
   RequestInfoDto,
@@ -40,6 +44,8 @@ export class RequestController {
     private readonly cancelHandler: CancelRequestHandler,
     private readonly requestInfoHandler: RequestInfoHandler,
     private readonly provideInfoHandler: ProvideInfoHandler,
+    private readonly escalateHandler: EscalateRequestHandler,
+    private readonly addCommentHandler: AddCommentHandler,
     private readonly getHandler: GetRequestHandler,
     private readonly listOutboxHandler: ListOutboxHandler,
     private readonly listInboxHandler: ListInboxHandler,
@@ -132,6 +138,33 @@ export class RequestController {
       actorId: user.id,
       fields: dto.fields,
       comment: dto.comment,
+    });
+  }
+
+  @Post(':id/escalate')
+  escalate(
+    @Param('id') id: string,
+    @Body() dto: EscalateRequestDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.escalateHandler.execute({
+      requestId: id,
+      actorId: user.id,
+      reason: dto.reason,
+    });
+  }
+
+  @Post(':id/comments')
+  addComment(
+    @Param('id') id: string,
+    @Body() dto: AddCommentDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.addCommentHandler.execute({
+      requestId: id,
+      actorId: user.id,
+      body: dto.body,
+      isInternal: dto.isInternal,
     });
   }
 

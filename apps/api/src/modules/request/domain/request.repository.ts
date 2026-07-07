@@ -51,4 +51,5 @@ export interface UserSummary {
 export abstract class UserReader {
   abstract findById(id: string): Promise<UserSummary | null>;
   abstract findAuthorContext(id: string): Promise<AuthorContext | null>;
+  abstract findManagerId(userId: string): Promise<string | null>;
 }
