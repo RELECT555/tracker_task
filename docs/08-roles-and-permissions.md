@@ -40,6 +40,7 @@ Access = Role Permissions ∩ Context Policies
 | `request:provide-info` | ✓*** | ✓*** | ✓*** | ✓ | ✗ |
 | `request:reassign` | ✗ | ✗ | ✗ | ✓ | ✗ |
 | `request:select-route` | ✓**** | ✓ | ✓ | ✓ | ✗ |
+| `request:build-personal-route` | ✓***** | ✓ | ✓ | ✓ | ✗ |
 | `comment:create` | ✓*** | ✓** | ✓** | ✓ | ✗ |
 | `comment:create:internal` | ✗ | ✓** | ✓** | ✓ | ✗ |
 | `attachment:upload` | ✓*** | ✓** | ✓** | ✓ | ✗ |
@@ -55,6 +56,7 @@ Access = Role Permissions ∩ Context Policies
 - \** Только если user = текущий assignee
 - \*** Только если user = author и status = `pending_info` (provide-info) или участник запроса (comment/upload)
 - \**** Только маршруты из `allowedManualRoutes` для данного типа
+- \***** Только если `RequestType.allowsPersonalRoute = true`; нельзя назначить себя
 
 ## Context Policies
 

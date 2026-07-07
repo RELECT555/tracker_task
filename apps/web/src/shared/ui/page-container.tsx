@@ -10,8 +10,8 @@ export function PageContainer({
   return (
     <div
       className={cn(
-        'mx-auto w-full max-w-7xl animate-in fade-in slide-in-from-bottom-2 duration-500',
-        className,
+        'mx-auto w-full animate-in px-4 fade-in slide-in-from-bottom-2 duration-500 md:px-6 lg:px-8',
+        className ?? 'max-w-7xl',
       )}
     >
       {children}

@@ -329,8 +329,11 @@ file: <binary>
         { "key": "dateFrom", "label": "Дата начала", "type": "date", "required": true },
         { "key": "dateTo", "label": "Дата окончания", "type": "date", "required": true },
         { "key": "days", "label": "Кол-во дней", "type": "number", "required": true },
-        { "key": "reason", "label": "Причина", "type": "text", "required": false }
-      ]
+        { "key": "reason", "label": "Причина", "type": "text", "required": false },
+        { "key": "addressee", "label": "Кому адресовано", "type": "user_ref", "required": false }
+      ],
+      "allowsPersonalRoute": false,
+      "maxPersonalRouteSteps": 5
     }
   ]
 }
@@ -338,7 +341,7 @@ file: <binary>
 
 ### GET /request-types/:id/available-routes
 
-Допустимые маршруты для ручного выбора.
+Допустимые маршруты для ручного выбора (UC-05). Возвращается только если тип имеет непустой `allowedManualRoutes`.
 
 ```json
 // Response 200
@@ -349,20 +352,34 @@ file: <binary>
       "name": "Стандартный (руководитель → HR)",
       "steps": [
         { "name": "Руководитель", "assigneeType": "manager_chain" },
-        { "name": "HR", "assigneeType": "pool" }
+        { "name": "HR", "assigneeType": "role" }
       ],
       "isDefault": true
-    },
-    {
-      "id": "rtpl_vacation_short",
-      "name": "Краткий (только руководитель)",
-      "steps": [
-        { "name": "Руководитель", "assigneeType": "manager_chain" }
-      ],
-      "isDefault": false
     }
+  ],
+  "allowsPersonalRoute": true,
+  "maxPersonalRouteSteps": 5
+}
+```
+
+> Если `allowsPersonalRoute = true`, UI показывает вкладку «Собрать свой маршрут» вместо или в дополнение к whitelist.
+
+### POST /requests/:id/submit — персональный маршрут
+
+Альтернатива `routeTemplateId` для типов с `allowsPersonalRoute`:
+
+```json
+// Request
+{
+  "personalSteps": [
+    { "name": "Согласование руководителя", "assigneeUserId": "usr_mgr", "slaHours": 24 },
+    { "name": "Информирование HR", "assigneeUserId": "usr_hr", "slaHours": 48 }
   ]
 }
+
+// Errors
+// 409 ROUTE_NOT_ALLOWED — тип не разрешает personal route
+// 422 BUSINESS_RULE_VIOLATION — self-assign, inactive user, too many steps
 ```
 
 ---
@@ -416,6 +433,40 @@ file: <binary>
 ### PUT /admin/route-templates/:id/publish
 
 Публикует новую версию шаблона.
+
+---
+
+## Request Types (Admin)
+
+### GET /admin/request-types
+
+Список типов с полной конфигурацией (включая `fieldSchema`, `allowedManualRoutes`, `allowsPersonalRoute`).
+
+### POST /admin/request-types
+
+```json
+{
+  "code": "personal_request",
+  "name": "Личный запрос",
+  "description": "Произвольный запрос с выбором согласующих",
+  "fieldSchema": [
+    { "key": "subject", "label": "Тема", "type": "text", "required": true },
+    { "key": "details", "label": "Подробности", "type": "textarea", "required": false },
+    { "key": "addressee", "label": "Кому", "type": "user_ref", "required": true }
+  ],
+  "defaultRouteTemplateId": null,
+  "allowedManualRoutes": [],
+  "allowsPersonalRoute": true,
+  "maxPersonalRouteSteps": 3,
+  "isActive": true
+}
+```
+
+### PATCH /admin/request-types/:id
+
+Частичное обновление. Поле `fieldSchema` заменяет схему целиком (не merge).
+
+**Типы полей `fieldSchema`:** `text`, `textarea`, `number`, `date`, `boolean`, `select`, `user_ref`.
 
 ---
 

@@ -159,20 +159,25 @@ interface RequestType {
   code: string;                    // 'vacation', 'purchase', ...
   name: string;
   description: string;
-  fieldSchema: FieldSchema[];      // JSON Schema-like
-  routeTemplateId: RouteTemplateId;
-  allowedManualRoutes: RouteTemplateId[];  // whitelist для ручного выбора
+  fieldSchema: FieldSchema[];      // кастомные поля формы
+  defaultRouteTemplateId: RouteTemplateId | null;
+  allowedManualRoutes: RouteTemplateId[];  // whitelist шаблонов для ручного выбора (UC-05)
+  allowsPersonalRoute: boolean;    // разрешена сборка маршрута автором (UC-06)
+  maxPersonalRouteSteps: number;   // лимит шагов в персональном маршруте (default: 5)
   isActive: boolean;
 }
 
 interface FieldSchema {
   key: string;
   label: string;
-  type: 'text' | 'number' | 'date' | 'select' | 'file' | 'user_ref';
+  type: 'text' | 'textarea' | 'number' | 'date' | 'boolean' | 'select' | 'user_ref';
   required: boolean;
   options?: { value: string; label: string }[];
-  validation?: Record<string, unknown>;
+  validation?: Record<string, unknown>;  // v2: min/max, pattern, file constraints
 }
+
+/** Значение поля user_ref — UUID активного пользователя */
+type UserRefValue = UserId;
 ```
 
 ### 5. User (агрегат идентичности)

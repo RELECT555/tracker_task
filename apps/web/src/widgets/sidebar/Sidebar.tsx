@@ -6,7 +6,6 @@ import { useState } from 'react';
 import {
   Inbox,
   Send,
-  PlusCircle,
   LayoutDashboard,
   Settings,
   ChevronUp,
@@ -14,26 +13,35 @@ import {
   LogOut,
 } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
+import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
 
-const navSections = [
-  {
-    title: 'Рабочее пространство',
-    items: [
-      { href: routes.inbox, label: 'Входящие', icon: Inbox },
-      { href: routes.outbox, label: 'Исходящие', icon: Send },
-      { href: routes.newRequest, label: 'Новый запрос', icon: PlusCircle },
-    ],
-  },
-  {
-    title: 'Администрирование',
-    items: [{ href: routes.admin.root, label: 'Админ', icon: Settings }],
-  },
-];
+const workspaceSection = {
+  title: 'Рабочее пространство',
+  items: [
+    { href: routes.inbox, label: 'Входящие', icon: Inbox },
+    { href: routes.outbox, label: 'Исходящие', icon: Send },
+  ],
+};
+
+const adminSection = {
+  title: 'Администрирование',
+  items: [{ href: routes.admin.root, label: 'Панель администратора', icon: Settings }],
+};
 
 function isActive(pathname: string, href: string) {
-  return pathname === href || (href !== routes.admin.root && pathname.startsWith(`${href}/`));
+  if (href === routes.admin.root) {
+    return pathname === href || pathname.startsWith('/admin/');
+  }
+  if (href === routes.outbox) {
+    return (
+      pathname === href ||
+      pathname.startsWith(`${href}/`) ||
+      pathname === routes.newRequest
+    );
+  }
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 function initials(fullName: string) {
@@ -53,6 +61,9 @@ export function Sidebar() {
   const displayName = user?.fullName ?? 'Dev-пользователь';
   const displayEmail = user?.email ?? 'без JWT (DEV_USER_ID)';
   const primaryRole = user?.roles[0] ?? 'dev';
+  const navSections = isAdminUser(user)
+    ? [workspaceSection, adminSection]
+    : [workspaceSection];
 
   return (
     <aside
@@ -63,7 +74,7 @@ export function Sidebar() {
         <div className="flex h-8 w-8 items-center justify-center rounded-md border border-sidebar-border/60">
           <LayoutDashboard className="h-4 w-4 text-sidebar-primary" strokeWidth={1.5} />
         </div>
-        <span className="text-sm font-semibold uppercase tracking-[0.2em] text-sidebar-foreground">
+        <span className="font-mono text-sm font-semibold uppercase tracking-[0.2em] text-sidebar-foreground">
           Tracker
         </span>
       </div>

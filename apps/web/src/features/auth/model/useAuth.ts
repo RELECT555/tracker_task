@@ -24,7 +24,8 @@ export function useAuth() {
       setHasToken(false);
       queryClient.removeQueries({ queryKey: ['auth', 'me'] });
       if (window.location.pathname !== routes.login) {
-        router.push(routes.login);
+        const redirect = encodeURIComponent(window.location.pathname);
+        router.push(`${routes.login}?redirect=${redirect}`);
         router.refresh();
       }
     };
@@ -47,12 +48,12 @@ export function useAuth() {
   });
 
   const loginMutation = useMutation({
-    mutationFn: (dto: LoginDto) => authApi.login(dto),
-    onSuccess: (data) => {
+    mutationFn: ({ dto }: { dto: LoginDto; redirectTo?: string }) => authApi.login(dto),
+    onSuccess: (data, variables) => {
       setTokens(data.accessToken, data.refreshToken);
       setHasToken(true);
       queryClient.setQueryData(['auth', 'me'], { user: data.user });
-      router.push(routes.inbox);
+      router.push(variables.redirectTo ?? routes.inbox);
       router.refresh();
     },
   });
@@ -69,7 +70,8 @@ export function useAuth() {
     user: meQuery.data?.user ?? null,
     isLoading: hasToken && meQuery.isLoading,
     isAuthenticated: hasToken && Boolean(meQuery.data?.user),
-    login: loginMutation.mutateAsync,
+    login: (dto: LoginDto, redirectTo?: string) =>
+      loginMutation.mutateAsync({ dto, redirectTo }),
     loginError: loginMutation.error,
     isLoggingIn: loginMutation.isPending,
     logout,

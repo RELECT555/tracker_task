@@ -47,7 +47,13 @@ export function useRequestActions(requestId: string) {
     onSuccess: invalidateRequest,
   });
 
-  return { submit, approve, reject, cancel, requestInfo, provideInfo, escalate };
+  const update = useMutation({
+    mutationFn: (input: { title?: string; fields?: Record<string, unknown> }) =>
+      requestApi.update(requestId, input),
+    onSuccess: invalidateRequest,
+  });
+
+  return { submit, approve, reject, cancel, requestInfo, provideInfo, escalate, update };
 }
 
 export function getAvailableActions(data: RequestDetail | undefined): Record<RequestAction, boolean> {

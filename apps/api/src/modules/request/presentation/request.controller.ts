@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   ParseIntPipe,
@@ -18,6 +19,7 @@ import { RequestInfoHandler } from '../application/commands/request-info.handler
 import { RejectRequestHandler } from '../application/commands/reject-request.handler';
 import { SubmitRequestHandler } from '../application/commands/submit-request.handler';
 import { CreateRequestHandler } from '../application/commands/create-request.handler';
+import { UpdateRequestHandler } from '../application/commands/update-request.handler';
 import { GetRequestHandler } from '../application/queries/get-request.handler';
 import { ListInboxHandler } from '../application/queries/list-inbox.handler';
 import { ListOutboxHandler } from '../application/queries/list-outbox.handler';
@@ -31,6 +33,7 @@ import {
   RejectRequestDto,
   RequestInfoDto,
   SubmitRequestDto,
+  UpdateRequestDto,
 } from './dto/request.dto';
 import { CurrentUser } from '../../../shared/presentation/decorators/current-user.decorator';
 
@@ -38,6 +41,7 @@ import { CurrentUser } from '../../../shared/presentation/decorators/current-use
 export class RequestController {
   constructor(
     private readonly createHandler: CreateRequestHandler,
+    private readonly updateHandler: UpdateRequestHandler,
     private readonly submitHandler: SubmitRequestHandler,
     private readonly approveHandler: ApproveRequestHandler,
     private readonly rejectHandler: RejectRequestHandler,
@@ -56,6 +60,21 @@ export class RequestController {
     return this.createHandler.execute({
       typeId: dto.typeId,
       authorId: user.id,
+      title: dto.title,
+      fields: dto.fields,
+      priority: dto.priority,
+    });
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateRequestDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.updateHandler.execute({
+      requestId: id,
+      actorId: user.id,
       title: dto.title,
       fields: dto.fields,
       priority: dto.priority,
@@ -188,11 +207,13 @@ export class RequestController {
     @CurrentUser() user: { id: string },
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+    @Query('sort') sort?: 'sla' | 'recent',
   ) {
     return this.listInboxHandler.execute({
       assigneeId: user.id,
       page,
       limit,
+      sort: sort === 'recent' ? 'recent' : 'sla',
     });
   }
 

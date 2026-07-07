@@ -20,7 +20,6 @@ import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Button } from '@/shared/ui/button';
-import { Card } from '@/shared/ui/card';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { TableSkeleton } from '@/shared/ui/skeleton';
 import { DashboardShell } from '@/widgets/dashboard-shell/DashboardShell';
@@ -118,46 +117,45 @@ export function OutboxPage() {
 
       {data && items.length > 0 && (
         <div className="space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard
+          <div className="grid grid-cols-2 divide-x divide-border overflow-hidden rounded-xl border border-border bg-card xl:grid-cols-4">
+            <StatTile
               icon={FileText}
               label="Всего"
               value={stats.total}
-              accent="text-primary bg-primary/10"
+              accent="text-primary"
+              iconBg="bg-primary/10"
             />
-            <StatCard
+            <StatTile
               icon={Clock}
               label="Активные"
               value={stats.active}
-              accent="text-blue-600 bg-blue-500/10 dark:text-blue-300"
+              accent="text-blue-600 dark:text-blue-300"
+              iconBg="bg-blue-500/10"
             />
-            <StatCard
+            <StatTile
               icon={Send}
               label="Черновики"
               value={stats.draft}
-              accent="text-muted-foreground bg-muted"
+              accent="text-muted-foreground"
+              iconBg="bg-muted"
             />
-            <StatCard
+            <StatTile
               icon={CheckCircle2}
               label="Завершённые"
               value={stats.done}
-              accent="text-green-600 bg-green-500/10 dark:text-green-300"
+              accent="text-green-600 dark:text-green-300"
+              iconBg="bg-green-500/10"
             />
           </div>
 
-          <Card className="overflow-hidden">
-            <div className="flex flex-col gap-4 border-b border-border/60 bg-muted/30 px-6 py-5 sm:flex-row sm:items-center sm:justify-between dark:bg-muted/15">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
-                  <Send className="h-5 w-5" strokeWidth={1.75} />
-                </div>
-                <div>
-                  <h2 className="text-base font-semibold">Список запросов</h2>
-                  <p className="text-sm text-muted-foreground">
-                    {stats.total}{' '}
-                    {stats.total === 1 ? 'запрос' : stats.total < 5 ? 'запроса' : 'запросов'}
-                  </p>
-                </div>
+          <section className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="flex flex-col gap-4 border-b border-border px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-base font-semibold">Список запросов</h2>
+                <p className="text-sm text-muted-foreground">
+                  {stats.total}{' '}
+                  {stats.total === 1 ? 'запрос' : stats.total < 5 ? 'запроса' : 'запросов'}
+                </p>
               </div>
               <Link href={routes.newRequest}>
                 <Button className="w-full sm:w-auto">
@@ -167,7 +165,7 @@ export function OutboxPage() {
               </Link>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-6 py-3">
+            <div className="flex flex-wrap items-center gap-2 border-b border-border px-6 py-3">
               <Filter className="mr-1 h-3.5 w-3.5 text-muted-foreground" />
               {filterOptions.map((option) => (
                 <button
@@ -184,7 +182,7 @@ export function OutboxPage() {
                   {option.label}
                   <span
                     className={cn(
-                      'rounded-full px-1.5 py-0.5 text-[10px] tabular-nums',
+                      'rounded-full px-1.5 py-0.5 font-mono text-[10px] tabular-nums',
                       statusFilter === option.id
                         ? 'bg-primary-foreground/20 text-primary-foreground'
                         : 'bg-background/80',
@@ -215,7 +213,7 @@ export function OutboxPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-border/60 bg-muted/20 dark:bg-muted/10">
+                    <tr className="border-b border-border bg-muted/30 dark:bg-muted/15">
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         Запрос
                       </th>
@@ -231,7 +229,7 @@ export function OutboxPage() {
                       <th className="w-10 px-4 py-3" aria-hidden />
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border/60">
+                  <tbody className="divide-y divide-border">
                     {filteredItems.map((item) => (
                       <tr
                         key={item.id}
@@ -253,7 +251,7 @@ export function OutboxPage() {
                         <td className="px-6 py-4">
                           <RequestStatusBadge status={item.status} />
                         </td>
-                        <td className="px-6 py-4 text-muted-foreground tabular-nums">
+                        <td className="px-6 py-4 font-mono text-xs text-muted-foreground tabular-nums">
                           {formatCreatedAt(item.createdAt)}
                         </td>
                         <td className="px-4 py-4">
@@ -273,7 +271,7 @@ export function OutboxPage() {
             )}
 
             {filteredItems.length > 0 && (
-              <div className="border-t border-border/60 bg-muted/20 px-6 py-3 text-xs text-muted-foreground dark:bg-muted/10">
+              <div className="border-t border-border px-6 py-3 font-mono text-xs text-muted-foreground">
                 Показано {filteredItems.length} из {items.length}
                 {statusFilter !== 'all' && (
                   <>
@@ -284,33 +282,35 @@ export function OutboxPage() {
                 )}
               </div>
             )}
-          </Card>
+          </section>
         </div>
       )}
     </DashboardShell>
   );
 }
 
-function StatCard({
+function StatTile({
   icon: Icon,
   label,
   value,
   accent,
+  iconBg,
 }: {
   icon: typeof FileText;
   label: string;
   value: number;
   accent: string;
+  iconBg: string;
 }) {
   return (
-    <Card className="flex items-center gap-4 p-4">
-      <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', accent)}>
+    <div className="flex items-center gap-4 p-4">
+      <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', iconBg, accent)}>
         <Icon className="h-5 w-5" strokeWidth={1.75} />
       </div>
       <div>
-        <p className="text-2xl font-semibold tabular-nums leading-none">{value}</p>
+        <p className="font-mono text-2xl font-semibold tabular-nums leading-none">{value}</p>
         <p className="mt-1 text-xs text-muted-foreground">{label}</p>
       </div>
-    </Card>
+    </div>
   );
 }

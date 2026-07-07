@@ -8,10 +8,11 @@ const DEV_ADMIN_ID = '00000000-0000-4000-8000-000000000002';
 const DEV_MANAGER_ID = '00000000-0000-4000-8000-000000000003';
 const DEV_DIRECTOR_ID = '00000000-0000-4000-8000-000000000004';
 const DEV_ORG_ID = '00000000-0000-4000-8000-000000000001';
-const TYPE_VACATION_ID = '00000000-0000-4000-8000-000000000101';
-const TYPE_PURCHASE_ID = '00000000-0000-4000-8000-000000000102';
-const ROUTE_VACATION_ID = '00000000-0000-4000-8000-000000000201';
-const ROUTE_PURCHASE_ID = '00000000-0000-4000-8000-000000000202';
+const TYPE_GENERIC_ID = '00000000-0000-4000-8000-000000000101';
+const TYPE_SIMPLE_ID = '00000000-0000-4000-8000-000000000102';
+const TYPE_PERSONAL_ID = '00000000-0000-4000-8000-000000000103';
+const ROUTE_STANDARD_ID = '00000000-0000-4000-8000-000000000201';
+const ROUTE_SHORT_ID = '00000000-0000-4000-8000-000000000202';
 
 async function main() {
   if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SEED !== 'true') {
@@ -114,11 +115,11 @@ async function main() {
   });
 
   await prisma.routeTemplate.upsert({
-    where: { id_version: { id: ROUTE_VACATION_ID, version: 1 } },
-    update: { isPublished: true },
+    where: { id_version: { id: ROUTE_STANDARD_ID, version: 1 } },
+    update: { isPublished: true, name: 'Стандартный маршрут (2 шага)' },
     create: {
-      id: ROUTE_VACATION_ID,
-      name: 'Отпуск — стандартный',
+      id: ROUTE_STANDARD_ID,
+      name: 'Стандартный маршрут (2 шага)',
       version: 1,
       isPublished: true,
       steps: {
@@ -133,7 +134,7 @@ async function main() {
           },
           {
             stepOrder: 1,
-            name: 'Согласование HR',
+            name: 'Финальное согласование',
             assigneeType: 'role',
             assigneeRef: 'admin',
             actions: ['approve', 'reject'],
@@ -145,11 +146,11 @@ async function main() {
   });
 
   await prisma.routeTemplate.upsert({
-    where: { id_version: { id: ROUTE_PURCHASE_ID, version: 1 } },
-    update: { isPublished: true },
+    where: { id_version: { id: ROUTE_SHORT_ID, version: 1 } },
+    update: { isPublished: true, name: 'Краткий маршрут (1 шаг)' },
     create: {
-      id: ROUTE_PURCHASE_ID,
-      name: 'Закупка — стандартный',
+      id: ROUTE_SHORT_ID,
+      name: 'Краткий маршрут (1 шаг)',
       version: 1,
       isPublished: true,
       steps: {
@@ -159,16 +160,8 @@ async function main() {
             name: 'Согласование руководителя',
             assigneeType: 'manager_chain',
             assigneeRef: '1',
-            actions: ['approve', 'reject', 'escalate'],
+            actions: ['approve', 'reject', 'escalate', 'request_info'],
             slaHours: 24,
-          },
-          {
-            stepOrder: 1,
-            name: 'Согласование директора',
-            assigneeType: 'manager_chain',
-            assigneeRef: '2',
-            actions: ['approve', 'reject'],
-            slaHours: 72,
           },
         ],
       },
@@ -176,35 +169,108 @@ async function main() {
   });
 
   await prisma.requestType.upsert({
-    where: { id: TYPE_VACATION_ID },
-    update: { defaultRouteTemplateId: ROUTE_VACATION_ID },
-    create: {
-      id: TYPE_VACATION_ID,
-      code: 'vacation',
-      name: 'Отпуск',
-      description: 'Заявление на ежегодный оплачиваемый отпуск',
-      defaultRouteTemplateId: ROUTE_VACATION_ID,
+    where: { id: TYPE_GENERIC_ID },
+    update: {
+      code: 'generic_approval',
+      name: 'Универсальное согласование',
+      description: 'Настраиваемый тип с произвольными полями формы',
+      defaultRouteTemplateId: ROUTE_STANDARD_ID,
       fieldSchema: [
-        { key: 'dateFrom', label: 'Дата начала', type: 'date', required: true },
-        { key: 'dateTo', label: 'Дата окончания', type: 'date', required: true },
-        { key: 'days', label: 'Кол-во дней', type: 'number', required: true },
-        { key: 'reason', label: 'Причина', type: 'text', required: false },
+        { key: 'subject', label: 'Тема', type: 'text', required: true },
+        { key: 'details', label: 'Подробности', type: 'textarea', required: false },
+        {
+          key: 'priority_level',
+          label: 'Приоритет',
+          type: 'select',
+          required: false,
+          options: [
+            { value: 'low', label: 'Низкий' },
+            { value: 'normal', label: 'Обычный' },
+            { value: 'high', label: 'Высокий' },
+          ],
+        },
+        { key: 'due_date', label: 'Желаемая дата', type: 'date', required: false },
+        { key: 'amount', label: 'Сумма / бюджет', type: 'number', required: false },
+        { key: 'urgent', label: 'Срочно', type: 'boolean', required: false },
+      ],
+    },
+    create: {
+      id: TYPE_GENERIC_ID,
+      code: 'generic_approval',
+      name: 'Универсальное согласование',
+      description: 'Настраиваемый тип с произвольными полями формы',
+      defaultRouteTemplateId: ROUTE_STANDARD_ID,
+      fieldSchema: [
+        { key: 'subject', label: 'Тема', type: 'text', required: true },
+        { key: 'details', label: 'Подробности', type: 'textarea', required: false },
+        {
+          key: 'priority_level',
+          label: 'Приоритет',
+          type: 'select',
+          required: false,
+          options: [
+            { value: 'low', label: 'Низкий' },
+            { value: 'normal', label: 'Обычный' },
+            { value: 'high', label: 'Высокий' },
+          ],
+        },
+        { key: 'due_date', label: 'Желаемая дата', type: 'date', required: false },
+        { key: 'amount', label: 'Сумма / бюджет', type: 'number', required: false },
+        { key: 'urgent', label: 'Срочно', type: 'boolean', required: false },
       ],
     },
   });
 
   await prisma.requestType.upsert({
-    where: { id: TYPE_PURCHASE_ID },
-    update: { defaultRouteTemplateId: ROUTE_PURCHASE_ID },
-    create: {
-      id: TYPE_PURCHASE_ID,
-      code: 'purchase',
-      name: 'Закупка',
-      description: 'Заявка на закупку оборудования или услуг',
-      defaultRouteTemplateId: ROUTE_PURCHASE_ID,
+    where: { id: TYPE_SIMPLE_ID },
+    update: {
+      code: 'simple_note',
+      name: 'Краткая заявка',
+      description: 'Минимальный тип — только текст запроса',
+      defaultRouteTemplateId: ROUTE_SHORT_ID,
       fieldSchema: [
-        { key: 'amount', label: 'Сумма', type: 'number', required: true },
-        { key: 'description', label: 'Описание', type: 'text', required: true },
+        { key: 'body', label: 'Текст запроса', type: 'textarea', required: true },
+      ],
+    },
+    create: {
+      id: TYPE_SIMPLE_ID,
+      code: 'simple_note',
+      name: 'Краткая заявка',
+      description: 'Минимальный тип — только текст запроса',
+      defaultRouteTemplateId: ROUTE_SHORT_ID,
+      fieldSchema: [
+        { key: 'body', label: 'Текст запроса', type: 'textarea', required: true },
+      ],
+    },
+  });
+
+  await prisma.requestType.upsert({
+    where: { id: TYPE_PERSONAL_ID },
+    update: {
+      code: 'personal_request',
+      name: 'Личный запрос',
+      description: 'Произвольный запрос — автор сам выбирает согласующих',
+      defaultRouteTemplateId: null,
+      allowsPersonalRoute: true,
+      maxPersonalRouteSteps: 3,
+      fieldSchema: [
+        { key: 'subject', label: 'Тема', type: 'text', required: true },
+        { key: 'details', label: 'Подробности', type: 'textarea', required: false },
+        { key: 'addressee', label: 'Кому адресовано', type: 'user_ref', required: true },
+      ],
+    },
+    create: {
+      id: TYPE_PERSONAL_ID,
+      code: 'personal_request',
+      name: 'Личный запрос',
+      description: 'Произвольный запрос — автор сам выбирает согласующих',
+      defaultRouteTemplateId: null,
+      allowsPersonalRoute: true,
+      maxPersonalRouteSteps: 3,
+      fieldSchema: [
+        { key: 'subject', label: 'Тема', type: 'text', required: true },
+        { key: 'details', label: 'Подробности', type: 'textarea', required: false },
+        { key: 'addressee', label: 'Кому адресовано', type: 'user_ref', required: true },
       ],
     },
   });

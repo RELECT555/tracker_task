@@ -105,13 +105,21 @@ export class PrismaRequestRepository extends RequestRepository {
 
   async findInboxWithRelations(
     assigneeId: string,
-    filters: { page: number; limit: number },
+    filters: { page: number; limit: number; sort?: 'sla' | 'recent' },
   ) {
     const where = {
       assigneeId,
       status: 'pending',
       request: { status: 'in_progress' },
     };
+
+    const orderBy =
+      filters.sort === 'recent'
+        ? [{ assignedAt: 'desc' as const }]
+        : [
+            { dueAt: { sort: 'asc' as const, nulls: 'last' as const } },
+            { assignedAt: 'asc' as const },
+          ];
 
     const [records, total] = await Promise.all([
       this.prisma.assignment.findMany({
@@ -121,7 +129,7 @@ export class PrismaRequestRepository extends RequestRepository {
             include: { type: true, author: true },
           },
         },
-        orderBy: { assignedAt: 'desc' },
+        orderBy,
         skip: (filters.page - 1) * filters.limit,
         take: filters.limit,
       }),

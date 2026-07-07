@@ -31,20 +31,22 @@ export function RequestFieldsView({
   }
 
   return (
-    <dl className="divide-y divide-border/60">
-      {orderedKeys.map((key) => (
-        <div
-          key={key}
-          className="grid gap-1 py-3 first:pt-0 last:pb-0 sm:grid-cols-[minmax(140px,35%)_1fr] sm:gap-4"
-        >
-          <dt className="text-sm text-muted-foreground">
-            {schema.length > 0 ? getFieldLabel(schema, key) : formatFieldKey(key)}
-          </dt>
-          <dd className="text-sm font-medium whitespace-pre-wrap">
-            {formatFieldDisplayValue(fields[key])}
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <div className="rounded-lg border border-border bg-muted px-4 dark:bg-field/30">
+      <dl className="divide-y divide-border">
+        {orderedKeys.map((key) => (
+          <div
+            key={key}
+            className="grid gap-1 py-3.5 first:pt-3 last:pb-3 sm:grid-cols-[minmax(140px,35%)_1fr] sm:items-baseline sm:gap-6"
+          >
+            <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {schema.length > 0 ? getFieldLabel(schema, key) : formatFieldKey(key)}
+            </dt>
+            <dd className="text-sm font-medium whitespace-pre-wrap text-foreground">
+              {formatFieldDisplayValue(fields[key])}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }

@@ -2,10 +2,12 @@
 
 import dynamic from 'next/dynamic';
 import type { FieldSchemaItem } from '@/entities/request-type/model/field-schema';
+import type { AuthUser } from '@/entities/user/api/authApi';
 import {
   parseDateFieldValue,
   serializeDateFieldValue,
 } from '@/entities/request-type/model/field-schema';
+import { UserRefField } from '@/features/request-fields/ui/UserRefField';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 
@@ -24,6 +26,7 @@ interface FieldSchemaFormProps {
   values: Record<string, unknown>;
   onChange: (values: Record<string, unknown>) => void;
   idPrefix?: string;
+  currentUser?: AuthUser | null;
 }
 
 export function FieldSchemaForm({
@@ -31,6 +34,7 @@ export function FieldSchemaForm({
   values,
   onChange,
   idPrefix = 'field',
+  currentUser = null,
 }: FieldSchemaFormProps) {
   const updateField = (key: string, value: unknown) => {
     onChange({ ...values, [key]: value });
@@ -78,13 +82,45 @@ export function FieldSchemaForm({
                   );
                 }}
               />
-            ) : usesTextarea(field.key) ? (
+            ) : field.type === 'boolean' ? (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  id={fieldId}
+                  type="checkbox"
+                  checked={Boolean(rawValue)}
+                  onChange={(event) => updateField(field.key, event.target.checked)}
+                  className="h-4 w-4 rounded border-input"
+                />
+                <span className="text-muted-foreground">Да</span>
+              </label>
+            ) : field.type === 'select' ? (
+              <select
+                id={fieldId}
+                value={rawValue === undefined || rawValue === null ? '' : String(rawValue)}
+                onChange={(event) => updateField(field.key, event.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-field px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              >
+                <option value="">—</option>
+                {(field.options ?? []).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ) : field.type === 'textarea' ? (
               <textarea
                 id={fieldId}
                 value={rawValue === undefined || rawValue === null ? '' : String(rawValue)}
                 onChange={(event) => updateField(field.key, event.target.value)}
                 rows={3}
                 className="flex min-h-[80px] w-full rounded-md border border-input bg-field px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              />
+            ) : field.type === 'user_ref' ? (
+              <UserRefField
+                id={fieldId}
+                value={rawValue}
+                onChange={(next) => updateField(field.key, next)}
+                user={currentUser}
               />
             ) : (
               <Input
@@ -99,8 +135,4 @@ export function FieldSchemaForm({
       })}
     </div>
   );
-}
-
-function usesTextarea(key: string): boolean {
-  return key === 'reason' || key === 'description' || key === 'comment';
 }

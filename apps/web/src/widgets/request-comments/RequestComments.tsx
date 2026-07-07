@@ -6,6 +6,7 @@ import { useState } from 'react';
 import type { RequestComment, CommentPermissions } from '@/entities/request/api/requestApi';
 import { requestApi } from '@/entities/request/api/requestApi';
 import { queryKeys } from '@/shared/api/queryKeys';
+import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Label } from '@/shared/ui/label';
@@ -44,23 +45,24 @@ export function RequestComments({
   const content = (
     <div className="space-y-4">
       {comments.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Комментариев пока нет.</p>
+        <p className="rounded-lg border border-dashed border-border/70 px-4 py-6 text-center text-sm text-muted-foreground">
+          Комментариев пока нет.
+        </p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-muted dark:bg-muted/10">
           {comments.map((comment) => (
             <li
               key={comment.id}
-              className={`rounded-lg border px-3 py-2.5 ${
-                comment.isInternal
-                  ? 'border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10'
-                  : 'border-border bg-card/50'
-              }`}
+              className={cn('px-4 py-3.5', comment.isInternal && 'bg-amber-500/8 dark:bg-amber-500/10')}
             >
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium">{comment.author.fullName}</span>
-                <span className="text-xs text-muted-foreground">
+                <time
+                  dateTime={comment.createdAt}
+                  className="font-mono text-xs text-muted-foreground tabular-nums"
+                >
                   {new Date(comment.createdAt).toLocaleString('ru-RU')}
-                </span>
+                </time>
                 {comment.isInternal && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
                     <Lock className="h-3 w-3" />
@@ -75,8 +77,8 @@ export function RequestComments({
       )}
 
       {permissions.canComment && (
-        <div className="space-y-3 border-t border-border/60 pt-4">
-          <Label htmlFor="comment-body" className="text-xs text-muted-foreground">
+        <div className="space-y-3 rounded-lg border border-border bg-field p-4 dark:border-border/80">
+          <Label htmlFor="comment-body" className="text-xs font-medium text-foreground">
             Новый комментарий
           </Label>
           <textarea

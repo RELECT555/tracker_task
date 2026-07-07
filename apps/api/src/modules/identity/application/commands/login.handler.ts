@@ -21,6 +21,7 @@ export class LoginHandler {
       where: { email: input.email },
       include: {
         orgUnit: true,
+        manager: { select: { id: true, fullName: true } },
         roles: { include: { role: true } },
       },
     });

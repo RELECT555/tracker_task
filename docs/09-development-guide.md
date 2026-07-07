@@ -290,10 +290,13 @@ jobs:
 ## Чеклист перед MVP
 
 - [ ] Auth: login, refresh, logout
-- [ ] CRUD request types (admin)
+- [ ] CRUD request types (admin) + fieldSchema editor + route flags
 - [ ] CRUD route templates (admin)
 - [ ] Create + submit request
-- [ ] Routing engine: auto + manual routes
+- [ ] Routing engine: auto routes
+- [ ] Routing engine: manual route selection (UC-05)
+- [ ] Routing engine: personal route builder (UC-06)
+- [ ] Field type `user_ref` (admin + create form)
 - [ ] Inbox / Outbox lists
 - [ ] Approve / Reject / Request Info / Escalate
 - [ ] Route timeline visualization

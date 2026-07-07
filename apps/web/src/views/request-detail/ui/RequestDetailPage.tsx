@@ -1,9 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ArrowLeft,
   ArrowUpCircle,
   Ban,
   Check,
@@ -13,6 +11,7 @@ import {
   Loader2,
   MessageCircleQuestion,
   MessageSquare,
+  Pencil,
   Send,
   Settings2,
   X,
@@ -29,10 +28,11 @@ import { RequestFieldsView } from '@/features/request-fields/ui/RequestFieldsVie
 import { validateFieldSchema } from '@/entities/request-type/model/field-schema';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { routes } from '@/shared/config/routes';
+import { PageBreadcrumbs } from '@/shared/ui/page-breadcrumbs';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Button } from '@/shared/ui/button';
-import { Card, CardContent, CardTitle } from '@/shared/ui/card';
 import { DetailSection, MetaItem } from '@/shared/ui/detail-section';
+import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { DashboardShell } from '@/widgets/dashboard-shell/DashboardShell';
 import { RouteTimeline } from '@/widgets/route-timeline/RouteTimeline';
@@ -53,6 +53,9 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
   const [showProvideInfoForm, setShowProvideInfoForm] = useState(false);
   const [escalateReason, setEscalateReason] = useState('');
   const [showEscalateForm, setShowEscalateForm] = useState(false);
+  const [showDraftEdit, setShowDraftEdit] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editFields, setEditFields] = useState<Record<string, unknown>>({});
 
   const { data, isLoading, error: loadError } = useQuery({
     queryKey: queryKeys.requests.detail(requestId),
@@ -77,6 +80,39 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
     setProvideFields({ ...(data?.fields ?? {}) });
     setProvideFieldsJson(JSON.stringify(data?.fields ?? {}, null, 2));
     setShowProvideInfoForm(true);
+  };
+
+  const openDraftEdit = () => {
+    setEditTitle(data?.title ?? '');
+    setEditFields({ ...(data?.fields ?? {}) });
+    setShowDraftEdit(true);
+    setError(null);
+  };
+
+  const handleSaveDraft = () => {
+    setError(null);
+
+    if (!editTitle.trim()) {
+      setError('Укажите название запроса');
+      return;
+    }
+
+    const validationError = validateFieldSchema(fieldSchema, editFields);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    actions.update.mutate(
+      { title: editTitle.trim(), fields: editFields },
+      {
+        onSuccess: () => {
+          onSuccess();
+          setShowDraftEdit(false);
+        },
+        onError,
+      },
+    );
   };
 
   const fieldSchema = data?.type?.fieldSchema ?? [];
@@ -132,14 +168,17 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
   const showSidebar = Boolean(data?.route) || hasActions;
 
   return (
-    <DashboardShell title={data?.title ?? 'Запрос'} containerClassName="max-w-screen-2xl">
-      <Link
-        href={routes.outbox}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Назад к исходящим
-      </Link>
+    <DashboardShell
+      title="Запрос"
+      titleAs="p"
+      containerClassName="max-w-screen-2xl"
+    >
+      <PageBreadcrumbs
+        items={[
+          { label: 'Исходящие', href: routes.outbox },
+          { label: data?.title ?? 'Запрос' },
+        ]}
+      />
 
       {isLoading && <p className="mt-6 text-muted-foreground">Загрузка...</p>}
       {loadError && (
@@ -150,51 +189,97 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
 
       {data && (
         <div className="mt-6 space-y-5">
-          <Card className="overflow-hidden">
+          <section className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_hsl(var(--foreground)/0.04),0_4px_12px_hsl(var(--foreground)/0.05)] dark:shadow-none">
             <div className="px-6 py-5">
               <div className="flex flex-wrap items-center gap-2">
                 <RequestStatusBadge status={data.status} />
                 {data.type ? (
-                  <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-medium text-muted-foreground">
                     {data.type.name}
                   </span>
                 ) : null}
               </div>
-              <CardTitle className="mt-3 text-2xl">{data.title}</CardTitle>
+              <h1 className="mt-3 text-2xl font-semibold tracking-tight">{data.title}</h1>
 
               <dl className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
                 <MetaItem label="Автор" value={data.author.fullName} />
                 <MetaItem
                   label="Создан"
                   value={new Date(data.createdAt).toLocaleString('ru-RU')}
+                  mono
                 />
                 {data.submittedAt ? (
                   <MetaItem
                     label="Отправлен"
                     value={new Date(data.submittedAt).toLocaleString('ru-RU')}
+                    mono
                   />
                 ) : null}
               </dl>
             </div>
 
             {data.status === 'pending_info' ? (
-              <CardContent className="border-t border-border/60 bg-muted/20 px-6 py-4 dark:bg-muted/10">
+              <div className="border-t border-border px-6 py-4">
                 <Alert>
                   <AlertDescription>
                     Ожидается уточнение от автора запроса. После ответа согласование продолжится.
                   </AlertDescription>
                 </Alert>
-              </CardContent>
+              </div>
             ) : null}
-          </Card>
+          </section>
 
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start xl:grid-cols-[minmax(0,1.15fr)_400px] xl:gap-6">
-            <Card className="divide-y divide-border/60 overflow-hidden">
+            <div className="space-y-4">
               <DetailSection title="Поля запроса" icon={FileText}>
-                <RequestFieldsView
-                  fields={data.fields}
-                  schema={data.type?.fieldSchema ?? []}
-                />
+                {showDraftEdit ? (
+                  <div className="space-y-4">
+                    {error ? (
+                      <Alert variant="destructive">
+                        <AlertDescription>{error}</AlertDescription>
+                      </Alert>
+                    ) : null}
+                    <div className="space-y-2">
+                      <Label htmlFor="draft-title">Название</Label>
+                      <Input
+                        id="draft-title"
+                        value={editTitle}
+                        onChange={(event) => setEditTitle(event.target.value)}
+                        maxLength={500}
+                      />
+                    </div>
+                    {fieldSchema.length > 0 ? (
+                      <FieldSchemaForm
+                        schema={fieldSchema}
+                        values={editFields}
+                        onChange={setEditFields}
+                      />
+                    ) : null}
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        onClick={handleSaveDraft}
+                        disabled={actions.update.isPending}
+                      >
+                        {actions.update.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : null}
+                        Сохранить
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowDraftEdit(false)}
+                        disabled={actions.update.isPending}
+                      >
+                        Отмена
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <RequestFieldsView
+                    fields={data.fields}
+                    schema={data.type?.fieldSchema ?? []}
+                  />
+                )}
               </DetailSection>
 
               {showHistory ? (
@@ -209,7 +294,7 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
                   icon={MessageSquare}
                   badge={
                     data.comments.length > 0 ? (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">
+                      <span className="rounded-full bg-primary/15 px-2 py-0.5 font-mono text-xs font-medium text-primary">
                         {data.comments.length}
                       </span>
                     ) : null
@@ -223,10 +308,10 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
                   />
                 </DetailSection>
               ) : null}
-            </Card>
+            </div>
 
             {showSidebar ? (
-              <Card className="divide-y divide-border/60 overflow-hidden lg:sticky lg:top-6">
+              <div className="space-y-4 lg:sticky lg:top-6">
                 {data.route ? (
                   <DetailSection title="Маршрут согласования" icon={GitBranch}>
                     <RouteTimeline embedded route={data.route} />
@@ -234,8 +319,7 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
                 ) : null}
 
                 {hasActions ? (
-                  <DetailSection title="Действия" icon={Settings2}>
-                    <div className="space-y-4">
+                  <DetailSection title="Действия" icon={Settings2} bodyClassName="space-y-4">
                       {error ? (
                         <Alert variant="destructive">
                           <AlertDescription>{error}</AlertDescription>
@@ -243,6 +327,16 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
                       ) : null}
 
                       <div className="flex flex-col gap-2">
+                      {can.submit && !showDraftEdit && (
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start"
+                          onClick={openDraftEdit}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          Редактировать черновик
+                        </Button>
+                      )}
                       {can.submit && (
                         <Button
                           className="w-full justify-start"
@@ -376,7 +470,7 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
                     )}
 
                     {showProvideInfoForm && can.provide_info && (
-                      <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                      <div className="mt-4 space-y-3 border-t border-primary/30 pt-4">
                         {fieldSchema.length > 0 ? (
                           <FieldSchemaForm
                             schema={fieldSchema}
@@ -473,10 +567,9 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
                         isPending={actions.cancel.isPending}
                       />
                     )}
-                    </div>
                   </DetailSection>
                 ) : null}
-              </Card>
+              </div>
             ) : null}
           </div>
         </div>
@@ -512,13 +605,11 @@ function ActionForm({
   required?: boolean;
   variant?: 'destructive';
 }) {
-  const borderClass =
-    variant === 'destructive'
-      ? 'border-destructive/30 bg-destructive/5 dark:bg-destructive/10'
-      : 'border-border/70 bg-muted/40 dark:bg-accent/20';
+  const accentClass =
+    variant === 'destructive' ? 'border-destructive/40' : 'border-border';
 
   return (
-    <div className={`space-y-3 rounded-lg border p-4 ${borderClass}`}>
+    <div className={`mt-4 space-y-3 border-t pt-4 ${accentClass}`}>
       <Label htmlFor={id}>{label}</Label>
       <textarea
         id={id}

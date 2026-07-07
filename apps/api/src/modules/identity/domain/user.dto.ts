@@ -4,6 +4,7 @@ export interface UserDto {
   fullName: string;
   roles: string[];
   orgUnit: { id: string; name: string } | null;
+  manager: { id: string; fullName: string } | null;
 }
 
 export interface AuthTokens {

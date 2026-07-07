@@ -64,6 +64,54 @@ describe('Request', () => {
     ).toThrow();
   });
 
+  it('updates draft title and fields by author', () => {
+    const request = Request.create({
+      id: 'req-1',
+      typeId: 'type-1',
+      authorId: 'user-1',
+      title: 'Test',
+      fields: { amount: 100 },
+    });
+
+    request.updateDraft('user-1', {
+      title: 'Updated title',
+      fields: { amount: 200 },
+      priority: 'high',
+    });
+
+    expect(request.title).toBe('Updated title');
+    expect(request.fields).toEqual({ amount: 200 });
+    expect(request.priority).toBe('high');
+  });
+
+  it('rejects draft update by non-author', () => {
+    const request = Request.create({
+      id: 'req-1',
+      typeId: 'type-1',
+      authorId: 'user-1',
+      title: 'Test',
+    });
+
+    expect(() => request.updateDraft('user-2', { title: 'Hack' })).toThrow(
+      AccessDeniedError,
+    );
+  });
+
+  it('rejects draft update after submit', () => {
+    const request = Request.create({
+      id: 'req-1',
+      typeId: 'type-1',
+      authorId: 'user-1',
+      title: 'Test',
+    });
+
+    request.submitWithRoute(sampleRoute);
+
+    expect(() => request.updateDraft('user-1', { title: 'Late edit' })).toThrow(
+      InvalidTransitionError,
+    );
+  });
+
   it('submits draft with route', () => {
     const request = Request.create({
       id: 'req-1',

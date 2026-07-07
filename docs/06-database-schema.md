@@ -139,7 +139,9 @@ CREATE TABLE request_types (
     description             TEXT,
     field_schema            JSONB NOT NULL,     -- [{key, label, type, required, ...}]
     default_route_template_id UUID REFERENCES route_templates(id),
-    allowed_manual_routes   UUID[],             -- whitelist route template IDs
+    allowed_manual_routes   UUID[],             -- whitelist route template IDs (UC-05)
+    allows_personal_route   BOOLEAN NOT NULL DEFAULT false,  -- UC-06
+    max_personal_route_steps INT NOT NULL DEFAULT 5,
     is_active               BOOLEAN NOT NULL DEFAULT true,
     created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()

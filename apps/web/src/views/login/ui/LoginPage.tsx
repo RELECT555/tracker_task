@@ -1,8 +1,11 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { LayoutDashboard } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
+import { routes } from '@/shared/config/routes';
+import { safeRedirectPath } from '@/shared/config/auth';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
@@ -10,6 +13,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/sha
 import { ApiError } from '@/shared/api/client';
 
 export function LoginPage() {
+  const searchParams = useSearchParams();
+  const redirectTo = safeRedirectPath(searchParams.get('redirect'), routes.inbox);
   const { login, isLoggingIn } = useAuth();
   const [email, setEmail] = useState('admin@tracker.local');
   const [password, setPassword] = useState('tracker');
@@ -20,7 +25,7 @@ export function LoginPage() {
     setError(null);
 
     try {
-      await login({ email, password });
+      await login({ email, password }, redirectTo);
     } catch (err) {
       const message =
         err instanceof ApiError ? err.message : 'Не удалось выполнить вход';

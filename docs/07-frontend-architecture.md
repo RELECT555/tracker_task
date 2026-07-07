@@ -387,6 +387,38 @@ sequenceDiagram
     FE->>BE: Retry original request
 ```
 
+## Создание запроса — UI Flow
+
+Экран `NewRequestPage` / `RequestDetailPage` (submit):
+
+| Шаг | Компонент | Статус |
+|-----|-----------|--------|
+| 1. Тип + поля | `FieldSchemaForm` | ✅ Реализовано |
+| 2. Маршрут (whitelist) | `RouteSelector` | 🔲 UC-05, не реализовано |
+| 3. Персональный маршрут | `PersonalRouteBuilder` | 🔲 UC-06, не реализовано |
+| 4. Превью + submit | `RouteFlowPreview` | 🔲 Частично |
+
+### PersonalRouteBuilder (план)
+
+```
+features/build-personal-route/
+├── ui/PersonalRouteBuilder.tsx   # список шагов + добавление согласующего
+├── ui/ApproverPicker.tsx         # поиск сотрудника (user_ref / assignee)
+└── model/usePersonalRoute.ts     # валидация, лимит шагов
+```
+
+Показывается если `requestType.allowsPersonalRoute === true`. По умолчанию предлагает `user.manager` из `/auth/me`.
+
+### Admin: RequestTypeDesigner
+
+Трёхшаговый wizard в `features/admin/ui/RequestTypeDesigner.tsx`:
+
+1. **Основное** — code, name, description, isActive  
+2. **Поля формы** — `FieldSchemaEditor` (compact): пресеты + таблица полей, live-превью справа  
+3. **Маршрут** — default template, `allowedManualRoutes` (multi-select), `allowsPersonalRoute`, preview canvas  
+
+Типы полей: `text`, `textarea`, `number`, `date`, `boolean`, `select`, `user_ref`.
+
 ## Route Protection
 
 ```typescript

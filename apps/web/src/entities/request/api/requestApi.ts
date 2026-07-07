@@ -20,7 +20,7 @@ export interface InboxListItem {
   priority: RequestPriority;
   type: { id: string; name: string };
   author: { id: string; fullName: string };
-  currentStep: { name: string; dueAt: string | null };
+  currentStep: { name: string; dueAt: string | null; assignedAt: string };
   createdAt: string;
 }
 
@@ -92,9 +92,18 @@ export interface CreateRequestInput {
   priority?: RequestPriority;
 }
 
+export interface UpdateRequestInput {
+  title?: string;
+  fields?: Record<string, unknown>;
+  priority?: RequestPriority;
+}
+
 export const requestApi = {
-  getInbox: () =>
-    apiFetch<PaginatedResponse<InboxListItem>>('/requests/inbox'),
+  getInbox: (params?: { sort?: 'sla' | 'recent' }) => {
+    const sort = params?.sort ?? 'sla';
+    const query = sort === 'recent' ? '?sort=recent' : '';
+    return apiFetch<PaginatedResponse<InboxListItem>>(`/requests/inbox${query}`);
+  },
 
   getOutbox: (status?: string) =>
     apiFetch<PaginatedResponse<RequestListItem>>(
@@ -104,6 +113,12 @@ export const requestApi = {
   create: (input: CreateRequestInput) =>
     apiFetch<RequestListItem>('/requests', {
       method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  update: (id: string, input: UpdateRequestInput) =>
+    apiFetch<RequestDetail>(`/requests/${id}`, {
+      method: 'PATCH',
       body: JSON.stringify(input),
     }),
 

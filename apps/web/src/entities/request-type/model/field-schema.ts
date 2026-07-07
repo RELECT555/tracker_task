@@ -3,7 +3,20 @@ export interface FieldSchemaItem {
   label: string;
   type: string;
   required: boolean;
+  options?: { value: string; label: string }[];
 }
+
+export const FIELD_SCHEMA_TYPES = [
+  { value: 'text', label: 'Текст' },
+  { value: 'textarea', label: 'Многострочный текст' },
+  { value: 'number', label: 'Число' },
+  { value: 'date', label: 'Дата' },
+  { value: 'boolean', label: 'Да/Нет' },
+  { value: 'select', label: 'Список' },
+  { value: 'user_ref', label: 'Сотрудник' },
+] as const;
+
+export type FieldSchemaType = (typeof FIELD_SCHEMA_TYPES)[number]['value'];
 
 export function getFieldLabel(
   schema: FieldSchemaItem[],
@@ -13,19 +26,10 @@ export function getFieldLabel(
 }
 
 export function formatFieldKey(key: string): string {
-  const labels: Record<string, string> = {
-    dateFrom: 'Дата начала',
-    dateTo: 'Дата окончания',
-    startDate: 'Дата начала',
-    endDate: 'Дата окончания',
-    days: 'Количество дней',
-    reason: 'Причина',
-    comment: 'Комментарий',
-    amount: 'Сумма',
-    description: 'Описание',
-  };
-
-  return labels[key] ?? key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
+  return key
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .replace(/^\w/, (char) => char.toUpperCase());
 }
 
 export function validateFieldSchema(

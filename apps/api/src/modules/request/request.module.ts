@@ -10,6 +10,7 @@ import { RequestInfoHandler } from './application/commands/request-info.handler'
 import { RejectRequestHandler } from './application/commands/reject-request.handler';
 import { SubmitRequestHandler } from './application/commands/submit-request.handler';
 import { CreateRequestHandler } from './application/commands/create-request.handler';
+import { UpdateRequestHandler } from './application/commands/update-request.handler';
 import { GetRequestHandler } from './application/queries/get-request.handler';
 import { ListInboxHandler } from './application/queries/list-inbox.handler';
 import { ListOutboxHandler } from './application/queries/list-outbox.handler';
@@ -30,6 +31,7 @@ import {
   controllers: [RequestController],
   providers: [
     CreateRequestHandler,
+    UpdateRequestHandler,
     SubmitRequestHandler,
     ApproveRequestHandler,
     RejectRequestHandler,

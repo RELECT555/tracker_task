@@ -130,6 +130,40 @@ export class Request extends AggregateRoot {
     return { ...this.props };
   }
 
+  updateDraft(
+    actorId: string,
+    input: {
+      title?: string;
+      fields?: Record<string, unknown>;
+      priority?: RequestPriority;
+    },
+  ): void {
+    if (this.props.status !== 'draft') {
+      throw new InvalidTransitionError('Only draft requests can be updated');
+    }
+
+    if (this.props.authorId !== actorId) {
+      throw new AccessDeniedError('Only the author can update this draft');
+    }
+
+    if (input.title !== undefined) {
+      if (!input.title.trim()) {
+        throw new ValidationError('Title is required');
+      }
+      this.props.title = input.title.trim();
+    }
+
+    if (input.fields !== undefined) {
+      this.props.fields = input.fields;
+    }
+
+    if (input.priority !== undefined) {
+      this.props.priority = input.priority;
+    }
+
+    this.props.updatedAt = new Date();
+  }
+
   submitWithRoute(routeSnapshot: RouteSnapshot): void {
     if (this.props.status !== 'draft') {
       throw new InvalidTransitionError('Only draft requests can be submitted');

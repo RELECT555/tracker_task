@@ -4,6 +4,7 @@ import type { UserDto } from '../domain/user.dto';
 type UserWithRelations = User & {
   orgUnit: OrgUnit | null;
   roles: (UserRole & { role: Role })[];
+  manager?: Pick<User, 'id' | 'fullName'> | null;
 };
 
 export function mapUserToDto(user: UserWithRelations): UserDto {
@@ -14,6 +15,9 @@ export function mapUserToDto(user: UserWithRelations): UserDto {
     roles: user.roles.map((entry) => entry.role.code),
     orgUnit: user.orgUnit
       ? { id: user.orgUnit.id, name: user.orgUnit.name }
+      : null,
+    manager: user.manager
+      ? { id: user.manager.id, fullName: user.manager.fullName }
       : null,
   };
 }

@@ -214,6 +214,10 @@ model RequestType {
 
   allowedManualRoutes    String[] @default([]) @map("allowed_manual_routes") @db.Uuid
 
+  allowsPersonalRoute    Boolean  @default(false) @map("allows_personal_route")
+
+  maxPersonalRouteSteps  Int      @default(5) @map("max_personal_route_steps")
+
   isActive               Boolean  @default(true) @map("is_active")
 
   createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz()

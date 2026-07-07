@@ -13,6 +13,7 @@ export class GetMeHandler {
       where: { id: userId },
       include: {
         orgUnit: true,
+        manager: { select: { id: true, fullName: true } },
         roles: { include: { role: true } },
       },
     });

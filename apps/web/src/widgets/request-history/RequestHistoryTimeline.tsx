@@ -16,7 +16,8 @@ export function RequestHistoryTimeline({
   }
 
   const content = (
-    <ol className="relative space-y-0">
+    <div className="rounded-lg border border-border bg-muted px-4 py-3 dark:bg-muted/10">
+      <ol className="relative space-y-0">
       {transitions.map((item, index) => {
         const isLast = index === transitions.length - 1;
 
@@ -45,18 +46,22 @@ export function RequestHistoryTimeline({
                 <p className="text-xs text-muted-foreground">{item.actor.fullName}</p>
               ) : null}
               {item.comment ? (
-                <p className="mt-1.5 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-sm dark:bg-muted/15">
+                <p className="mt-1.5 border-l-2 border-border pl-3 text-sm text-muted-foreground">
                   {item.comment}
                 </p>
               ) : null}
-              <time dateTime={item.createdAt} className="block pt-0.5 text-xs text-muted-foreground">
+              <time
+                dateTime={item.createdAt}
+                className="block pt-0.5 font-mono text-xs text-muted-foreground tabular-nums"
+              >
                 {new Date(item.createdAt).toLocaleString('ru-RU')}
               </time>
             </div>
           </li>
         );
       })}
-    </ol>
+      </ol>
+    </div>
   );
 
   if (embedded) return content;

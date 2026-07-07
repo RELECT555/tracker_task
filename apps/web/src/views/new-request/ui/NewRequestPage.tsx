@@ -1,13 +1,10 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import dynamic from 'next/dynamic';
-import Link from 'next/link';
+import { PageBreadcrumbs } from '@/shared/ui/page-breadcrumbs';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  ArrowLeft,
-  CalendarDays,
   FileText,
   Layers,
   ListChecks,
@@ -16,7 +13,10 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { requestTypeApi } from '@/entities/request-type/api/requestTypeApi';
+import { validateFieldSchema } from '@/entities/request-type/model/field-schema';
 import { requestApi } from '@/entities/request/api/requestApi';
+import { FieldSchemaForm } from '@/features/request-fields/ui/FieldSchemaForm';
+import { useAuth } from '@/features/auth/model/useAuth';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { routes } from '@/shared/config/routes';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
@@ -34,16 +34,6 @@ import {
 } from '@/shared/ui/select';
 import { DashboardShell } from '@/widgets/dashboard-shell/DashboardShell';
 
-const DatePicker = dynamic(
-  () => import('@/shared/ui/date-picker').then((m) => m.DatePicker),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="h-10 animate-pulse rounded-md border border-input bg-field" />
-    ),
-  },
-);
-
 const workflowSteps = [
   {
     icon: Layers,
@@ -52,13 +42,13 @@ const workflowSteps = [
   },
   {
     icon: FileText,
-    title: 'Заполните основное',
-    description: 'Название и дата помогут быстрее понять суть запроса.',
+    title: 'Заполните данные',
+    description: 'Название и поля типа запроса.',
   },
   {
     icon: Sparkles,
     title: 'Сохраните черновик',
-    description: 'Дополнительные поля можно заполнить на следующем шаге.',
+    description: 'Черновик можно отредактировать перед отправкой.',
   },
   {
     icon: Send,
@@ -72,13 +62,20 @@ export function NewRequestPage() {
   const queryClient = useQueryClient();
   const [typeId, setTypeId] = useState('');
   const [title, setTitle] = useState('');
-  const [startDate, setStartDate] = useState<Date | undefined>();
+  const [fieldValues, setFieldValues] = useState<Record<string, unknown>>({});
   const [error, setError] = useState<string | null>(null);
 
+  const { user } = useAuth();
   const typesQuery = useQuery({
     queryKey: queryKeys.requestTypes.all,
     queryFn: () => requestTypeApi.list(),
   });
+
+  const selectedType = typesQuery.data?.data.find((type) => type.id === typeId);
+
+  useEffect(() => {
+    setFieldValues({});
+  }, [typeId]);
 
   const createMutation = useMutation({
     mutationFn: requestApi.create,
@@ -89,14 +86,28 @@ export function NewRequestPage() {
     onError: (err: Error) => setError(err.message),
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
     setError(null);
+
     if (!typeId) {
       setError('Выберите тип запроса');
       return;
     }
-    createMutation.mutate({ typeId, title });
+
+    if (selectedType?.fieldSchema.length) {
+      const validationError = validateFieldSchema(selectedType.fieldSchema, fieldValues);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+    }
+
+    createMutation.mutate({
+      typeId,
+      title,
+      fields: fieldValues,
+    });
   };
 
   return (
@@ -104,13 +115,12 @@ export function NewRequestPage() {
       title="Новый запрос"
       description="Создайте черновик и отправьте на согласование"
     >
-      <Link
-        href={routes.outbox}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Назад к исходящим
-      </Link>
+      <PageBreadcrumbs
+        items={[
+          { label: 'Исходящие', href: routes.outbox },
+          { label: 'Новый запрос' },
+        ]}
+      />
 
       {typesQuery.isLoading ? (
         <div className="mt-6">
@@ -127,8 +137,8 @@ export function NewRequestPage() {
                 <div>
                   <CardTitle className="text-base">Основные данные</CardTitle>
                   <CardDescription className="mt-1.5 leading-relaxed">
-                    Выберите тип и укажите краткое название. Поля типа можно заполнить после
-                    создания черновика.
+                    Выберите тип, укажите название и заполните поля. После создания запрос
+                    сохранится как черновик.
                   </CardDescription>
                 </div>
               </div>
@@ -159,21 +169,9 @@ export function NewRequestPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="startDate" className="flex items-center gap-2 text-foreground">
-                    <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-                    Желаемая дата
-                    <span className="text-xs font-normal text-muted-foreground">(необязательно)</span>
-                  </Label>
-                  <DatePicker
-                    id="startDate"
-                    value={startDate}
-                    onChange={setStartDate}
-                    placeholder="Выберите дату"
-                    className="h-11"
-                  />
+                  {selectedType?.description ? (
+                    <p className="text-xs text-muted-foreground">{selectedType.description}</p>
+                  ) : null}
                 </div>
 
                 <div className="space-y-2">
@@ -184,16 +182,29 @@ export function NewRequestPage() {
                   <Input
                     id="title"
                     value={title}
-                    onChange={(e) => setTitle(e.target.value)}
+                    onChange={(event) => setTitle(event.target.value)}
                     required
                     maxLength={500}
-                    placeholder="Краткое описание запроса"
+                    placeholder="Краткое название запроса"
                     className="h-11"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Например: «Отпуск 10–24 июля» или «Закупка ноутбука для отдела»
+                    Например: «Согласование договора с поставщиком» или «Заявка на доступ к системе»
                   </p>
                 </div>
+
+                {selectedType && selectedType.fieldSchema.length > 0 ? (
+                  <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-4 dark:bg-muted/10">
+                    <p className="text-sm font-medium">Поля типа «{selectedType.name}»</p>
+                    <FieldSchemaForm
+                      schema={selectedType.fieldSchema}
+                      values={fieldValues}
+                      onChange={setFieldValues}
+                      idPrefix="create"
+                      currentUser={user}
+                    />
+                  </div>
+                ) : null}
 
                 {error && (
                   <Alert variant="destructive">
@@ -207,9 +218,7 @@ export function NewRequestPage() {
                   Отмена
                 </Button>
                 <Button type="submit" disabled={createMutation.isPending} size="lg">
-                  {createMutation.isPending && (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  )}
+                  {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                   Создать черновик
                 </Button>
               </CardFooter>

@@ -288,6 +288,56 @@ async validateManualRoute(
 }
 ```
 
+## Персональный маршрут (сборка автором)
+
+Режим для типов с `allowsPersonalRoute = true`. Отличается от UC-05: автор не выбирает готовый шаблон, а **собирает цепочку шагов** из конкретных сотрудников.
+
+### Алгоритм
+
+```
+1. Проверить RequestType.allowsPersonalRoute === true
+2. Проверить право request:build-personal-route
+3. Валидировать personalSteps[]:
+     a. 1 ≤ steps.length ≤ maxPersonalRouteSteps
+     b. Каждый шаг: assigneeType = 'user', assigneeRef = active UserId
+     c. assigneeRef ≠ authorId (нельзя согласовать самому себе)
+     d. Без дубликатов assigneeRef подряд
+4. Построить Route snapshot из personalSteps (без RouteTemplate)
+5. Сохранить в Request.route с templateId = null, source = 'personal'
+```
+
+### Структура шага (вход API)
+
+```typescript
+interface PersonalRouteStepInput {
+  name: string;           // «Согласование руководителя»
+  assigneeUserId: UserId;
+  slaHours?: number | null;
+}
+```
+
+### UI Flow (создание запроса)
+
+1. Автор выбирает тип с `allowsPersonalRoute`.
+2. На шаге «Маршрут» видит конструктор: «Добавить согласующего» → поиск сотрудника → название шага.
+3. По умолчанию предлагается **непосредственный руководитель** автора (из `User.managerId`).
+4. Превью цепочки перед отправкой.
+5. При submit передаётся `{ personalSteps: [...] }` вместо `routeTemplateId`.
+
+### Ограничения
+
+| Правило | Значение по умолчанию |
+|---------|----------------------|
+| Макс. шагов | `maxPersonalRouteSteps` (5) |
+| Мин. шагов | 1 |
+| Тип назначения | только `user` |
+| Себя назначить | запрещено |
+| Неактивный пользователь | запрещено |
+
+### Связь с кастомными полями
+
+Поле `user_ref` в `fieldSchema` может дополнять персональный маршрут: например, поле «Кому адресовано» для информации, а шаг маршрута — для формального согласования. В v2 допустима привязка `dynamic` assignee к полю `user_ref`.
+
 ## Визуализация маршрута (Timeline)
 
 Frontend-компонент `RouteTimeline` отображает:

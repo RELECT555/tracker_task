@@ -10,6 +10,22 @@ import {
 } from 'class-validator';
 import { REQUEST_PRIORITIES, type RequestPriority } from '@tracker/shared';
 
+export class UpdateRequestDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(500)
+  title?: string;
+
+  @IsOptional()
+  @IsObject()
+  fields?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsEnum(REQUEST_PRIORITIES)
+  priority?: RequestPriority;
+}
+
 export class CreateRequestDto {
   @IsUUID()
   typeId!: string;
@@ -30,6 +46,18 @@ export class CreateRequestDto {
   @IsOptional()
   @IsUUID()
   routeTemplateId?: string | null;
+}
+
+export class InboxQueryDto {
+  @IsOptional()
+  page?: number;
+
+  @IsOptional()
+  limit?: number;
+
+  @IsOptional()
+  @IsEnum(['sla', 'recent'])
+  sort?: 'sla' | 'recent';
 }
 
 export class OutboxQueryDto {

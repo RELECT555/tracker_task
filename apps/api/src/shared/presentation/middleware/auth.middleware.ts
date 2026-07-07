@@ -44,6 +44,15 @@ export class AuthMiddleware implements NestMiddleware {
       }
     }
 
+    if (this.isStrictAuth()) {
+      throw new UnauthorizedException({
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required',
+        },
+      });
+    }
+
     const devUserId = this.config.get<string>('DEV_USER_ID');
     const headerUserId = req.header('x-user-id');
     let userId = headerUserId ?? devUserId;
@@ -66,5 +75,9 @@ export class AuthMiddleware implements NestMiddleware {
 
     (req as Request & { devUser: { id: string } }).devUser = { id: userId };
     next();
+  }
+
+  private isStrictAuth(): boolean {
+    return this.config.get<string>('AUTH_MODE', 'dev') === 'strict';
   }
 }
