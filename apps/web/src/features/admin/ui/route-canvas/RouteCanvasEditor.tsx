@@ -29,6 +29,8 @@ interface RouteCanvasEditorProps {
   selectedIndex: number | null;
   onSelectStep: (index: number | null) => void;
   readOnly?: boolean;
+  /** Hide minimap and zoom controls — for inline previews */
+  compact?: boolean;
   className?: string;
 }
 
@@ -45,6 +47,7 @@ function RouteCanvasEditorInner({
   selectedIndex,
   onSelectStep,
   readOnly = false,
+  compact = false,
   className,
 }: RouteCanvasEditorProps) {
   const flow = useMemo(
@@ -86,13 +89,15 @@ function RouteCanvasEditorInner({
         proOptions={{ hideAttribution: true }}
       >
         <Background gap={20} size={1} color="hsl(var(--border))" />
-        <Controls showInteractive={false} />
-        <MiniMap
-          pannable
-          zoomable
-          nodeColor={() => 'hsl(var(--primary))'}
-          maskColor="hsl(var(--background) / 0.75)"
-        />
+        {!compact ? <Controls showInteractive={false} /> : null}
+        {!compact ? (
+          <MiniMap
+            pannable
+            zoomable
+            nodeColor={() => 'hsl(var(--primary))'}
+            maskColor="hsl(var(--background) / 0.75)"
+          />
+        ) : null}
       </ReactFlow>
     </div>
   );

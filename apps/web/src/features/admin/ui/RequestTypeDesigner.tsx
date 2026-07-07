@@ -150,7 +150,12 @@ export function RequestTypeDesigner({
           </div>
         ) : null}
 
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div
+          className={cn(
+            'grid gap-0',
+            step === 'route' ? 'grid-cols-1' : 'lg:grid-cols-[minmax(0,1fr)_320px]',
+          )}
+        >
           <div className="space-y-5 p-5">
             {step === 'basics' ? (
               <>
@@ -205,65 +210,67 @@ export function RequestTypeDesigner({
 
             {step === 'route' ? (
               <>
-                <div className="space-y-2">
-                  <Label>Маршрут по умолчанию</Label>
-                  <Select
-                    value={form.defaultRouteTemplateId || '__none__'}
-                    onValueChange={(value) =>
-                      setForm({
-                        ...form,
-                        defaultRouteTemplateId: value === '__none__' ? '' : value,
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Не выбран" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Не выбран</SelectItem>
-                      {publishedRoutes.map((route) => (
-                        <SelectItem key={route.id} value={route.id}>
-                          {route.name} (v{route.version})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Используется автоматически, если автор не выберет другой маршрут.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Допустимые шаблоны для выбора автором</Label>
-                  <div className="space-y-2 rounded-lg border border-border/70 bg-muted/10 p-3">
-                    {publishedRoutes.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Нет опубликованных маршрутов</p>
-                    ) : (
-                      publishedRoutes.map((route) => {
-                        const checked = form.allowedManualRoutes.includes(route.id);
-                        return (
-                          <label
-                            key={route.id}
-                            className="flex cursor-pointer items-center gap-2 text-sm"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(event) => {
-                                setForm({
-                                  ...form,
-                                  allowedManualRoutes: event.target.checked
-                                    ? [...form.allowedManualRoutes, route.id]
-                                    : form.allowedManualRoutes.filter((id) => id !== route.id),
-                                });
-                              }}
-                              className="h-4 w-4 rounded border-input"
-                            />
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Маршрут по умолчанию</Label>
+                    <Select
+                      value={form.defaultRouteTemplateId || '__none__'}
+                      onValueChange={(value) =>
+                        setForm({
+                          ...form,
+                          defaultRouteTemplateId: value === '__none__' ? '' : value,
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Не выбран" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Не выбран</SelectItem>
+                        {publishedRoutes.map((route) => (
+                          <SelectItem key={route.id} value={route.id}>
                             {route.name} (v{route.version})
-                          </label>
-                        );
-                      })
-                    )}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Используется автоматически, если автор не выберет другой маршрут.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Допустимые шаблоны для выбора автором</Label>
+                    <div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border border-border/70 bg-muted/10 p-3">
+                      {publishedRoutes.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Нет опубликованных маршрутов</p>
+                      ) : (
+                        publishedRoutes.map((route) => {
+                          const checked = form.allowedManualRoutes.includes(route.id);
+                          return (
+                            <label
+                              key={route.id}
+                              className="flex cursor-pointer items-center gap-2 text-sm"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(event) => {
+                                  setForm({
+                                    ...form,
+                                    allowedManualRoutes: event.target.checked
+                                      ? [...form.allowedManualRoutes, route.id]
+                                      : form.allowedManualRoutes.filter((id) => id !== route.id),
+                                  });
+                                }}
+                                className="h-4 w-4 rounded border-input"
+                              />
+                              {route.name} (v{route.version})
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -311,17 +318,21 @@ export function RequestTypeDesigner({
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Схема согласования (превью)</Label>
+                  <Label>Схема согласования</Label>
                   {selectedRoute ? (
                     <RouteCanvasEditor
                       steps={selectedRoute.steps}
                       selectedIndex={null}
                       onSelectStep={() => {}}
                       readOnly
-                      className="h-[280px]"
+                      className="h-[min(520px,60vh)] min-h-[360px]"
                     />
                   ) : (
-                    <p className="text-sm text-muted-foreground">Маршрут не выбран</p>
+                    <div className="flex h-[200px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/10">
+                      <p className="text-sm text-muted-foreground">
+                        Выберите маршрут по умолчанию, чтобы увидеть схему
+                      </p>
+                    </div>
                   )}
                 </div>
               </>
@@ -338,52 +349,62 @@ export function RequestTypeDesigner({
             </div>
           </div>
 
-          <aside className="border-t border-border bg-muted/15 p-5 lg:border-l lg:border-t-0 dark:bg-muted/10">
-            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <Eye className="h-4 w-4 text-muted-foreground" />
-              Как увидит сотрудник
-            </div>
-
-            <div className="mt-4 space-y-4 rounded-xl border border-border/70 bg-card p-4">
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">Название запроса</Label>
-                <Input
-                  value={form.name ? `Пример: ${form.name}` : ''}
-                  disabled
-                  placeholder="Краткое название"
-                />
+          {step !== 'route' ? (
+            <aside className="border-t border-border bg-muted/15 p-5 lg:border-l lg:border-t-0 dark:bg-muted/10">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Eye className="h-4 w-4 text-muted-foreground" />
+                Как увидит сотрудник
               </div>
 
-              {form.fieldSchema.length > 0 ? (
-                <FieldSchemaForm
-                  schema={form.fieldSchema}
-                  values={previewValues}
-                  onChange={setPreviewValues}
-                  idPrefix="preview"
-                  currentUser={user}
-                />
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Дополнительных полей нет — только название.
-                </p>
-              )}
-            </div>
+              <div className="mt-4 space-y-4 rounded-xl border border-border/70 bg-card p-4">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Название запроса</Label>
+                  <Input
+                    value={form.name ? `Пример: ${form.name}` : ''}
+                    disabled
+                    placeholder="Краткое название"
+                  />
+                </div>
 
-            {selectedRoute ? (
-              <div className="mt-4">
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Маршрут
-                </p>
-                <RouteCanvasEditor
-                  steps={selectedRoute.steps}
-                  selectedIndex={null}
-                  onSelectStep={() => {}}
-                  readOnly
-                  className="h-[220px]"
-                />
+                {form.fieldSchema.length > 0 ? (
+                  <FieldSchemaForm
+                    schema={form.fieldSchema}
+                    values={previewValues}
+                    onChange={setPreviewValues}
+                    idPrefix="preview"
+                    currentUser={user}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Дополнительных полей нет — только название.
+                  </p>
+                )}
               </div>
-            ) : null}
-          </aside>
+
+              {selectedRoute ? (
+                <div className="mt-4 rounded-xl border border-border/70 bg-card p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Маршрут
+                  </p>
+                  <p className="mt-1 text-sm font-medium">{selectedRoute.name}</p>
+                  <ol className="mt-2 space-y-1.5">
+                    {selectedRoute.steps.map((routeStep, index) => (
+                      <li
+                        key={routeStep.order}
+                        className="flex items-baseline gap-2 text-sm text-muted-foreground"
+                      >
+                        <span className="font-mono text-xs text-primary">{index + 1}.</span>
+                        <span>{routeStep.name}</span>
+                        {routeStep.slaHours ? (
+                          <span className="text-xs">· {routeStep.slaHours}ч</span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ) : null}
+            </aside>
+          ) : null}
         </div>
       </CardContent>
     </Card>
