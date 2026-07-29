@@ -13,6 +13,7 @@ import {
   type RequestTypeDesignerState,
 } from '@/features/admin/ui/RequestTypeDesigner';
 import { queryKeys } from '@/shared/api/queryKeys';
+import { formatAdminApiError } from '@/shared/lib/admin-errors';
 import { cn } from '@/shared/lib/utils';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Button } from '@/shared/ui/button';
@@ -96,7 +97,7 @@ export function RequestTypesAdminPage() {
       setMode('list');
       invalidate();
     },
-    onError: (err: Error) => setMutationError(err.message),
+    onError: (err: Error) => setMutationError(formatAdminApiError(err)),
   });
 
   const updateMutation = useMutation({
@@ -113,7 +114,7 @@ export function RequestTypesAdminPage() {
       setEditingType(null);
       invalidate();
     },
-    onError: (err: Error) => setMutationError(err.message),
+    onError: (err: Error) => setMutationError(formatAdminApiError(err)),
   });
 
   const startEdit = (type: AdminRequestType) => {
@@ -154,8 +155,12 @@ export function RequestTypesAdminPage() {
             initial={emptyForm()}
             routeTemplates={routeTemplates}
             isPending={createMutation.isPending}
+            submitError={mutationError}
             onCancel={() => setMode('list')}
-            onSubmit={(payload) => createMutation.mutate(payload)}
+            onSubmit={(payload) => {
+              setMutationError(null);
+              createMutation.mutate(payload);
+            }}
           />
         </div>
       ) : null}
@@ -167,13 +172,15 @@ export function RequestTypesAdminPage() {
             initial={toForm(editingType)}
             routeTemplates={routeTemplates}
             isPending={updateMutation.isPending}
+            submitError={mutationError}
             onCancel={() => {
               setMode('list');
               setEditingType(null);
             }}
-            onSubmit={(payload) =>
-              updateMutation.mutate({ id: editingType.id, input: payload })
-            }
+            onSubmit={(payload) => {
+              setMutationError(null);
+              updateMutation.mutate({ id: editingType.id, input: payload });
+            }}
           />
         </div>
       ) : null}

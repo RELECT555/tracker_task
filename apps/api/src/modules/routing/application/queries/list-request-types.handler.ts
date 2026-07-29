@@ -15,6 +15,10 @@ export class ListRequestTypesHandler {
         name: t.name,
         description: t.description,
         fieldSchema: t.fieldSchema,
+        defaultRouteTemplateId: t.defaultRouteTemplateId,
+        allowedManualRoutes: t.allowedManualRoutes,
+        allowsPersonalRoute: t.allowsPersonalRoute,
+        maxPersonalRouteSteps: t.maxPersonalRouteSteps,
       })),
     };
   }

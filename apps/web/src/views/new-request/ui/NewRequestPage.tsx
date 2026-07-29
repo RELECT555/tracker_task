@@ -6,12 +6,18 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   FileText,
+  Flag,
   Layers,
   ListChecks,
   Loader2,
   Send,
   Sparkles,
 } from 'lucide-react';
+import {
+  PRIORITY_LABELS,
+  REQUEST_PRIORITIES,
+  type RequestPriority,
+} from '@tracker/shared';
 import { requestTypeApi } from '@/entities/request-type/api/requestTypeApi';
 import { validateFieldSchema } from '@/entities/request-type/model/field-schema';
 import { requestApi } from '@/entities/request/api/requestApi';
@@ -62,6 +68,7 @@ export function NewRequestPage() {
   const queryClient = useQueryClient();
   const [typeId, setTypeId] = useState('');
   const [title, setTitle] = useState('');
+  const [priority, setPriority] = useState<RequestPriority>('normal');
   const [fieldValues, setFieldValues] = useState<Record<string, unknown>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -107,6 +114,7 @@ export function NewRequestPage() {
       typeId,
       title,
       fields: fieldValues,
+      priority,
     });
   };
 
@@ -172,6 +180,11 @@ export function NewRequestPage() {
                   {selectedType?.description ? (
                     <p className="text-xs text-muted-foreground">{selectedType.description}</p>
                   ) : null}
+                  {selectedType?.allowsPersonalRoute ? (
+                    <p className="text-xs text-primary">
+                      После создания черновика вы сможете сами выбрать согласующих при отправке.
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="space-y-2">
@@ -191,6 +204,28 @@ export function NewRequestPage() {
                   <p className="text-xs text-muted-foreground">
                     Например: «Согласование договора с поставщиком» или «Заявка на доступ к системе»
                   </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="priority" className="flex items-center gap-2 text-foreground">
+                    <Flag className="h-3.5 w-3.5 text-muted-foreground" />
+                    Приоритет
+                  </Label>
+                  <Select
+                    value={priority}
+                    onValueChange={(value) => setPriority(value as RequestPriority)}
+                  >
+                    <SelectTrigger id="priority" className="h-11 bg-field">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {REQUEST_PRIORITIES.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {PRIORITY_LABELS[value]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {selectedType && selectedType.fieldSchema.length > 0 ? (

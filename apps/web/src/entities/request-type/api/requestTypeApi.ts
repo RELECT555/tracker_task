@@ -7,6 +7,10 @@ export interface RequestTypeItem {
   name: string;
   description: string | null;
   fieldSchema: FieldSchemaItem[];
+  defaultRouteTemplateId: string | null;
+  allowedManualRoutes: string[];
+  allowsPersonalRoute: boolean;
+  maxPersonalRouteSteps: number;
 }
 
 export type { FieldSchemaItem };

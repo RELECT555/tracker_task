@@ -1,12 +1,18 @@
+import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsEnum,
+  IsInt,
   IsObject,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 import { REQUEST_PRIORITIES, type RequestPriority } from '@tracker/shared';
 
@@ -72,10 +78,32 @@ export class OutboxQueryDto {
   limit?: number;
 }
 
+export class PersonalRouteStepDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  name!: string;
+
+  @IsUUID()
+  assigneeUserId!: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(720)
+  slaHours?: number | null;
+}
+
 export class SubmitRequestDto {
   @IsOptional()
   @IsUUID()
   routeTemplateId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PersonalRouteStepDto)
+  personalSteps?: PersonalRouteStepDto[];
 }
 
 export class ApproveRequestDto {

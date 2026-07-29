@@ -6,7 +6,7 @@ export class RequestSubmittedEvent extends DomainEvent {
   constructor(
     readonly requestId: string,
     readonly authorId: string,
-    readonly routeTemplateId: string,
+    readonly routeTemplateId: string | null,
   ) {
     super();
   }

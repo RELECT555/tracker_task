@@ -16,13 +16,26 @@ import {
   Settings2,
   X,
 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, useEffect } from 'react';
+import {
+  PRIORITY_LABELS,
+  REQUEST_PRIORITIES,
+  type RequestPriority,
+} from '@tracker/shared';
 import { requestApi } from '@/entities/request/api/requestApi';
+import { RequestPriorityBadge } from '@/entities/request/ui/RequestPriorityBadge';
 import { RequestStatusBadge } from '@/entities/request/ui/RequestStatusBadge';
+import {
+  createDefaultPersonalSteps,
+  PersonalRouteBuilder,
+  validatePersonalRouteSteps,
+  type PersonalRouteStepForm,
+} from '@/features/build-personal-route/ui/PersonalRouteBuilder';
 import {
   getAvailableActions,
   useRequestActions,
 } from '@/features/request-actions/model/useRequestActions';
+import { useAuth } from '@/features/auth/model/useAuth';
 import { FieldSchemaForm } from '@/features/request-fields/ui/FieldSchemaForm';
 import { RequestFieldsView } from '@/features/request-fields/ui/RequestFieldsView';
 import { validateFieldSchema } from '@/entities/request-type/model/field-schema';
@@ -34,10 +47,19 @@ import { Button } from '@/shared/ui/button';
 import { DetailSection, MetaItem } from '@/shared/ui/detail-section';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/ui/select';
 import { DashboardShell } from '@/widgets/dashboard-shell/DashboardShell';
 import { RouteTimeline } from '@/widgets/route-timeline/RouteTimeline';
 import { RequestComments } from '@/widgets/request-comments/RequestComments';
 import { RequestHistoryTimeline } from '@/widgets/request-history/RequestHistoryTimeline';
+
+type SubmitRouteMode = 'default' | 'personal';
 
 export function RequestDetailPage({ requestId }: { requestId: string }) {
   const [error, setError] = useState<string | null>(null);
@@ -55,8 +77,12 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
   const [showEscalateForm, setShowEscalateForm] = useState(false);
   const [showDraftEdit, setShowDraftEdit] = useState(false);
   const [editTitle, setEditTitle] = useState('');
+  const [editPriority, setEditPriority] = useState<RequestPriority>('normal');
   const [editFields, setEditFields] = useState<Record<string, unknown>>({});
+  const [submitRouteMode, setSubmitRouteMode] = useState<SubmitRouteMode>('default');
+  const [personalSteps, setPersonalSteps] = useState<PersonalRouteStepForm[]>([]);
 
+  const { user } = useAuth();
   const { data, isLoading, error: loadError } = useQuery({
     queryKey: queryKeys.requests.detail(requestId),
     queryFn: () => requestApi.getById(requestId),
@@ -64,6 +90,20 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
 
   const actions = useRequestActions(requestId);
   const can = getAvailableActions(data);
+  const allowsPersonalRoute = Boolean(data?.type?.allowsPersonalRoute);
+  const hasDefaultRoute = Boolean(data?.type?.defaultRouteTemplateId);
+  const maxPersonalSteps = data?.type?.maxPersonalRouteSteps ?? 5;
+
+  useEffect(() => {
+    if (!data?.type) return;
+    if (data.type.allowsPersonalRoute && !data.type.defaultRouteTemplateId) {
+      setSubmitRouteMode('personal');
+    } else {
+      setSubmitRouteMode('default');
+    }
+    setPersonalSteps(createDefaultPersonalSteps(user));
+  }, [data?.type?.id, data?.type?.allowsPersonalRoute, data?.type?.defaultRouteTemplateId, user]);
+
   const hasActions =
     can.submit ||
     can.approve ||
@@ -76,6 +116,36 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
   const onError = (err: Error) => setError(err.message);
   const onSuccess = () => setError(null);
 
+  const handleSubmit = () => {
+    setError(null);
+
+    if (allowsPersonalRoute && submitRouteMode === 'personal') {
+      const validationError = validatePersonalRouteSteps(
+        personalSteps,
+        maxPersonalSteps,
+        user?.id,
+      );
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+
+      actions.submit.mutate(
+        {
+          personalSteps: personalSteps.map((step) => ({
+            name: step.name.trim(),
+            assigneeUserId: step.assigneeUserId,
+            slaHours: step.slaHours,
+          })),
+        },
+        { onSuccess, onError },
+      );
+      return;
+    }
+
+    actions.submit.mutate(undefined, { onSuccess, onError });
+  };
+
   const openProvideInfoForm = () => {
     setProvideFields({ ...(data?.fields ?? {}) });
     setProvideFieldsJson(JSON.stringify(data?.fields ?? {}, null, 2));
@@ -84,6 +154,7 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
 
   const openDraftEdit = () => {
     setEditTitle(data?.title ?? '');
+    setEditPriority(data?.priority ?? 'normal');
     setEditFields({ ...(data?.fields ?? {}) });
     setShowDraftEdit(true);
     setError(null);
@@ -104,7 +175,7 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
     }
 
     actions.update.mutate(
-      { title: editTitle.trim(), fields: editFields },
+      { title: editTitle.trim(), fields: editFields, priority: editPriority },
       {
         onSuccess: () => {
           onSuccess();
@@ -193,8 +264,9 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
             <div className="px-6 py-5">
               <div className="flex flex-wrap items-center gap-2">
                 <RequestStatusBadge status={data.status} />
+                <RequestPriorityBadge priority={data.priority} alwaysShow />
                 {data.type ? (
-                  <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-medium text-muted-foreground">
+                  <span className="rounded-md bg-muted/50 px-2 py-0.5 font-mono text-xs font-medium text-muted-foreground">
                     {data.type.name}
                   </span>
                 ) : null}
@@ -247,6 +319,24 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
                         onChange={(event) => setEditTitle(event.target.value)}
                         maxLength={500}
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="draft-priority">Приоритет</Label>
+                      <Select
+                        value={editPriority}
+                        onValueChange={(value) => setEditPriority(value as RequestPriority)}
+                      >
+                        <SelectTrigger id="draft-priority" className="bg-field">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {REQUEST_PRIORITIES.map((value) => (
+                            <SelectItem key={value} value={value}>
+                              {PRIORITY_LABELS[value]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     {fieldSchema.length > 0 ? (
                       <FieldSchemaForm
@@ -337,10 +427,62 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
                           Редактировать черновик
                         </Button>
                       )}
+                      {can.submit && allowsPersonalRoute ? (
+                        <div className="space-y-3 rounded-lg border border-border/70 bg-muted/10 p-3">
+                          {hasDefaultRoute ? (
+                            <div className="space-y-2">
+                              <Label className="text-xs text-muted-foreground">
+                                Как отправить на согласование
+                              </Label>
+                              <div className="space-y-2">
+                                <label className="flex cursor-pointer items-start gap-2 text-sm">
+                                  <input
+                                    type="radio"
+                                    name="submit-route-mode"
+                                    checked={submitRouteMode === 'default'}
+                                    onChange={() => setSubmitRouteMode('default')}
+                                    className="mt-0.5 h-4 w-4"
+                                  />
+                                  <span>
+                                    <span className="font-medium">Стандартный маршрут</span>
+                                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                                      По шаблону типа запроса
+                                    </span>
+                                  </span>
+                                </label>
+                                <label className="flex cursor-pointer items-start gap-2 text-sm">
+                                  <input
+                                    type="radio"
+                                    name="submit-route-mode"
+                                    checked={submitRouteMode === 'personal'}
+                                    onChange={() => setSubmitRouteMode('personal')}
+                                    className="mt-0.5 h-4 w-4"
+                                  />
+                                  <span>
+                                    <span className="font-medium">Собрать свой маршрут</span>
+                                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                                      Сами выберите согласующих
+                                    </span>
+                                  </span>
+                                </label>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {submitRouteMode === 'personal' || !hasDefaultRoute ? (
+                            <PersonalRouteBuilder
+                              steps={personalSteps}
+                              onChange={setPersonalSteps}
+                              maxSteps={maxPersonalSteps}
+                              currentUser={user}
+                            />
+                          ) : null}
+                        </div>
+                      ) : null}
                       {can.submit && (
                         <Button
                           className="w-full justify-start"
-                          onClick={() => actions.submit.mutate(undefined, { onSuccess, onError })}
+                          onClick={handleSubmit}
                           disabled={actions.submit.isPending}
                         >
                           {actions.submit.isPending ? (

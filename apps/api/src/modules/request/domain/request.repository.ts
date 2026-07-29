@@ -34,6 +34,9 @@ export interface RequestTypeRecord {
   fieldSchema: unknown;
   isActive: boolean;
   defaultRouteTemplateId: string | null;
+  allowedManualRoutes: string[];
+  allowsPersonalRoute: boolean;
+  maxPersonalRouteSteps: number;
 }
 
 export interface AuthorContext {

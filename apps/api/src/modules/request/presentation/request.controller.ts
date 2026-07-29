@@ -91,6 +91,7 @@ export class RequestController {
       requestId: id,
       actorId: user.id,
       routeTemplateId: dto.routeTemplateId,
+      personalSteps: dto.personalSteps,
     });
   }
 
@@ -208,12 +209,14 @@ export class RequestController {
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
     @Query('sort') sort?: 'sla' | 'recent',
+    @Query('scope') scope?: string,
   ) {
     return this.listInboxHandler.execute({
       assigneeId: user.id,
       page,
       limit,
       sort: sort === 'recent' ? 'recent' : 'sla',
+      scope: scope === 'archive' ? 'archive' : 'active',
     });
   }
 

@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { LayoutDashboard } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
+import { DEV_ACCOUNTS, DEV_PASSWORD } from '@/features/auth/lib/dev-accounts';
 import { routes } from '@/shared/config/routes';
 import { safeRedirectPath } from '@/shared/config/auth';
 import { Button } from '@/shared/ui/button';
@@ -16,21 +17,30 @@ export function LoginPage() {
   const searchParams = useSearchParams();
   const redirectTo = safeRedirectPath(searchParams.get('redirect'), routes.inbox);
   const { login, isLoggingIn } = useAuth();
-  const [email, setEmail] = useState('admin@tracker.local');
-  const [password, setPassword] = useState('tracker');
+  const [email, setEmail] = useState('employee@tracker.local');
+  const [password, setPassword] = useState(DEV_PASSWORD);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
+  async function signIn(nextEmail: string, nextPassword: string) {
     setError(null);
-
     try {
-      await login({ email, password }, redirectTo);
+      await login({ email: nextEmail, password: nextPassword }, redirectTo);
     } catch (err) {
       const message =
         err instanceof ApiError ? err.message : 'Не удалось выполнить вход';
       setError(message);
     }
+  }
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    await signIn(email, password);
+  }
+
+  async function handleDevAccount(accountEmail: string) {
+    setEmail(accountEmail);
+    setPassword(DEV_PASSWORD);
+    await signIn(accountEmail, DEV_PASSWORD);
   }
 
   return (
@@ -78,10 +88,31 @@ export function LoginPage() {
               {isLoggingIn ? 'Вход…' : 'Войти'}
             </Button>
           </form>
-          <p className="mt-4 text-center text-xs text-muted-foreground">
-            Dev: admin / manager / director @tracker.local, пароль{' '}
-            <code className="rounded bg-muted px-1 py-0.5">tracker</code>
-          </p>
+
+          <div className="mt-6 space-y-3 border-t border-border/60 pt-4">
+            <p className="text-center text-xs text-muted-foreground">
+              Dev-аккаунты, пароль{' '}
+              <code className="rounded bg-muted px-1 py-0.5">{DEV_PASSWORD}</code>
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {DEV_ACCOUNTS.map((account) => (
+                <Button
+                  key={account.email}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-auto flex-col items-start gap-0.5 px-2.5 py-2 text-left"
+                  disabled={isLoggingIn}
+                  onClick={() => void handleDevAccount(account.email)}
+                >
+                  <span className="text-xs font-medium">{account.label}</span>
+                  <span className="text-[10px] font-normal text-muted-foreground">
+                    {account.hint}
+                  </span>
+                </Button>
+              ))}
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -17,7 +17,7 @@ export class CreateAdminRouteTemplateHandler {
   async execute(command: CreateAdminRouteTemplateCommand) {
     const name = command.name.trim();
     if (!name) {
-      throw new ValidationError('Name is required');
+      throw new ValidationError('Укажите название маршрута');
     }
 
     const steps = normalizeRouteSteps(command.steps);

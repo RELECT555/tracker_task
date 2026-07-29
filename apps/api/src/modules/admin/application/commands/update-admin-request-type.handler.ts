@@ -49,7 +49,7 @@ export class UpdateAdminRequestTypeHandler {
       if (code !== existing.code) {
         const duplicate = await this.prisma.requestType.findUnique({ where: { code } });
         if (duplicate) {
-          throw new ValidationError(`Request type with code "${code}" already exists`);
+          throw new ValidationError(`Тип с кодом «${code}» уже существует`);
         }
       }
       data.code = code;
@@ -58,7 +58,7 @@ export class UpdateAdminRequestTypeHandler {
     if (command.name !== undefined) {
       const name = command.name.trim();
       if (!name) {
-        throw new ValidationError('Name is required');
+        throw new ValidationError('Укажите название типа запроса');
       }
       data.name = name;
     }
@@ -107,6 +107,21 @@ export class UpdateAdminRequestTypeHandler {
 
     if (command.isActive !== undefined) {
       data.isActive = command.isActive;
+    }
+
+    const nextDefaultRoute =
+      command.defaultRouteTemplateId !== undefined
+        ? command.defaultRouteTemplateId
+        : existing.defaultRouteTemplateId;
+    const nextAllowsPersonal =
+      command.allowsPersonalRoute !== undefined
+        ? command.allowsPersonalRoute
+        : existing.allowsPersonalRoute;
+
+    if (!nextDefaultRoute && !nextAllowsPersonal) {
+      throw new ValidationError(
+        'Укажите маршрут по умолчанию или включите персональный маршрут',
+      );
     }
 
     await this.prisma.requestType.update({

@@ -33,7 +33,8 @@ export interface RouteStepSnapshot {
 }
 
 export interface RouteSnapshot {
-  templateId: string;
-  templateVersion: number;
+  templateId: string | null;
+  templateVersion: number | null;
   steps: RouteStepSnapshot[];
+  source?: 'template' | 'personal';
 }

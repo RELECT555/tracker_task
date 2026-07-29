@@ -2,6 +2,7 @@ export const routes = {
   home: '/',
   inbox: '/inbox',
   outbox: '/outbox',
+  notifications: '/notifications',
   newRequest: '/requests/new',
   request: (id: string) => `/requests/${id}`,
   admin: {

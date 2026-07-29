@@ -22,14 +22,14 @@ const FIELD_KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 
 export function normalizeFieldSchema(raw: unknown): FieldSchemaInput[] {
   if (!Array.isArray(raw)) {
-    throw new ValidationError('fieldSchema must be an array');
+    throw new ValidationError('Список полей формы должен быть массивом');
   }
 
   const keys = new Set<string>();
 
   return raw.map((item, index) => {
     if (!item || typeof item !== 'object') {
-      throw new ValidationError(`fieldSchema[${index}] must be an object`);
+      throw new ValidationError(`Поле №${index + 1}: некорректный формат`);
     }
 
     const field = item as Record<string, unknown>;
@@ -40,33 +40,33 @@ export function normalizeFieldSchema(raw: unknown): FieldSchemaInput[] {
 
     if (!FIELD_KEY_PATTERN.test(key)) {
       throw new ValidationError(
-        `fieldSchema[${index}].key must match ${FIELD_KEY_PATTERN.source}`,
+        `Поле №${index + 1}: ключ должен начинаться с латинской буквы и содержать только a–z, 0–9 и _ (например: due_date)`,
       );
     }
 
     if (keys.has(key)) {
-      throw new ValidationError(`Duplicate field key: ${key}`);
+      throw new ValidationError(`Повторяющийся ключ поля: «${key}»`);
     }
     keys.add(key);
 
     if (!label) {
-      throw new ValidationError(`fieldSchema[${index}].label is required`);
+      throw new ValidationError(`Поле «${key}»: укажите подпись`);
     }
 
     if (!ALLOWED_TYPES.has(type)) {
-      throw new ValidationError(`Unsupported field type: ${type}`);
+      throw new ValidationError(`Поле «${key}»: неподдерживаемый тип «${type}»`);
     }
 
     let options: { value: string; label: string }[] | undefined;
     if (type === 'select') {
       if (!Array.isArray(field.options) || field.options.length === 0) {
-        throw new ValidationError(`Field "${key}" requires options`);
+        throw new ValidationError(`Поле «${key}»: добавьте хотя бы один вариант списка`);
       }
 
       options = field.options.map((option, optionIndex) => {
         if (!option || typeof option !== 'object') {
           throw new ValidationError(
-            `fieldSchema[${index}].options[${optionIndex}] must be an object`,
+            `Поле «${key}»: вариант №${optionIndex + 1} имеет некорректный формат`,
           );
         }
 
@@ -76,7 +76,7 @@ export function normalizeFieldSchema(raw: unknown): FieldSchemaInput[] {
 
         if (!value || !optionLabel) {
           throw new ValidationError(
-            `fieldSchema[${index}].options[${optionIndex}] requires value and label`,
+            `Поле «${key}»: у варианта №${optionIndex + 1} нужны значение и подпись`,
           );
         }
 
@@ -91,7 +91,9 @@ export function normalizeFieldSchema(raw: unknown): FieldSchemaInput[] {
 export function normalizeRequestTypeCode(code: string): string {
   const normalized = code.trim().toLowerCase();
   if (!FIELD_KEY_PATTERN.test(normalized)) {
-    throw new ValidationError('code must contain lowercase letters, numbers, and underscores');
+    throw new ValidationError(
+      'Код типа: только латиница в нижнем регистре, цифры и подчёркивание; начинается с буквы (например: contract_approval)',
+    );
   }
   return normalized;
 }

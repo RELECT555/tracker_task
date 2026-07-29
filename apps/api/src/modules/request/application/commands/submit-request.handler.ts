@@ -19,6 +19,11 @@ export interface SubmitRequestCommand {
   requestId: string;
   actorId: string;
   routeTemplateId?: string;
+  personalSteps?: {
+    name: string;
+    assigneeUserId: string;
+    slaHours?: number | null;
+  }[];
 }
 
 @Injectable()
@@ -47,6 +52,7 @@ export class SubmitRequestHandler {
       author,
       fields: request.fields,
       routeTemplateId: command.routeTemplateId,
+      personalSteps: command.personalSteps,
     });
 
     request.submitWithRoute(routeSnapshot);

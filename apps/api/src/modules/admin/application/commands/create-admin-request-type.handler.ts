@@ -28,16 +28,23 @@ export class CreateAdminRequestTypeHandler {
     const code = normalizeRequestTypeCode(command.code);
     const name = command.name.trim();
     if (!name) {
-      throw new ValidationError('Name is required');
+      throw new ValidationError('Укажите название типа запроса');
     }
 
     const existing = await this.prisma.requestType.findUnique({ where: { code } });
     if (existing) {
-      throw new ValidationError(`Request type with code "${code}" already exists`);
+      throw new ValidationError(`Тип с кодом «${code}» уже существует`);
     }
 
     if (command.defaultRouteTemplateId) {
       await this.assertPublishedRoute(command.defaultRouteTemplateId);
+    }
+
+    const allowsPersonalRoute = command.allowsPersonalRoute ?? false;
+    if (!command.defaultRouteTemplateId && !allowsPersonalRoute) {
+      throw new ValidationError(
+        'Укажите маршрут по умолчанию или включите персональный маршрут',
+      );
     }
 
     const allowedManualRoutes = command.allowedManualRoutes ?? [];
@@ -56,7 +63,7 @@ export class CreateAdminRequestTypeHandler {
         fieldSchema: fieldSchema as unknown as Prisma.InputJsonValue,
         defaultRouteTemplateId: command.defaultRouteTemplateId ?? null,
         allowedManualRoutes,
-        allowsPersonalRoute: command.allowsPersonalRoute ?? false,
+        allowsPersonalRoute,
         maxPersonalRouteSteps: command.maxPersonalRouteSteps ?? 5,
         isActive: command.isActive ?? true,
       },

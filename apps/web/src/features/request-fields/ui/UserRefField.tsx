@@ -1,8 +1,8 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { adminApi } from '@/entities/admin/api/adminApi';
 import type { AuthUser } from '@/entities/user/api/authApi';
+import { usersApi } from '@/entities/user/api/usersApi';
 import { queryKeys } from '@/shared/api/queryKeys';
 
 interface UserRefFieldProps {
@@ -13,12 +13,9 @@ interface UserRefFieldProps {
 }
 
 export function UserRefField({ id, value, onChange, user }: UserRefFieldProps) {
-  const isAdmin = Boolean(user?.roles.includes('admin'));
-
   const usersQuery = useQuery({
-    queryKey: queryKeys.admin.users(),
-    queryFn: () => adminApi.listUsers(),
-    enabled: isAdmin,
+    queryKey: queryKeys.users.directory(),
+    queryFn: () => usersApi.list(),
     staleTime: 60_000,
   });
 
@@ -31,31 +28,14 @@ export function UserRefField({ id, value, onChange, user }: UserRefFieldProps) {
     });
   }
 
-  if (isAdmin && usersQuery.data?.data) {
-    for (const entry of usersQuery.data.data) {
-      if (entry.isActive && !options.some((option) => option.id === entry.id)) {
-        options.push({ id: entry.id, label: entry.fullName });
-      }
+  for (const entry of usersQuery.data?.data ?? []) {
+    if (entry.id === user?.id) continue;
+    if (!options.some((option) => option.id === entry.id)) {
+      options.push({ id: entry.id, label: entry.fullName });
     }
   }
 
   const stringValue = value === undefined || value === null ? '' : String(value);
-
-  if (options.length === 0) {
-    return (
-      <select
-        id={id}
-        value={stringValue}
-        onChange={(event) => onChange(event.target.value)}
-        className="flex h-10 w-full rounded-md border border-input bg-field px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-      >
-        <option value="">— Выберите сотрудника —</option>
-        {stringValue ? (
-          <option value={stringValue}>{stringValue}</option>
-        ) : null}
-      </select>
-    );
-  }
 
   return (
     <select

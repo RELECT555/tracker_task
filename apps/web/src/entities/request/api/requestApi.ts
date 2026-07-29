@@ -11,6 +11,7 @@ export interface RequestListItem {
   author: { id: string; fullName: string };
   createdAt: string;
   submittedAt: string | null;
+  completedAt: string | null;
 }
 
 export interface InboxListItem {
@@ -21,6 +22,7 @@ export interface InboxListItem {
   type: { id: string; name: string };
   author: { id: string; fullName: string };
   currentStep: { name: string; dueAt: string | null; assignedAt: string };
+  completedAt: string | null;
   createdAt: string;
 }
 
@@ -62,11 +64,16 @@ export interface RequestDetail {
   id: string;
   title: string;
   status: RequestStatus;
+  priority: RequestPriority;
   type: {
     id: string;
     name: string;
     code: string;
     fieldSchema: FieldSchemaItem[];
+    defaultRouteTemplateId: string | null;
+    allowedManualRoutes: string[];
+    allowsPersonalRoute: boolean;
+    maxPersonalRouteSteps: number;
   } | null;
   fields: Record<string, unknown>;
   route: RouteSnapshot | null;
@@ -99,10 +106,14 @@ export interface UpdateRequestInput {
 }
 
 export const requestApi = {
-  getInbox: (params?: { sort?: 'sla' | 'recent' }) => {
-    const sort = params?.sort ?? 'sla';
-    const query = sort === 'recent' ? '?sort=recent' : '';
-    return apiFetch<PaginatedResponse<InboxListItem>>(`/requests/inbox${query}`);
+  getInbox: (params?: { sort?: 'sla' | 'recent'; scope?: 'active' | 'archive' }) => {
+    const search = new URLSearchParams();
+    if (params?.sort === 'recent') search.set('sort', 'recent');
+    if (params?.scope === 'archive') search.set('scope', 'archive');
+    const query = search.toString();
+    return apiFetch<PaginatedResponse<InboxListItem>>(
+      `/requests/inbox${query ? `?${query}` : ''}`,
+    );
   },
 
   getOutbox: (status?: string) =>
@@ -122,10 +133,20 @@ export const requestApi = {
       body: JSON.stringify(input),
     }),
 
-  submit: (id: string) =>
+  submit: (
+    id: string,
+    input?: {
+      routeTemplateId?: string;
+      personalSteps?: {
+        name: string;
+        assigneeUserId: string;
+        slaHours?: number | null;
+      }[];
+    },
+  ) =>
     apiFetch<RequestDetail>(`/requests/${id}/submit`, {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify(input ?? {}),
     }),
 
   approve: (id: string, comment?: string) =>

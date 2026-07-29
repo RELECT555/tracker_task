@@ -18,7 +18,7 @@ export class PublishAdminRouteTemplateHandler {
     }
 
     if (draft.steps.length === 0) {
-      throw new ValidationError('Cannot publish route template without steps');
+      throw new ValidationError('Нельзя опубликовать маршрут без шагов');
     }
 
     await this.prisma.routeTemplate.update({
@@ -52,7 +52,9 @@ export class CreateAdminRouteTemplateVersionHandler {
     });
 
     if (existingDraft) {
-      throw new ValidationError('A draft version already exists. Edit or publish it first.');
+      throw new ValidationError(
+        'Черновик версии уже есть. Отредактируйте или опубликуйте его.',
+      );
     }
 
     const nextVersion = latest.version + 1;

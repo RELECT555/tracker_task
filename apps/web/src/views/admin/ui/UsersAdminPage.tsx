@@ -9,6 +9,7 @@ import {
   type UpdateAdminUserInput,
 } from '@/entities/admin/api/adminApi';
 import { queryKeys } from '@/shared/api/queryKeys';
+import { formatAdminApiError } from '@/shared/lib/admin-errors';
 import { cn } from '@/shared/lib/utils';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Button } from '@/shared/ui/button';
@@ -241,7 +242,7 @@ export function UsersAdminPage() {
       setEditingUser(null);
       queryClient.invalidateQueries({ queryKey: queryKeys.admin.users() });
     },
-    onError: (err: Error) => setMutationError(err.message),
+    onError: (err: Error) => setMutationError(formatAdminApiError(err)),
   });
 
   return (
@@ -288,7 +289,7 @@ export function UsersAdminPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border bg-muted dark:bg-muted/25">
+                <tr className="border-b border-border bg-muted/40 dark:bg-muted/25">
                   <th className="px-5 py-3.5 text-left font-medium text-muted-foreground">Пользователь</th>
                   <th className="px-5 py-3.5 text-left font-medium text-muted-foreground">Подразделение</th>
                   <th className="px-5 py-3.5 text-left font-medium text-muted-foreground">Руководитель</th>

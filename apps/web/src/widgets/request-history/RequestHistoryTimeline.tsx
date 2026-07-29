@@ -16,52 +16,58 @@ export function RequestHistoryTimeline({
   }
 
   const content = (
-    <div className="rounded-lg border border-border bg-muted px-4 py-3 dark:bg-muted/10">
-      <ol className="relative space-y-0">
+    <ol className="relative">
       {transitions.map((item, index) => {
         const isLast = index === transitions.length - 1;
+        const statusChange = formatStatusChange(
+          item.fromStatus,
+          item.toStatus,
+          item.fromStep,
+          item.toStep,
+        );
+        const metaParts = [statusChange, item.actor?.fullName].filter(Boolean) as string[];
 
         return (
-          <li key={item.id} className="relative flex gap-3 pb-5 last:pb-0">
+          <li key={item.id} className="relative flex gap-3 pb-3.5 last:pb-0">
             {!isLast ? (
               <span
                 aria-hidden
-                className="absolute left-[11px] top-6 h-[calc(100%-12px)] w-px bg-border/80"
+                className="absolute left-[7px] top-4 h-[calc(100%-8px)] w-px bg-border"
               />
             ) : null}
             <span
+              aria-hidden
               className={cn(
-                'relative z-10 mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 bg-background',
+                'relative z-10 mt-1.5 h-3.5 w-3.5 shrink-0 rounded-full ring-2 ring-background',
                 actionDotClass(item.action),
               )}
             />
-            <div className="min-w-0 flex-1 space-y-0.5">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-medium leading-snug">
                 {TRANSITION_ACTION_LABELS[item.action] ?? item.action}
               </p>
-              <p className="text-xs text-muted-foreground">
-                {formatStatusChange(item.fromStatus, item.toStatus, item.fromStep, item.toStep)}
+              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                {metaParts.map((part, i) => (
+                  <span key={`${item.id}-meta-${i}`}>
+                    {i > 0 ? <span className="mx-1.5 text-border">·</span> : null}
+                    {part}
+                  </span>
+                ))}
+                {metaParts.length > 0 ? <span className="mx-1.5 text-border">·</span> : null}
+                <time dateTime={item.createdAt} className="font-mono tabular-nums">
+                  {new Date(item.createdAt).toLocaleString('ru-RU')}
+                </time>
               </p>
-              {item.actor ? (
-                <p className="text-xs text-muted-foreground">{item.actor.fullName}</p>
-              ) : null}
               {item.comment ? (
-                <p className="mt-1.5 border-l-2 border-border pl-3 text-sm text-muted-foreground">
+                <p className="mt-2 rounded-md border border-border/70 bg-muted/30 px-2.5 py-2 text-sm leading-relaxed text-foreground dark:bg-muted/25">
                   {item.comment}
                 </p>
               ) : null}
-              <time
-                dateTime={item.createdAt}
-                className="block pt-0.5 font-mono text-xs text-muted-foreground tabular-nums"
-              >
-                {new Date(item.createdAt).toLocaleString('ru-RU')}
-              </time>
             </div>
           </li>
         );
       })}
-      </ol>
-    </div>
+    </ol>
   );
 
   if (embedded) return content;
@@ -108,15 +114,15 @@ function actionDotClass(action: string): string {
   switch (action) {
     case 'approve':
     case 'provide_info':
-      return 'border-green-500/60 bg-green-500/10';
+      return 'bg-green-500/70';
     case 'reject':
     case 'cancel':
-      return 'border-destructive/60 bg-destructive/10';
+      return 'bg-destructive/70';
     case 'request_info':
     case 'escalate':
     case 'sla_escalate':
-      return 'border-amber-500/60 bg-amber-500/10';
+      return 'bg-amber-500/70';
     default:
-      return 'border-primary/60 bg-primary/10';
+      return 'bg-primary/70';
   }
 }

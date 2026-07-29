@@ -10,6 +10,13 @@ import {
   FieldSchemaEditor,
   validateFieldSchemaEditor,
 } from '@/features/admin/ui/FieldSchemaEditor';
+import { RouteCanvasEditor } from '@/features/admin/ui/route-canvas/RouteCanvasEditor';
+import {
+  isValidRequestTypeCode,
+  REQUEST_TYPE_CODE_HINT,
+  sanitizeRequestTypeCodeInput,
+  slugifyRequestTypeCode,
+} from '@/shared/lib/request-type-code';
 import { cn } from '@/shared/lib/utils';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Button } from '@/shared/ui/button';
@@ -23,7 +30,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/ui/select';
-import { RouteCanvasEditor } from '@/features/admin/ui/route-canvas/RouteCanvasEditor';
 
 type DesignerStep = 'basics' | 'fields' | 'route';
 
@@ -52,6 +58,7 @@ interface RequestTypeDesignerProps {
   onCancel: () => void;
   onSubmit: (payload: CreateAdminRequestTypeInput) => void;
   isPending: boolean;
+  submitError?: string | null;
 }
 
 export function RequestTypeDesigner({
@@ -61,11 +68,13 @@ export function RequestTypeDesigner({
   onCancel,
   onSubmit,
   isPending,
+  submitError = null,
 }: RequestTypeDesignerProps) {
   const [step, setStep] = useState<DesignerStep>('basics');
   const [form, setForm] = useState(initial);
   const [previewValues, setPreviewValues] = useState<Record<string, unknown>>({});
   const [error, setError] = useState<string | null>(null);
+  const [codeTouched, setCodeTouched] = useState(() => Boolean(initial.code));
 
   const { user } = useAuth();
 
@@ -84,11 +93,37 @@ export function RequestTypeDesigner({
     (route) => route.id === form.defaultRouteTemplateId,
   );
 
+  const displayError = error ?? submitError;
+
+  const updateName = (name: string) => {
+    setForm((prev) => {
+      const next = { ...prev, name };
+      if (!codeTouched) {
+        next.code = slugifyRequestTypeCode(name);
+      }
+      return next;
+    });
+  };
+
+  const updateCode = (raw: string) => {
+    setCodeTouched(true);
+    setForm((prev) => ({ ...prev, code: sanitizeRequestTypeCodeInput(raw) }));
+  };
+
   const handleSubmit = () => {
     setError(null);
 
-    if (!form.code.trim() || !form.name.trim()) {
-      setError('Заполните код и название на шаге «Основное»');
+    if (!form.name.trim()) {
+      setError('Укажите название на шаге «Основное»');
+      setStep('basics');
+      return;
+    }
+
+    const code = (form.code.trim() || slugifyRequestTypeCode(form.name)).toLowerCase();
+    if (!isValidRequestTypeCode(code)) {
+      setError(
+        'Не удалось получить код из названия. Введите код латиницей, например: contract_approval',
+      );
       setStep('basics');
       return;
     }
@@ -100,8 +135,18 @@ export function RequestTypeDesigner({
       return;
     }
 
+    if (!form.defaultRouteTemplateId && !form.allowsPersonalRoute) {
+      setError(
+        publishedRoutes.length === 0
+          ? 'Нет опубликованных маршрутов — включите персональный маршрут или сначала опубликуйте шаблон в «Маршруты»'
+          : 'Выберите маршрут по умолчанию или включите персональный маршрут',
+      );
+      setStep('route');
+      return;
+    }
+
     onSubmit({
-      code: form.code.trim(),
+      code,
       name: form.name.trim(),
       description: form.description.trim() || null,
       fieldSchema: form.fieldSchema,
@@ -142,10 +187,10 @@ export function RequestTypeDesigner({
           </div>
         </div>
 
-        {error ? (
+        {displayError ? (
           <div className="px-5 pt-4">
             <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{displayError}</AlertDescription>
             </Alert>
           </div>
         ) : null}
@@ -161,22 +206,25 @@ export function RequestTypeDesigner({
               <>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="type-code">Код</Label>
-                    <Input
-                      id="type-code"
-                      value={form.code}
-                      onChange={(event) => setForm({ ...form, code: event.target.value })}
-                      placeholder="contract_approval"
-                    />
-                  </div>
-                  <div className="space-y-2">
                     <Label htmlFor="type-name">Название</Label>
                     <Input
                       id="type-name"
                       value={form.name}
-                      onChange={(event) => setForm({ ...form, name: event.target.value })}
+                      onChange={(event) => updateName(event.target.value)}
                       placeholder="Согласование договора"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="type-code">Код</Label>
+                    <Input
+                      id="type-code"
+                      value={form.code}
+                      onChange={(event) => updateCode(event.target.value)}
+                      placeholder="soglasovanie_dogovora"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    <p className="text-xs text-muted-foreground">{REQUEST_TYPE_CODE_HINT}</p>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -210,6 +258,13 @@ export function RequestTypeDesigner({
 
             {step === 'route' ? (
               <>
+                <Alert>
+                  <AlertDescription>
+                    Нужен хотя бы один способ маршрутизации: шаблон по умолчанию или персональный
+                    маршрут.
+                  </AlertDescription>
+                </Alert>
+
                 <div className="grid gap-4 xl:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Маршрут по умолчанию</Label>

@@ -34,7 +34,7 @@ export class UpdateAdminUserHandler {
     if (command.fullName !== undefined) {
       const fullName = command.fullName.trim();
       if (!fullName) {
-        throw new ValidationError('Full name is required');
+        throw new ValidationError('Укажите ФИО пользователя');
       }
       data.fullName = fullName;
     }
@@ -55,7 +55,7 @@ export class UpdateAdminUserHandler {
 
     if (command.managerId !== undefined) {
       if (command.managerId === command.id) {
-        throw new ValidationError('User cannot be their own manager');
+        throw new ValidationError('Пользователь не может быть своим руководителем');
       }
 
       if (command.managerId) {
@@ -79,7 +79,7 @@ export class UpdateAdminUserHandler {
 
     if (command.roleCodes !== undefined) {
       if (command.roleCodes.length === 0) {
-        throw new ValidationError('User must have at least one role');
+        throw new ValidationError('У пользователя должна быть хотя бы одна роль');
       }
 
       const roles = await this.prisma.role.findMany({
@@ -89,7 +89,7 @@ export class UpdateAdminUserHandler {
       if (roles.length !== command.roleCodes.length) {
         const found = new Set(roles.map((role) => role.code));
         const missing = command.roleCodes.filter((code) => !found.has(code));
-        throw new ValidationError(`Unknown roles: ${missing.join(', ')}`);
+        throw new ValidationError(`Неизвестные роли: ${missing.join(', ')}`);
       }
 
       await this.prisma.$transaction([

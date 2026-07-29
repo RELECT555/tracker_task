@@ -105,21 +105,39 @@ export class PrismaRequestRepository extends RequestRepository {
 
   async findInboxWithRelations(
     assigneeId: string,
-    filters: { page: number; limit: number; sort?: 'sla' | 'recent' },
+    filters: {
+      page: number;
+      limit: number;
+      sort?: 'sla' | 'recent';
+      scope?: 'active' | 'archive';
+    },
   ) {
-    const where = {
-      assigneeId,
-      status: 'pending',
-      request: { status: 'in_progress' },
-    };
+    const scope = filters.scope ?? 'active';
+
+    const where =
+      scope === 'archive'
+        ? {
+            assigneeId,
+            status: 'completed',
+          }
+        : {
+            assigneeId,
+            status: 'pending',
+            request: { status: 'in_progress' },
+          };
 
     const orderBy =
-      filters.sort === 'recent'
-        ? [{ assignedAt: 'desc' as const }]
-        : [
-            { dueAt: { sort: 'asc' as const, nulls: 'last' as const } },
-            { assignedAt: 'asc' as const },
-          ];
+      scope === 'archive'
+        ? [
+            { completedAt: { sort: 'desc' as const, nulls: 'last' as const } },
+            { assignedAt: 'desc' as const },
+          ]
+        : filters.sort === 'recent'
+          ? [{ assignedAt: 'desc' as const }]
+          : [
+              { dueAt: { sort: 'asc' as const, nulls: 'last' as const } },
+              { assignedAt: 'asc' as const },
+            ];
 
     const [records, total] = await Promise.all([
       this.prisma.assignment.findMany({

@@ -41,6 +41,7 @@ export class RequestMapper {
         : { id: record.authorId, fullName: '—' },
       createdAt: record.createdAt.toISOString(),
       submittedAt: record.submittedAt?.toISOString() ?? null,
+      completedAt: record.completedAt?.toISOString() ?? null,
     };
   }
 
@@ -56,6 +57,10 @@ export class RequestMapper {
             name: record.type.name,
             code: record.type.code,
             fieldSchema: (record.type.fieldSchema as object[]) ?? [],
+            defaultRouteTemplateId: record.type.defaultRouteTemplateId,
+            allowedManualRoutes: record.type.allowedManualRoutes ?? [],
+            allowsPersonalRoute: record.type.allowsPersonalRoute,
+            maxPersonalRouteSteps: record.type.maxPersonalRouteSteps,
           }
         : null,
       title: record.title,

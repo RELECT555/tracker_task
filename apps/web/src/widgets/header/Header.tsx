@@ -4,6 +4,7 @@ import { Moon, Sun, Monitor } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import { Button } from '@/shared/ui/button';
+import { NotificationBell } from '@/widgets/header/NotificationBell';
 
 export function Header({
   title,
@@ -25,8 +26,13 @@ export function Header({
     setTheme(order[(idx + 1) % order.length]);
   };
 
-  const themeLabel =
-    theme === 'dark' ? 'Тёмная' : theme === 'light' ? 'Светлая' : 'Системная';
+  const themeLabel = !mounted
+    ? 'Системная'
+    : theme === 'dark'
+      ? 'Тёмная'
+      : theme === 'light'
+        ? 'Светлая'
+        : 'Системная';
 
   const ThemeIcon =
     !mounted ? Monitor : theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
@@ -42,10 +48,13 @@ export function Header({
             <p className="mt-0.5 text-sm text-muted-foreground dark:text-foreground/68">{description}</p>
           )}
         </div>
-        <Button variant="outline" size="sm" onClick={cycleTheme} aria-label="Переключить тему" className="shrink-0">
-          <ThemeIcon className="h-4 w-4" />
-          <span className="hidden sm:inline">{themeLabel}</span>
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <NotificationBell />
+          <Button variant="outline" size="sm" onClick={cycleTheme} aria-label="Переключить тему" className="shrink-0">
+            <ThemeIcon className="h-4 w-4" />
+            <span className="hidden sm:inline">{themeLabel}</span>
+          </Button>
+        </div>
       </div>
     </header>
   );

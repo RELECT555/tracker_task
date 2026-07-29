@@ -70,8 +70,13 @@ export async function apiFetch<T>(
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
+    const nestMessage = Array.isArray(body?.message)
+      ? body.message.join('; ')
+      : typeof body?.message === 'string'
+        ? body.message
+        : undefined;
     const message =
-      body?.error?.message ?? `Request failed: ${response.status}`;
+      body?.error?.message ?? nestMessage ?? `Request failed: ${response.status}`;
     throw new ApiError(message, body?.error?.code, response.status);
   }
 

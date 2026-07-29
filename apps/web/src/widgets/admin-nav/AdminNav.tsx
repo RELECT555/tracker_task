@@ -47,7 +47,7 @@ export function AdminNav() {
 
       <nav
         aria-label="Разделы администрирования"
-        className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted p-1 sm:grid-cols-3 lg:grid-cols-5 dark:border-border/80 dark:bg-accent/40"
+        className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted/40 p-1 sm:grid-cols-3 lg:grid-cols-5 dark:border-border/80 dark:bg-accent/40"
       >
         {adminLinks.map((link) => {
           const active = isLinkActive(pathname, link.href, link.exact);

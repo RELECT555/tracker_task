@@ -27,7 +27,9 @@ export class UpdateAdminRouteTemplateHandler {
     }
 
     if (template.isPublished) {
-      throw new ValidationError('Published route templates cannot be edited. Create a new version.');
+      throw new ValidationError(
+        'Опубликованный маршрут нельзя изменить. Создайте новую версию.',
+      );
     }
 
     const data: { name?: string } = {};
@@ -35,7 +37,7 @@ export class UpdateAdminRouteTemplateHandler {
     if (command.name !== undefined) {
       const name = command.name.trim();
       if (!name) {
-        throw new ValidationError('Name is required');
+        throw new ValidationError('Укажите название маршрута');
       }
       data.name = name;
     }

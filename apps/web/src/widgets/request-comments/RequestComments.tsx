@@ -49,13 +49,18 @@ export function RequestComments({
           Комментариев пока нет.
         </p>
       ) : (
-        <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-muted dark:bg-muted/10">
+        <ul className="space-y-2">
           {comments.map((comment) => (
             <li
               key={comment.id}
-              className={cn('px-4 py-3.5', comment.isInternal && 'bg-amber-500/8 dark:bg-amber-500/10')}
+              className={cn(
+                'rounded-lg border px-4 py-3.5 transition-colors duration-200',
+                comment.isInternal
+                  ? 'border-amber-500/25 bg-amber-50/60 dark:border-amber-500/20 dark:bg-amber-500/[0.07]'
+                  : 'border-border bg-card dark:bg-muted/10',
+              )}
             >
-              <div className="mb-1 flex flex-wrap items-center gap-2">
+              <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="text-sm font-medium">{comment.author.fullName}</span>
                 <time
                   dateTime={comment.createdAt}
@@ -64,20 +69,29 @@ export function RequestComments({
                   {new Date(comment.createdAt).toLocaleString('ru-RU')}
                 </time>
                 {comment.isInternal && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                    <Lock className="h-3 w-3" />
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                    <Lock className="h-3 w-3 shrink-0" aria-hidden />
                     Внутренний
                   </span>
                 )}
               </div>
-              <p className="whitespace-pre-wrap text-sm">{comment.body}</p>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                {comment.body}
+              </p>
             </li>
           ))}
         </ul>
       )}
 
       {permissions.canComment && (
-        <div className="space-y-3 rounded-lg border border-border bg-field p-4 dark:border-border/80">
+        <div
+          className={cn(
+            'space-y-3 rounded-lg border p-4 transition-colors duration-200',
+            isInternal
+              ? 'border-amber-500/30 bg-amber-50/40 dark:border-amber-500/25 dark:bg-amber-500/[0.06]'
+              : 'border-border bg-field dark:border-border/80',
+          )}
+        >
           <Label htmlFor="comment-body" className="text-xs font-medium text-foreground">
             Новый комментарий
           </Label>
@@ -97,7 +111,10 @@ export function RequestComments({
                 onChange={(e) => setIsInternal(e.target.checked)}
                 className="rounded border-input"
               />
-              Внутренний комментарий (не виден автору)
+              <span className="inline-flex items-center gap-1.5">
+                <Lock className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+                Внутренний комментарий (не виден автору)
+              </span>
             </label>
           )}
           {error && <p className="text-sm text-destructive">{error}</p>}

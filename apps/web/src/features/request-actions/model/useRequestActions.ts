@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { RequestPriority } from '@tracker/shared';
 import { requestApi, type RequestAction, type RequestDetail } from '@/entities/request/api/requestApi';
 import { queryKeys } from '@/shared/api/queryKeys';
 
@@ -8,11 +9,18 @@ export function useRequestActions(requestId: string) {
   const invalidateRequest = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.requests.detail(requestId) });
     queryClient.invalidateQueries({ queryKey: queryKeys.requests.outbox() });
-    queryClient.invalidateQueries({ queryKey: queryKeys.requests.inbox() });
+    queryClient.invalidateQueries({ queryKey: ['requests', 'inbox'] });
   };
 
   const submit = useMutation({
-    mutationFn: () => requestApi.submit(requestId),
+    mutationFn: (input?: {
+      routeTemplateId?: string;
+      personalSteps?: {
+        name: string;
+        assigneeUserId: string;
+        slaHours?: number | null;
+      }[];
+    }) => requestApi.submit(requestId, input),
     onSuccess: invalidateRequest,
   });
 
@@ -48,8 +56,11 @@ export function useRequestActions(requestId: string) {
   });
 
   const update = useMutation({
-    mutationFn: (input: { title?: string; fields?: Record<string, unknown> }) =>
-      requestApi.update(requestId, input),
+    mutationFn: (input: {
+      title?: string;
+      fields?: Record<string, unknown>;
+      priority?: RequestPriority;
+    }) => requestApi.update(requestId, input),
     onSuccess: invalidateRequest,
   });
 

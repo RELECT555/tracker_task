@@ -34,6 +34,9 @@ export class PrismaRequestTypeReader extends RequestTypeReader {
     fieldSchema: unknown;
     isActive: boolean;
     defaultRouteTemplateId: string | null;
+    allowedManualRoutes: string[];
+    allowsPersonalRoute: boolean;
+    maxPersonalRouteSteps: number;
   }): RequestTypeRecord {
     return {
       id: record.id,
@@ -43,6 +46,9 @@ export class PrismaRequestTypeReader extends RequestTypeReader {
       fieldSchema: record.fieldSchema,
       isActive: record.isActive,
       defaultRouteTemplateId: record.defaultRouteTemplateId,
+      allowedManualRoutes: record.allowedManualRoutes ?? [],
+      allowsPersonalRoute: record.allowsPersonalRoute,
+      maxPersonalRouteSteps: record.maxPersonalRouteSteps,
     };
   }
 }

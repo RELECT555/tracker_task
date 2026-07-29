@@ -16,6 +16,7 @@ import {
   type RouteStepFormValue,
 } from '@/features/admin/ui/RouteStepEditor';
 import { queryKeys } from '@/shared/api/queryKeys';
+import { formatAdminApiError } from '@/shared/lib/admin-errors';
 import { cn } from '@/shared/lib/utils';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Button } from '@/shared/ui/button';
@@ -98,7 +99,7 @@ export function RouteTemplatesAdminPage() {
       setMode('list');
       invalidate();
     },
-    onError: (err: Error) => setMutationError(err.message),
+    onError: (err: Error) => setMutationError(formatAdminApiError(err)),
   });
 
   const updateMutation = useMutation({
@@ -117,7 +118,7 @@ export function RouteTemplatesAdminPage() {
       setEditingTemplate(null);
       invalidate();
     },
-    onError: (err: Error) => setMutationError(err.message),
+    onError: (err: Error) => setMutationError(formatAdminApiError(err)),
   });
 
   const publishMutation = useMutation({
@@ -126,7 +127,7 @@ export function RouteTemplatesAdminPage() {
       setMutationError(null);
       invalidate();
     },
-    onError: (err: Error) => setMutationError(err.message),
+    onError: (err: Error) => setMutationError(formatAdminApiError(err)),
   });
 
   const newVersionMutation = useMutation({
@@ -135,7 +136,7 @@ export function RouteTemplatesAdminPage() {
       setMutationError(null);
       invalidate();
     },
-    onError: (err: Error) => setMutationError(err.message),
+    onError: (err: Error) => setMutationError(formatAdminApiError(err)),
   });
 
   const startEdit = (template: AdminRouteTemplate) => {
@@ -221,7 +222,7 @@ export function RouteTemplatesAdminPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border bg-muted dark:bg-muted/25">
+                <tr className="border-b border-border bg-muted/40 dark:bg-muted/25">
                   <th className="px-5 py-3.5 text-left font-medium text-muted-foreground">Название</th>
                   <th className="px-5 py-3.5 text-left font-medium text-muted-foreground">Версия</th>
                   <th className="px-5 py-3.5 text-left font-medium text-muted-foreground">Шаги</th>

@@ -343,7 +343,7 @@ export function validateFieldSchemaEditor(schema: FieldSchemaItem[]): string | n
     const label = field.label.trim();
 
     if (!keyPattern.test(key)) {
-      return 'Ключ поля: латиница, цифры и _, начинается с буквы';
+      return 'Ключ поля: только латиница (a–z), цифры и _; начинается с буквы (например: due_date)';
     }
 
     if (keys.has(key)) {

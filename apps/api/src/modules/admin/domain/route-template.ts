@@ -17,14 +17,14 @@ const ACTION_SET = new Set<string>(ROUTE_STEP_ACTIONS);
 
 export function normalizeRouteSteps(raw: unknown): RouteStepInput[] {
   if (!Array.isArray(raw) || raw.length === 0) {
-    throw new ValidationError('At least one route step is required');
+    throw new ValidationError('Добавьте хотя бы один шаг маршрута');
   }
 
   const orders = new Set<number>();
 
   return raw.map((item, index) => {
     if (!item || typeof item !== 'object') {
-      throw new ValidationError(`steps[${index}] must be an object`);
+      throw new ValidationError(`Шаг №${index + 1}: некорректный формат`);
     }
 
     const step = item as Record<string, unknown>;
@@ -34,20 +34,24 @@ export function normalizeRouteSteps(raw: unknown): RouteStepInput[] {
     const assigneeRef = String(step.assigneeRef ?? '').trim();
 
     if (!Number.isInteger(order) || order < 0) {
-      throw new ValidationError(`steps[${index}].order must be a non-negative integer`);
+      throw new ValidationError(
+        `Шаг №${index + 1}: порядковый номер должен быть целым числом ≥ 0`,
+      );
     }
 
     if (orders.has(order)) {
-      throw new ValidationError(`Duplicate step order: ${order}`);
+      throw new ValidationError(`Дублируется порядковый номер шага: ${order}`);
     }
     orders.add(order);
 
     if (!name) {
-      throw new ValidationError(`steps[${index}].name is required`);
+      throw new ValidationError(`Шаг №${index + 1}: укажите название`);
     }
 
     if (!ASSIGNEE_TYPE_SET.has(assigneeType)) {
-      throw new ValidationError(`Unsupported assignee type: ${assigneeType}`);
+      throw new ValidationError(
+        `Шаг №${index + 1}: неподдерживаемый тип назначения «${assigneeType}»`,
+      );
     }
 
     if (
@@ -55,7 +59,9 @@ export function normalizeRouteSteps(raw: unknown): RouteStepInput[] {
       assigneeType !== 'pool' &&
       !assigneeRef
     ) {
-      throw new ValidationError(`steps[${index}].assigneeRef is required for ${assigneeType}`);
+      throw new ValidationError(
+        `Шаг №${index + 1}: укажите, кому назначается шаг`,
+      );
     }
 
     const slaRaw = step.slaHours;
@@ -65,7 +71,9 @@ export function normalizeRouteSteps(raw: unknown): RouteStepInput[] {
         : Number(slaRaw);
 
     if (slaHours !== null && (!Number.isFinite(slaHours) || slaHours < 1)) {
-      throw new ValidationError(`steps[${index}].slaHours must be a positive number`);
+      throw new ValidationError(
+        `Шаг №${index + 1}: SLA должен быть положительным числом часов`,
+      );
     }
 
     const actionsRaw = step.actions;
@@ -74,12 +82,14 @@ export function normalizeRouteSteps(raw: unknown): RouteStepInput[] {
       : ['approve', 'reject'];
 
     if (actions.length === 0) {
-      throw new ValidationError(`steps[${index}] must include at least one action`);
+      throw new ValidationError(`Шаг №${index + 1}: выберите хотя бы одно действие`);
     }
 
     for (const action of actions) {
       if (!ACTION_SET.has(action)) {
-        throw new ValidationError(`Unsupported action: ${action}`);
+        throw new ValidationError(
+          `Шаг №${index + 1}: неподдерживаемое действие «${action}»`,
+        );
       }
     }
 

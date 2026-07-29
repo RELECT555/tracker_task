@@ -14,6 +14,10 @@ import {
 import { useMemo, useState } from 'react';
 import type { RequestStatus } from '@tracker/shared';
 import { requestApi, type RequestListItem } from '@/entities/request/api/requestApi';
+import {
+  RequestPriorityBadge,
+  priorityRowClass,
+} from '@/entities/request/ui/RequestPriorityBadge';
 import { RequestStatusBadge } from '@/entities/request/ui/RequestStatusBadge';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { routes } from '@/shared/config/routes';
@@ -49,6 +53,11 @@ function formatCreatedAt(value: string) {
     month: 'short',
     year: 'numeric',
   });
+}
+
+function formatCompletedAt(value: string | null) {
+  if (!value) return '—';
+  return formatCreatedAt(value);
 }
 
 export function OutboxPage() {
@@ -89,7 +98,7 @@ export function OutboxPage() {
   return (
     <DashboardShell
       title="Исходящие запросы"
-      description="Запросы, созданные вами"
+      description="Запросы, созданные вами — в том числе одобренные, отклонённые и отменённые"
     >
       {isLoading && <TableSkeleton rows={5} />}
 
@@ -155,6 +164,7 @@ export function OutboxPage() {
                 <p className="text-sm text-muted-foreground">
                   {stats.total}{' '}
                   {stats.total === 1 ? 'запрос' : stats.total < 5 ? 'запроса' : 'запросов'}
+                  {statusFilter === 'done' ? ' · архив завершённых' : ''}
                 </p>
               </div>
               <Link href={routes.newRequest}>
@@ -196,9 +206,15 @@ export function OutboxPage() {
 
             {filteredItems.length === 0 ? (
               <div className="px-6 py-12 text-center">
-                <p className="text-sm font-medium">Нет запросов в этой категории</p>
+                <p className="text-sm font-medium">
+                  {statusFilter === 'done'
+                    ? 'Нет завершённых запросов'
+                    : 'Нет запросов в этой категории'}
+                </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Попробуйте другой фильтр или создайте новый запрос.
+                  {statusFilter === 'done'
+                    ? 'Одобренные, отклонённые и отменённые запросы появятся здесь.'
+                    : 'Попробуйте другой фильтр или создайте новый запрос.'}
                 </p>
                 <Button
                   variant="outline"
@@ -223,8 +239,14 @@ export function OutboxPage() {
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         Статус
                       </th>
+                      <th className="hidden px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground md:table-cell">
+                        Приоритет
+                      </th>
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         Создан
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Завершён
                       </th>
                       <th className="w-10 px-4 py-3" aria-hidden />
                     </tr>
@@ -233,7 +255,10 @@ export function OutboxPage() {
                     {filteredItems.map((item) => (
                       <tr
                         key={item.id}
-                        className="group transition-colors hover:bg-muted/30 dark:hover:bg-accent/20"
+                        className={cn(
+                          'group transition-colors hover:bg-muted/30 dark:hover:bg-accent/20',
+                          priorityRowClass(item.priority),
+                        )}
                       >
                         <td className="px-6 py-4">
                           <Link href={routes.request(item.id)} className="block min-w-0">
@@ -249,10 +274,21 @@ export function OutboxPage() {
                           {item.type.name}
                         </td>
                         <td className="px-6 py-4">
-                          <RequestStatusBadge status={item.status} />
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <RequestStatusBadge status={item.status} />
+                            <span className="md:hidden">
+                              <RequestPriorityBadge priority={item.priority} />
+                            </span>
+                          </div>
+                        </td>
+                        <td className="hidden px-6 py-4 md:table-cell">
+                          <RequestPriorityBadge priority={item.priority} />
                         </td>
                         <td className="px-6 py-4 font-mono text-xs text-muted-foreground tabular-nums">
                           {formatCreatedAt(item.createdAt)}
+                        </td>
+                        <td className="px-6 py-4 font-mono text-xs text-muted-foreground tabular-nums">
+                          {formatCompletedAt(item.completedAt)}
                         </td>
                         <td className="px-4 py-4">
                           <Link

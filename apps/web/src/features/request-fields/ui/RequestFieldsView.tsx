@@ -31,7 +31,7 @@ export function RequestFieldsView({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-muted px-4 dark:bg-field/30">
+    <div className="rounded-lg border border-border bg-muted/30 px-4 dark:bg-field/30">
       <dl className="divide-y divide-border">
         {orderedKeys.map((key) => (
           <div

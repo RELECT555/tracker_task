@@ -147,20 +147,37 @@ npm run db:migrate -w @tracker/api -- --name add_notifications
 
 ## Seed-данные (dev)
 
-Файл: `apps/api/prisma/seed.ts`
+Файл: `apps/api/prisma/seed.ts`  
+Пароль у всех: `tracker`
 
-| Сущность | ID / email |
-|----------|------------|
-| Admin | `00000000-0000-4000-8000-000000000002` / admin@tracker.local |
-| Manager | `00000000-0000-4000-8000-000000000003` / manager@tracker.local |
-| Org unit | `00000000-0000-4000-8000-000000000001` |
-| Тип «Отпуск» | `00000000-0000-4000-8000-000000000101` |
-| Тип «Закупка» | `00000000-0000-4000-8000-000000000102` |
+Иерархия: Director → Manager → Admin / Employee / Employee2 / Observer.
 
-Переключение dev-пользователя API:
+| Persona | Email | Роли | Для чего тестировать |
+|---------|-------|------|----------------------|
+| Анна Кузнецова | `employee@tracker.local` | employee | Создание запросов, «мой» UX |
+| Игорь Петров | `employee2@tracker.local` | employee | Второй автор, peer / personal route |
+| Мария Соколова | `manager@tracker.local` | manager, employee | Inbox, согласование, эскалация |
+| Алексей Воронов | `director@tracker.local` | director, employee | Эскалированные / стратегические |
+| Дмитрий Орлов | `admin@tracker.local` | admin, employee | Админка, финальный шаг маршрута |
+| Елена Морозова | `observer@tracker.local` | observer | Только чтение |
+
+| Сущность | Stable ID |
+|----------|-----------|
+| Org unit | `…0001` |
+| Admin | `…0002` |
+| Manager | `…0003` |
+| Director | `…0004` |
+| Employee | `…0005` |
+| Employee 2 | `…0006` |
+| Observer | `…0007` |
+
+Префикс ID: `00000000-0000-4000-8000-00000000`.
+
+Переключение dev-пользователя API (без JWT):
 
 ```env
-DEV_USER_ID=00000000-0000-4000-8000-000000000003   # manager → inbox
+DEV_USER_ID=00000000-0000-4000-8000-000000000005   # employee → создать запрос
+# DEV_USER_ID=00000000-0000-4000-8000-000000000003 # manager → inbox
 ```
 
 ---

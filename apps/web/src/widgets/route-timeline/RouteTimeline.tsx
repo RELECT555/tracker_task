@@ -50,7 +50,7 @@ export function RouteTimeline({
 
   if (embedded) {
     return (
-      <div className="rounded-lg border border-border bg-muted px-3 py-2 dark:bg-muted/10">
+      <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 dark:bg-muted/10">
         {content}
       </div>
     );
