@@ -1,4 +1,17 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  DefaultValuePipe,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { ListAuditLogsHandler } from '../../audit/application/queries/list-audit-logs.handler';
 import { CreateAdminRequestTypeHandler } from '../application/commands/create-admin-request-type.handler';
 import { UpdateAdminRequestTypeHandler } from '../application/commands/update-admin-request-type.handler';
 import { CreateAdminRouteTemplateHandler } from '../application/commands/create-admin-route-template.handler';
@@ -23,6 +36,7 @@ import {
 } from './dto/admin-route-template.dto';
 import { UpdateAdminUserDto } from './dto/admin-user.dto';
 import { AdminRoleGuard } from './guards/admin-role.guard';
+import { CurrentUser } from '../../../shared/presentation/decorators/current-user.decorator';
 
 @Controller('admin')
 @UseGuards(AdminRoleGuard)
@@ -40,6 +54,7 @@ export class AdminController {
     private readonly listRolesHandler: ListAdminRolesHandler,
     private readonly updateUserHandler: UpdateAdminUserHandler,
     private readonly listOrgUnitsHandler: ListAdminOrgUnitsHandler,
+    private readonly listAuditLogsHandler: ListAuditLogsHandler,
   ) {}
 
   @Get('request-types')
@@ -48,16 +63,20 @@ export class AdminController {
   }
 
   @Post('request-types')
-  createRequestType(@Body() dto: CreateAdminRequestTypeDto) {
-    return this.createRequestTypeHandler.execute(dto);
+  createRequestType(
+    @Body() dto: CreateAdminRequestTypeDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.createRequestTypeHandler.execute({ ...dto, actorId: user.id });
   }
 
   @Patch('request-types/:id')
   updateRequestType(
     @Param('id') id: string,
     @Body() dto: UpdateAdminRequestTypeDto,
+    @CurrentUser() user: { id: string },
   ) {
-    return this.updateRequestTypeHandler.execute({ id, ...dto });
+    return this.updateRequestTypeHandler.execute({ id, actorId: user.id, ...dto });
   }
 
   @Get('route-templates')
@@ -66,8 +85,11 @@ export class AdminController {
   }
 
   @Post('route-templates')
-  createRouteTemplate(@Body() dto: CreateAdminRouteTemplateDto) {
-    return this.createRouteTemplateHandler.execute(dto);
+  createRouteTemplate(
+    @Body() dto: CreateAdminRouteTemplateDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.createRouteTemplateHandler.execute({ ...dto, actorId: user.id });
   }
 
   @Patch('route-templates/:id/versions/:version')
@@ -75,18 +97,30 @@ export class AdminController {
     @Param('id') id: string,
     @Param('version', ParseIntPipe) version: number,
     @Body() dto: UpdateAdminRouteTemplateDto,
+    @CurrentUser() user: { id: string },
   ) {
-    return this.updateRouteTemplateHandler.execute({ id, version, ...dto });
+    return this.updateRouteTemplateHandler.execute({
+      id,
+      version,
+      actorId: user.id,
+      ...dto,
+    });
   }
 
   @Put('route-templates/:id/publish')
-  publishRouteTemplate(@Param('id') id: string) {
-    return this.publishRouteTemplateHandler.execute(id);
+  publishRouteTemplate(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.publishRouteTemplateHandler.execute(id, user.id);
   }
 
   @Post('route-templates/:id/versions')
-  createRouteTemplateVersion(@Param('id') id: string) {
-    return this.createRouteTemplateVersionHandler.execute(id);
+  createRouteTemplateVersion(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.createRouteTemplateVersionHandler.execute(id, user.id);
   }
 
   @Get('users')
@@ -95,8 +129,12 @@ export class AdminController {
   }
 
   @Patch('users/:id')
-  updateUser(@Param('id') id: string, @Body() dto: UpdateAdminUserDto) {
-    return this.updateUserHandler.execute({ id, ...dto });
+  updateUser(
+    @Param('id') id: string,
+    @Body() dto: UpdateAdminUserDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.updateUserHandler.execute({ id, actorId: user.id, ...dto });
   }
 
   @Get('roles')
@@ -107,5 +145,30 @@ export class AdminController {
   @Get('org-units')
   listOrgUnits() {
     return this.listOrgUnitsHandler.execute();
+  }
+
+  @Get('audit-logs')
+  async listAuditLogs(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+    @Query('entityType') entityType?: string,
+    @Query('actorId') actorId?: string,
+  ) {
+    const result = await this.listAuditLogsHandler.execute({
+      page,
+      limit,
+      entityType,
+      actorId,
+    });
+
+    return {
+      data: result.items.map((item) => ({
+        ...item,
+        createdAt: item.createdAt.toISOString(),
+      })),
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+    };
   }
 }

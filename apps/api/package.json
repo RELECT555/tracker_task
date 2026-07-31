@@ -1,7 +1,7 @@
 {
   "name": "@tracker/api",
   "version": "0.0.1",
-  "description": "Request Tracker API",
+  "description": "Wayo API",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {

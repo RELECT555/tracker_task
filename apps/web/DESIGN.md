@@ -1,4 +1,4 @@
-# DESIGN.md — Request Tracker (Web)
+# DESIGN.md — Wayo (Web)
 
 ## Theme
 

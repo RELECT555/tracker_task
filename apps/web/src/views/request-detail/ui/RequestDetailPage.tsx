@@ -11,6 +11,7 @@ import {
   Loader2,
   MessageCircleQuestion,
   MessageSquare,
+  Paperclip,
   Pencil,
   Send,
   Settings2,
@@ -56,6 +57,7 @@ import {
 } from '@/shared/ui/select';
 import { DashboardShell } from '@/widgets/dashboard-shell/DashboardShell';
 import { RouteTimeline } from '@/widgets/route-timeline/RouteTimeline';
+import { RequestAttachments } from '@/widgets/request-attachments/RequestAttachments';
 import { RequestComments } from '@/widgets/request-comments/RequestComments';
 import { RequestHistoryTimeline } from '@/widgets/request-history/RequestHistoryTimeline';
 
@@ -398,6 +400,10 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
                   />
                 </DetailSection>
               ) : null}
+
+              <DetailSection title="Вложения" icon={Paperclip}>
+                <RequestAttachments embedded />
+              </DetailSection>
             </div>
 
             {showSidebar ? (

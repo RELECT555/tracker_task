@@ -1,10 +1,21 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Pencil } from 'lucide-react';
+import {
+  Check,
+  Eye,
+  Landmark,
+  Loader2,
+  Pencil,
+  Shield,
+  User,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
   adminApi,
+  type AdminRole,
   type AdminUser,
   type UpdateAdminUserInput,
 } from '@/entities/admin/api/adminApi';
@@ -26,6 +37,22 @@ import {
 import { TableSkeleton } from '@/shared/ui/skeleton';
 import { DashboardShell } from '@/widgets/dashboard-shell/DashboardShell';
 import { AdminNav } from '@/widgets/admin-nav/AdminNav';
+
+const ROLE_ICONS: Record<string, LucideIcon> = {
+  admin: Shield,
+  director: Landmark,
+  manager: Users,
+  employee: User,
+  observer: Eye,
+};
+
+const ROLE_HINTS: Record<string, string> = {
+  admin: 'Полный доступ к администрированию',
+  director: 'Стратегический обзор и эскалации',
+  manager: 'Обработка запросов подразделения',
+  employee: 'Подача и отслеживание своих запросов',
+  observer: 'Только просмотр без изменений',
+};
 
 function StatusBadge({ active }: { active: boolean }) {
   return (
@@ -54,7 +81,7 @@ function UserEditForm({
   user: AdminUser;
   orgUnits: { id: string; name: string }[];
   managers: { id: string; fullName: string }[];
-  roles: { code: string; name: string }[];
+  roles: AdminRole[];
   onCancel: () => void;
   onSave: (input: UpdateAdminUserInput) => void;
   isPending: boolean;
@@ -98,100 +125,194 @@ function UserEditForm({
   };
 
   return (
-    <Card>
-      <CardContent className="space-y-5 p-5">
-        <CardTitle className="text-lg">Редактирование: {user.email}</CardTitle>
+    <Card className="overflow-hidden">
+      <CardContent className="space-y-0 p-0">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
+          <div className="min-w-0">
+            <CardTitle className="text-lg">Редактирование пользователя</CardTitle>
+            <p className="mt-1 truncate text-sm font-medium text-foreground">
+              {user.fullName}
+            </p>
+            <p className="truncate font-mono text-xs text-muted-foreground">{user.email}</p>
+          </div>
+          <StatusBadge active={isActive} />
+        </div>
 
         {error ? (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+          <div className="px-5 pt-4">
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          </div>
         ) : null}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="user-full-name">ФИО</Label>
-              <Input
-                id="user-full-name"
-                value={fullName}
-                onChange={(event) => setFullName(event.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Email</Label>
-              <Input value={user.email} disabled />
-            </div>
-          </div>
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-6 p-5">
+            <section className="space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold tracking-tight">Профиль</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Основные данные и организационная привязка
+                </p>
+              </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Подразделение</Label>
-              <Select value={orgUnitId} onValueChange={setOrgUnitId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Выберите подразделение" />
-                </SelectTrigger>
-                <SelectContent>
-                  {orgUnits.map((unit) => (
-                    <SelectItem key={unit.id} value={unit.id}>
-                      {unit.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Руководитель</Label>
-              <Select
-                value={managerId || '__none__'}
-                onValueChange={(value) => setManagerId(value === '__none__' ? '' : value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Не назначен" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Не назначен</SelectItem>
-                  {managers
-                    .filter((manager) => manager.id !== user.id)
-                    .map((manager) => (
-                      <SelectItem key={manager.id} value={manager.id}>
-                        {manager.fullName}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Роли</Label>
-            <div className="flex flex-wrap gap-3">
-              {roles.map((role) => (
-                <label key={role.code} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={roleCodes.includes(role.code)}
-                    onChange={() => toggleRole(role.code)}
-                    className="h-4 w-4 rounded border-input"
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="user-full-name">ФИО</Label>
+                  <Input
+                    id="user-full-name"
+                    value={fullName}
+                    onChange={(event) => setFullName(event.target.value)}
+                    autoComplete="name"
                   />
-                  <span>{role.name}</span>
-                  <span className="font-mono text-xs text-muted-foreground">{role.code}</span>
-                </label>
-              ))}
-            </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="user-email">Email</Label>
+                  <Input id="user-email" value={user.email} disabled />
+                </div>
+                <div className="space-y-2">
+                  <Label>Подразделение</Label>
+                  <Select value={orgUnitId} onValueChange={setOrgUnitId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Выберите подразделение" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {orgUnits.map((unit) => (
+                        <SelectItem key={unit.id} value={unit.id}>
+                          {unit.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Руководитель</Label>
+                  <Select
+                    value={managerId || '__none__'}
+                    onValueChange={(value) => setManagerId(value === '__none__' ? '' : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Не назначен" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Не назначен</SelectItem>
+                      {managers
+                        .filter((manager) => manager.id !== user.id)
+                        .map((manager) => (
+                          <SelectItem key={manager.id} value={manager.id}>
+                            {manager.fullName}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-4 border-t border-border pt-6">
+              <div>
+                <h3 className="text-sm font-semibold tracking-tight">Роли и доступ</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Можно назначить несколько ролей. Выбрано: {roleCodes.length}
+                </p>
+              </div>
+
+              <div
+                className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
+                role="group"
+                aria-label="Роли пользователя"
+              >
+                {roles.map((role) => {
+                  const selected = roleCodes.includes(role.code);
+                  const Icon = ROLE_ICONS[role.code] ?? User;
+                  const hint = role.description?.trim() || ROLE_HINTS[role.code];
+
+                  return (
+                    <button
+                      key={role.code}
+                      type="button"
+                      onClick={() => toggleRole(role.code)}
+                      aria-pressed={selected}
+                      className={cn(
+                        'group relative flex min-h-[5.5rem] flex-col items-start gap-2 rounded-lg border p-3.5 text-left transition-colors duration-200',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+                        selected
+                          ? 'border-primary/45 bg-primary/10'
+                          : 'border-border bg-field hover:bg-muted/40 dark:bg-field',
+                      )}
+                    >
+                      <div className="flex w-full items-start justify-between gap-2">
+                        <span
+                          className={cn(
+                            'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors',
+                            selected
+                              ? 'bg-primary/15 text-primary'
+                              : 'bg-muted/60 text-muted-foreground',
+                          )}
+                        >
+                          <Icon className="h-4 w-4" strokeWidth={1.75} />
+                        </span>
+                        <span
+                          className={cn(
+                            'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors',
+                            selected
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border bg-background text-transparent',
+                          )}
+                          aria-hidden
+                        >
+                          <Check className="h-3 w-3" strokeWidth={2.5} />
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium leading-tight text-foreground">
+                          {role.name}
+                        </p>
+                        <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                          {role.code}
+                        </p>
+                        {hint ? (
+                          <p className="mt-1.5 text-xs leading-snug text-muted-foreground">
+                            {hint}
+                          </p>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/25 px-4 py-3 dark:bg-muted/10">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">Учётная запись активна</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Отключённые пользователи не могут войти в систему
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isActive}
+                  aria-label="Учётная запись активна"
+                  onClick={() => setIsActive((value) => !value)}
+                  className={cn(
+                    'relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+                    isActive ? 'bg-primary' : 'bg-muted',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-background shadow-sm transition-transform duration-200 ease-out',
+                      isActive && 'translate-x-5',
+                    )}
+                  />
+                </button>
+              </div>
+            </section>
           </div>
 
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={isActive}
-              onChange={(event) => setIsActive(event.target.checked)}
-              className="h-4 w-4 rounded border-input"
-            />
-            Учётная запись активна
-          </label>
-
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 border-t border-border bg-muted/20 px-5 py-4 dark:bg-muted/10">
             <Button type="submit" disabled={isPending}>
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Сохранить
@@ -316,9 +437,10 @@ export function UsersAdminPage() {
                         {user.roles.map((role) => (
                           <span
                             key={role.code}
-                            className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground"
+                            className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                            title={role.code}
                           >
-                            {role.code}
+                            <span className="font-medium text-foreground/80">{role.name}</span>
                           </span>
                         ))}
                       </div>

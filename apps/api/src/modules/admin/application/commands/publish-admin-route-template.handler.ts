@@ -1,12 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { NotFoundError, ValidationError } from '../../../../shared/domain/domain.error';
 import { PrismaService } from '../../../../shared/infrastructure/prisma/prisma.service';
+import { AuditRecorder } from '../../../audit/application/audit-recorder';
+import { AuditActions, AuditEntityTypes } from '../../../audit/domain/audit-action';
 
 @Injectable()
 export class PublishAdminRouteTemplateHandler {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditRecorder,
+  ) {}
 
-  async execute(templateId: string) {
+  async execute(templateId: string, actorId: string) {
     const draft = await this.prisma.routeTemplate.findFirst({
       where: { id: templateId, isPublished: false },
       orderBy: { version: 'desc' },
@@ -28,15 +33,30 @@ export class PublishAdminRouteTemplateHandler {
       data: { isPublished: true },
     });
 
+    await this.audit.record({
+      actorId,
+      action: AuditActions.ROUTE_TEMPLATE_PUBLISHED,
+      entityType: AuditEntityTypes.ROUTE_TEMPLATE,
+      entityId: draft.id,
+      payload: {
+        name: draft.name,
+        version: draft.version,
+        stepCount: draft.steps.length,
+      },
+    });
+
     return { id: draft.id, version: draft.version };
   }
 }
 
 @Injectable()
 export class CreateAdminRouteTemplateVersionHandler {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditRecorder,
+  ) {}
 
-  async execute(templateId: string) {
+  async execute(templateId: string, actorId: string) {
     const latest = await this.prisma.routeTemplate.findFirst({
       where: { id: templateId },
       orderBy: { version: 'desc' },
@@ -75,6 +95,19 @@ export class CreateAdminRouteTemplateVersionHandler {
             slaHours: step.slaHours,
           })),
         },
+      },
+    });
+
+    await this.audit.record({
+      actorId,
+      action: AuditActions.ROUTE_TEMPLATE_VERSION_CREATED,
+      entityType: AuditEntityTypes.ROUTE_TEMPLATE,
+      entityId: templateId,
+      payload: {
+        name: latest.name,
+        fromVersion: latest.version,
+        version: nextVersion,
+        stepCount: latest.steps.length,
       },
     });
 

@@ -3,12 +3,15 @@ import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { NotFoundError, ValidationError } from '../../../../shared/domain/domain.error';
 import { PrismaService } from '../../../../shared/infrastructure/prisma/prisma.service';
+import { AuditRecorder } from '../../../audit/application/audit-recorder';
+import { AuditActions, AuditEntityTypes } from '../../../audit/domain/audit-action';
 import {
   normalizeFieldSchema,
   normalizeRequestTypeCode,
 } from '../../domain/field-schema';
 
 export interface CreateAdminRequestTypeCommand {
+  actorId: string;
   code: string;
   name: string;
   description?: string | null;
@@ -22,7 +25,10 @@ export interface CreateAdminRequestTypeCommand {
 
 @Injectable()
 export class CreateAdminRequestTypeHandler {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditRecorder,
+  ) {}
 
   async execute(command: CreateAdminRequestTypeCommand) {
     const code = normalizeRequestTypeCode(command.code);
@@ -66,6 +72,21 @@ export class CreateAdminRequestTypeHandler {
         allowsPersonalRoute,
         maxPersonalRouteSteps: command.maxPersonalRouteSteps ?? 5,
         isActive: command.isActive ?? true,
+      },
+    });
+
+    await this.audit.record({
+      actorId: command.actorId,
+      action: AuditActions.REQUEST_TYPE_CREATED,
+      entityType: AuditEntityTypes.REQUEST_TYPE,
+      entityId: created.id,
+      payload: {
+        code: created.code,
+        name: created.name,
+        isActive: created.isActive,
+        allowsPersonalRoute: created.allowsPersonalRoute,
+        defaultRouteTemplateId: created.defaultRouteTemplateId,
+        fieldCount: fieldSchema.length,
       },
     });
 

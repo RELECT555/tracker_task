@@ -1,18 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { NotFoundError, ValidationError } from '../../../../shared/domain/domain.error';
 import { PrismaService } from '../../../../shared/infrastructure/prisma/prisma.service';
+import { AuditRecorder } from '../../../audit/application/audit-recorder';
+import { AuditActions, AuditEntityTypes } from '../../../audit/domain/audit-action';
 import { normalizeRouteSteps } from '../../domain/route-template';
 
 export interface UpdateAdminRouteTemplateCommand {
   id: string;
   version: number;
+  actorId: string;
   name?: string;
   steps?: unknown;
 }
 
 @Injectable()
 export class UpdateAdminRouteTemplateHandler {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditRecorder,
+  ) {}
 
   async execute(command: UpdateAdminRouteTemplateCommand) {
     const template = await this.prisma.routeTemplate.findUnique({
@@ -33,6 +39,7 @@ export class UpdateAdminRouteTemplateHandler {
     }
 
     const data: { name?: string } = {};
+    let stepCount = template.steps.length;
 
     if (command.name !== undefined) {
       const name = command.name.trim();
@@ -44,6 +51,7 @@ export class UpdateAdminRouteTemplateHandler {
 
     if (command.steps !== undefined) {
       const steps = normalizeRouteSteps(command.steps);
+      stepCount = steps.length;
 
       await this.prisma.$transaction([
         this.prisma.routeStepTemplate.deleteMany({
@@ -71,16 +79,27 @@ export class UpdateAdminRouteTemplateHandler {
           },
         }),
       ]);
-
-      return { id: command.id, version: command.version };
-    }
-
-    if (Object.keys(data).length > 0) {
+    } else if (Object.keys(data).length > 0) {
       await this.prisma.routeTemplate.update({
         where: {
           id_version: { id: command.id, version: command.version },
         },
         data,
+      });
+    }
+
+    if (command.name !== undefined || command.steps !== undefined) {
+      await this.audit.record({
+        actorId: command.actorId,
+        action: AuditActions.ROUTE_TEMPLATE_UPDATED,
+        entityType: AuditEntityTypes.ROUTE_TEMPLATE,
+        entityId: command.id,
+        payload: {
+          version: command.version,
+          name: data.name ?? template.name,
+          stepsChanged: command.steps !== undefined,
+          stepCount,
+        },
       });
     }
 

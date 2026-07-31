@@ -2,9 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { ValidationError } from '../../../../shared/domain/domain.error';
 import { PrismaService } from '../../../../shared/infrastructure/prisma/prisma.service';
+import { AuditRecorder } from '../../../audit/application/audit-recorder';
+import { AuditActions, AuditEntityTypes } from '../../../audit/domain/audit-action';
 import { normalizeRouteSteps } from '../../domain/route-template';
 
 export interface CreateAdminRouteTemplateCommand {
+  actorId: string;
   name: string;
   steps: unknown;
   isPublished?: boolean;
@@ -12,7 +15,10 @@ export interface CreateAdminRouteTemplateCommand {
 
 @Injectable()
 export class CreateAdminRouteTemplateHandler {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditRecorder,
+  ) {}
 
   async execute(command: CreateAdminRouteTemplateCommand) {
     const name = command.name.trim();
@@ -23,13 +29,14 @@ export class CreateAdminRouteTemplateHandler {
     const steps = normalizeRouteSteps(command.steps);
     const id = randomUUID();
     const version = 1;
+    const isPublished = command.isPublished ?? false;
 
     await this.prisma.routeTemplate.create({
       data: {
         id,
         name,
         version,
-        isPublished: command.isPublished ?? false,
+        isPublished,
         steps: {
           create: steps.map((step) => ({
             stepOrder: step.order,
@@ -40,6 +47,19 @@ export class CreateAdminRouteTemplateHandler {
             slaHours: step.slaHours,
           })),
         },
+      },
+    });
+
+    await this.audit.record({
+      actorId: command.actorId,
+      action: AuditActions.ROUTE_TEMPLATE_CREATED,
+      entityType: AuditEntityTypes.ROUTE_TEMPLATE,
+      entityId: id,
+      payload: {
+        name,
+        version,
+        isPublished,
+        stepCount: steps.length,
       },
     });
 

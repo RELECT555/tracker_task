@@ -17,5 +17,7 @@ export const queryKeys = {
     users: () => ['admin', 'users'] as const,
     roles: () => ['admin', 'roles'] as const,
     orgUnits: () => ['admin', 'org-units'] as const,
+    auditLogs: (entityType?: string) =>
+      ['admin', 'audit-logs', entityType ?? 'all'] as const,
   },
 };

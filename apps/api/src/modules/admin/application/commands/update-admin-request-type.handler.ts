@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { NotFoundError, ValidationError } from '../../../../shared/domain/domain.error';
 import { PrismaService } from '../../../../shared/infrastructure/prisma/prisma.service';
+import { AuditRecorder } from '../../../audit/application/audit-recorder';
+import { buildAuditChanges } from '../../../audit/application/build-audit-changes';
+import { AuditActions, AuditEntityTypes } from '../../../audit/domain/audit-action';
 import {
   normalizeFieldSchema,
   normalizeRequestTypeCode,
@@ -9,6 +12,7 @@ import {
 
 export interface UpdateAdminRequestTypeCommand {
   id: string;
+  actorId: string;
   code?: string;
   name?: string;
   description?: string | null;
@@ -22,7 +26,10 @@ export interface UpdateAdminRequestTypeCommand {
 
 @Injectable()
 export class UpdateAdminRequestTypeHandler {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditRecorder,
+  ) {}
 
   async execute(command: UpdateAdminRequestTypeCommand) {
     const existing = await this.prisma.requestType.findUnique({
@@ -31,6 +38,18 @@ export class UpdateAdminRequestTypeHandler {
     if (!existing) {
       throw new NotFoundError('RequestType', command.id);
     }
+
+    const before = {
+      code: existing.code,
+      name: existing.name,
+      description: existing.description,
+      isActive: existing.isActive,
+      defaultRouteTemplateId: existing.defaultRouteTemplateId,
+      allowedManualRoutes: existing.allowedManualRoutes,
+      allowsPersonalRoute: existing.allowsPersonalRoute,
+      maxPersonalRouteSteps: existing.maxPersonalRouteSteps,
+      fieldSchema: existing.fieldSchema,
+    };
 
     const data: {
       code?: string;
@@ -128,6 +147,41 @@ export class UpdateAdminRequestTypeHandler {
       where: { id: command.id },
       data,
     });
+
+    const after = {
+      code: data.code ?? before.code,
+      name: data.name ?? before.name,
+      description:
+        command.description !== undefined ? data.description : before.description,
+      isActive: data.isActive ?? before.isActive,
+      defaultRouteTemplateId:
+        command.defaultRouteTemplateId !== undefined
+          ? data.defaultRouteTemplateId
+          : before.defaultRouteTemplateId,
+      allowedManualRoutes:
+        command.allowedManualRoutes !== undefined
+          ? data.allowedManualRoutes
+          : before.allowedManualRoutes,
+      allowsPersonalRoute: data.allowsPersonalRoute ?? before.allowsPersonalRoute,
+      maxPersonalRouteSteps:
+        data.maxPersonalRouteSteps ?? before.maxPersonalRouteSteps,
+      fieldSchema:
+        command.fieldSchema !== undefined ? data.fieldSchema : before.fieldSchema,
+    };
+
+    const changes = buildAuditChanges(
+      before as Record<string, unknown>,
+      after as Record<string, unknown>,
+    );
+    if (changes) {
+      await this.audit.record({
+        actorId: command.actorId,
+        action: AuditActions.REQUEST_TYPE_UPDATED,
+        entityType: AuditEntityTypes.REQUEST_TYPE,
+        entityId: command.id,
+        payload: { changes },
+      });
+    }
 
     return { id: command.id };
   }

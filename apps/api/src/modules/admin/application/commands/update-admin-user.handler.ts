@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { NotFoundError, ValidationError } from '../../../../shared/domain/domain.error';
 import { PrismaService } from '../../../../shared/infrastructure/prisma/prisma.service';
+import { AuditRecorder } from '../../../audit/application/audit-recorder';
+import { buildAuditChanges } from '../../../audit/application/build-audit-changes';
+import { AuditActions, AuditEntityTypes } from '../../../audit/domain/audit-action';
 
 export interface UpdateAdminUserCommand {
   id: string;
+  actorId: string;
   fullName?: string;
   isActive?: boolean;
   orgUnitId?: string;
@@ -13,16 +17,28 @@ export interface UpdateAdminUserCommand {
 
 @Injectable()
 export class UpdateAdminUserHandler {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditRecorder,
+  ) {}
 
   async execute(command: UpdateAdminUserCommand) {
     const user = await this.prisma.user.findUnique({
       where: { id: command.id },
+      include: { roles: { include: { role: true } } },
     });
 
     if (!user) {
       throw new NotFoundError('User', command.id);
     }
+
+    const before = {
+      fullName: user.fullName,
+      isActive: user.isActive,
+      orgUnitId: user.orgUnitId,
+      managerId: user.managerId,
+      roleCodes: user.roles.map((entry) => entry.role.code).sort(),
+    };
 
     const data: {
       fullName?: string;
@@ -101,6 +117,29 @@ export class UpdateAdminUserHandler {
           })),
         }),
       ]);
+    }
+
+    const after = {
+      fullName: data.fullName ?? before.fullName,
+      isActive: data.isActive ?? before.isActive,
+      orgUnitId: data.orgUnitId ?? before.orgUnitId,
+      managerId:
+        command.managerId !== undefined ? command.managerId : before.managerId,
+      roleCodes:
+        command.roleCodes !== undefined
+          ? [...command.roleCodes].sort()
+          : before.roleCodes,
+    };
+
+    const changes = buildAuditChanges(before, after);
+    if (changes) {
+      await this.audit.record({
+        actorId: command.actorId,
+        action: AuditActions.USER_UPDATED,
+        entityType: AuditEntityTypes.USER,
+        entityId: command.id,
+        payload: { changes },
+      });
     }
 
     return { id: command.id };

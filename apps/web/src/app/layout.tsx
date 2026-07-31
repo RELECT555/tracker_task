@@ -18,8 +18,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Request Tracker',
-  description: 'Система трекинга запросов',
+  title: 'Wayo',
+  description: 'Согласование запросов и маршруты',
 };
 
 export default function RootLayout({

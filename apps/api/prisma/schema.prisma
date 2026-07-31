@@ -126,6 +126,8 @@ model User {
 
   comments     Comment[]
 
+  auditLogs    AuditLog[]
+
 
 
   @@index([orgUnitId])
@@ -383,6 +385,40 @@ model Comment {
   @@index([requestId, createdAt])
 
   @@map("comments")
+
+}
+
+
+
+model AuditLog {
+
+  id         String   @id @default(uuid()) @db.Uuid
+
+  actorId    String?  @map("actor_id") @db.Uuid
+
+  action     String   @db.VarChar(100)
+
+  entityType String   @map("entity_type") @db.VarChar(50)
+
+  entityId   String   @map("entity_id") @db.Uuid
+
+  payload    Json     @default("{}")
+
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  actor      User?    @relation(fields: [actorId], references: [id])
+
+
+
+  @@index([entityType, entityId, createdAt])
+
+  @@index([actorId, createdAt])
+
+  @@index([createdAt])
+
+  @@map("audit_logs")
 
 }
 

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuditModule } from '../audit/audit.module';
 import { CreateAdminRequestTypeHandler } from './application/commands/create-admin-request-type.handler';
 import { UpdateAdminRequestTypeHandler } from './application/commands/update-admin-request-type.handler';
 import { CreateAdminRouteTemplateHandler } from './application/commands/create-admin-route-template.handler';
@@ -17,6 +18,7 @@ import { AdminController } from './presentation/admin.controller';
 import { AdminRoleGuard } from './presentation/guards/admin-role.guard';
 
 @Module({
+  imports: [AuditModule],
   controllers: [AdminController],
   providers: [
     AdminRoleGuard,

@@ -1,8 +1,9 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useState } from 'react';
-import { LayoutDashboard } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { LayoutDashboard, Monitor, Moon, Sun } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { DEV_ACCOUNTS, DEV_PASSWORD } from '@/features/auth/lib/dev-accounts';
 import { routes } from '@/shared/config/routes';
@@ -12,6 +13,44 @@ import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
 import { ApiError } from '@/shared/api/client';
+
+function LoginThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  const cycleTheme = () => {
+    const order = ['light', 'dark', 'system'] as const;
+    const idx = order.indexOf((theme as (typeof order)[number]) ?? 'system');
+    setTheme(order[(idx + 1) % order.length]);
+  };
+
+  const themeLabel = !mounted
+    ? 'Системная'
+    : theme === 'dark'
+      ? 'Тёмная'
+      : theme === 'light'
+        ? 'Светлая'
+        : 'Системная';
+
+  const ThemeIcon =
+    !mounted ? Monitor : theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={cycleTheme}
+      aria-label="Переключить тему"
+      className="absolute right-4 top-4"
+    >
+      <ThemeIcon className="h-4 w-4" />
+      <span className="hidden sm:inline">{themeLabel}</span>
+    </Button>
+  );
+}
 
 export function LoginPage() {
   const searchParams = useSearchParams();
@@ -44,15 +83,16 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-sidebar px-4 dark:bg-background">
+    <div className="relative flex min-h-screen items-center justify-center bg-background px-4">
+      <LoginThemeToggle />
       <Card className="w-full max-w-md border-border/60 shadow-xl">
         <CardHeader className="space-y-4 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-border/60 bg-field">
             <LayoutDashboard className="h-6 w-6 text-primary" strokeWidth={1.5} />
           </div>
           <div>
-            <CardTitle className="text-xl">Request Tracker</CardTitle>
-            <CardDescription>Войдите в систему трекинга запросов</CardDescription>
+            <CardTitle className="text-xl">Wayo</CardTitle>
+            <CardDescription>Войдите, чтобы работать с запросами и маршрутами</CardDescription>
           </div>
         </CardHeader>
         <CardContent>

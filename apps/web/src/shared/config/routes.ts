@@ -11,6 +11,7 @@ export const routes = {
     requestTypes: '/admin/request-types',
     users: '/admin/users',
     orgUnits: '/admin/org-units',
+    audit: '/admin/audit',
   },
   login: '/login',
 } as const;

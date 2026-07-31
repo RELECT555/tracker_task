@@ -88,7 +88,7 @@ export function Sidebar() {
           <LayoutDashboard className="h-4 w-4 text-sidebar-primary" strokeWidth={1.5} />
         </div>
         <span className="font-mono text-sm font-semibold uppercase tracking-[0.2em] text-sidebar-foreground">
-          Tracker
+          Wayo
         </span>
       </div>
 

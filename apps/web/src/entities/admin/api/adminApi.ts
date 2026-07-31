@@ -107,6 +107,16 @@ export interface UpdateAdminUserInput {
   roleCodes?: string[];
 }
 
+export interface AdminAuditLog {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  actor: { id: string; fullName: string; email: string } | null;
+}
+
 export const adminApi = {
   listRequestTypes: () =>
     apiFetch<{ data: AdminRequestType[] }>('/admin/request-types'),
@@ -167,4 +177,22 @@ export const adminApi = {
 
   listOrgUnits: () =>
     apiFetch<{ data: AdminOrgUnit[]; flat: AdminOrgUnit[] }>('/admin/org-units'),
+
+  listAuditLogs: (params?: {
+    page?: number;
+    limit?: number;
+    entityType?: string;
+  }) => {
+    const search = new URLSearchParams();
+    if (params?.page) search.set('page', String(params.page));
+    if (params?.limit) search.set('limit', String(params.limit));
+    if (params?.entityType) search.set('entityType', params.entityType);
+    const query = search.toString();
+    return apiFetch<{
+      data: AdminAuditLog[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(`/admin/audit-logs${query ? `?${query}` : ''}`);
+  },
 };
