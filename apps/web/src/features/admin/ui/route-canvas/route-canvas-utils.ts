@@ -3,15 +3,39 @@ import type { RouteStepFormValue } from '@/features/admin/ui/RouteStepEditor';
 export type ApprovalStepNodeData = {
   step: RouteStepFormValue;
   index: number;
+  total: number;
   selected: boolean;
+  invalid: boolean;
+  interactive: boolean;
+  onMove?: (index: number, direction: -1 | 1) => void;
+};
+
+export type InsertEdgeData = {
+  at: number;
+  interactive: boolean;
+  onInsert?: (at: number) => void;
 };
 
 export const APPROVAL_STEP_NODE_TYPE = 'approvalStep';
+export const INSERT_EDGE_TYPE = 'insertStep';
 
-export const NODE_WIDTH = 220;
-export const NODE_GAP = 80;
+export const NODE_WIDTH = 248;
+export const NODE_GAP = 104;
 
-export function stepsToFlow(steps: RouteStepFormValue[], selectedIndex: number | null) {
+interface StepsToFlowOptions {
+  invalidIndexes?: ReadonlySet<number>;
+  interactive?: boolean;
+  onInsert?: (at: number) => void;
+  onMove?: (index: number, direction: -1 | 1) => void;
+}
+
+export function stepsToFlow(
+  steps: RouteStepFormValue[],
+  selectedIndex: number | null,
+  options: StepsToFlowOptions = {},
+) {
+  const { invalidIndexes, interactive = false, onInsert, onMove } = options;
+
   const nodes = steps.map((step, index) => ({
     id: `step-${index}`,
     type: APPROVAL_STEP_NODE_TYPE,
@@ -19,7 +43,11 @@ export function stepsToFlow(steps: RouteStepFormValue[], selectedIndex: number |
     data: {
       step,
       index,
+      total: steps.length,
       selected: selectedIndex === index,
+      invalid: invalidIndexes?.has(index) ?? false,
+      interactive,
+      onMove,
     } satisfies ApprovalStepNodeData,
     draggable: false,
     selectable: true,
@@ -29,8 +57,13 @@ export function stepsToFlow(steps: RouteStepFormValue[], selectedIndex: number |
     id: `edge-${index}`,
     source: `step-${index}`,
     target: `step-${index + 1}`,
-    animated: true,
-    style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
+    type: INSERT_EDGE_TYPE,
+    data: {
+      at: index + 1,
+      interactive,
+      onInsert,
+    } satisfies InsertEdgeData,
+    style: { stroke: 'hsl(var(--border))', strokeWidth: 2 },
   }));
 
   return { nodes, edges };

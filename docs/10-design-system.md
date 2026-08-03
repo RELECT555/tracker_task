@@ -258,8 +258,40 @@
 | `Skeleton` | `skeleton.tsx` | Shimmer + TableSkeleton, FormSkeleton |
 | `EmptyState` | `empty-state.tsx` | Пустые списки с иконкой и action |
 | `PageContainer` | `page-container.tsx` | max-w-7xl + fade-in анимация |
+| `Checkbox` | `checkbox.tsx` | Чекбокс с состоянием indeterminate (массовый выбор в таблицах) |
+| `Toaster` / `toast` | `toast/` | Системные уведомления, см. ниже |
 
 Утилита `cn()` — `shared/lib/utils.ts` (clsx + tailwind-merge).
+
+### Уведомления (toast)
+
+Собственная реализация без внешних зависимостей: стор на `useSyncExternalStore`
+(`shared/ui/toast/toast-store.ts`) + вьюпорт `<Toaster />`, смонтированный один раз
+в `app/providers.tsx`. Вызывается из любого места, в том числе вне React-дерева.
+
+```ts
+import { toast } from '@/shared/ui/toast';
+
+toast.success('Запрос одобрен');
+toast.error(getErrorMessage(error));
+toast.warning('Отменено: 3, с ошибкой: 1', { description: 'Заявка X — нет прав' });
+toast.info('Черновик сохранён', { action: { label: 'Открыть', onClick: open } });
+```
+
+Правила:
+
+- **Заголовок — результат, а не процесс**: «Запрос одобрен», не «Одобрение выполнено успешно».
+- Технические детали и перечни ошибок — в `description`, не в заголовке.
+- Тайминги по варианту: success 4 с, info 5 с, warning 7 с, error 9 с;
+  `duration: Infinity` — до закрытия пользователем. Таймер встаёт на паузу при
+  наведении и фокусе.
+- Одновременно видно не более 4 уведомлений, новые сверху; повторный вызов с тем же
+  `id` заменяет уведомление, а не копит стек (для прогресса и повторов).
+- Позиция — правый нижний угол, `z-60`: выше панели массовых операций (`z-50`).
+- Ошибки получают `role="alert"` + `aria-live="assertive"`, остальные — `role="status"` + `polite`.
+
+Toast — для результата действия пользователя. Для состояния страницы (ошибка загрузки,
+предупреждение о правах) остаётся `Alert` внутри контента.
 
 ### Layout
 

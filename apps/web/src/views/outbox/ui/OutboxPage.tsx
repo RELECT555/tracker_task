@@ -11,7 +11,7 @@ import {
   Plus,
   Send,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { RequestStatus } from '@tracker/shared';
 import { requestApi, type RequestListItem } from '@/entities/request/api/requestApi';
 import {
@@ -24,9 +24,11 @@ import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Button } from '@/shared/ui/button';
+import { Checkbox } from '@/shared/ui/checkbox';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { TableSkeleton } from '@/shared/ui/skeleton';
 import { DashboardShell } from '@/widgets/dashboard-shell/DashboardShell';
+import { OutboxBulkBar } from './OutboxBulkBar';
 
 type StatusFilter = 'all' | 'active' | 'draft' | 'done';
 
@@ -62,13 +64,14 @@ function formatCompletedAt(value: string | null) {
 
 export function OutboxPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.requests.outbox(),
     queryFn: () => requestApi.getOutbox(),
   });
 
-  const items = data?.data ?? [];
+  const items = useMemo(() => data?.data ?? [], [data]);
 
   const stats = useMemo(
     () => ({
@@ -94,6 +97,37 @@ export function OutboxPage() {
     }),
     [items.length, stats.active, stats.draft, stats.done],
   );
+
+  // Drop selections that disappeared from the list (refetch, cancel, filter-independent)
+  useEffect(() => {
+    setSelectedIds((current) => {
+      const alive = current.filter((id) => items.some((item) => item.id === id));
+      return alive.length === current.length ? current : alive;
+    });
+  }, [items]);
+
+  const selectedItems = useMemo(
+    () => items.filter((item) => selectedIds.includes(item.id)),
+    [items, selectedIds],
+  );
+
+  const visibleSelectedCount = filteredItems.filter((item) =>
+    selectedIds.includes(item.id),
+  ).length;
+  const allVisibleSelected =
+    filteredItems.length > 0 && visibleSelectedCount === filteredItems.length;
+
+  const toggleItem = (id: string) =>
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
+    );
+
+  const toggleAllVisible = () =>
+    setSelectedIds((current) => {
+      const visibleIds = filteredItems.map((item) => item.id);
+      if (allVisibleSelected) return current.filter((id) => !visibleIds.includes(id));
+      return Array.from(new Set([...current, ...visibleIds]));
+    });
 
   return (
     <DashboardShell
@@ -230,7 +264,15 @@ export function OutboxPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/30 dark:bg-muted/15">
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <th className="w-10 pl-6 pr-0 py-3">
+                        <Checkbox
+                          checked={allVisibleSelected}
+                          indeterminate={visibleSelectedCount > 0 && !allVisibleSelected}
+                          onCheckedChange={toggleAllVisible}
+                          aria-label="Выбрать все запросы на странице"
+                        />
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         Запрос
                       </th>
                       <th className="hidden px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground sm:table-cell">
@@ -252,15 +294,30 @@ export function OutboxPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {filteredItems.map((item) => (
+                    {filteredItems.map((item) => {
+                      const isSelected = selectedIds.includes(item.id);
+                      return (
                       <tr
                         key={item.id}
                         className={cn(
                           'group transition-colors hover:bg-muted/30 dark:hover:bg-accent/20',
                           priorityRowClass(item.priority),
+                          isSelected && 'bg-primary/[0.06] hover:bg-primary/10 dark:bg-primary/10',
                         )}
                       >
-                        <td className="px-6 py-4">
+                        <td className="w-10 pl-6 pr-0 py-4">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleItem(item.id)}
+                            className={cn(
+                              'transition-opacity',
+                              !isSelected &&
+                                'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+                            )}
+                            aria-label={`Выбрать «${item.title}»`}
+                          />
+                        </td>
+                        <td className="px-4 py-4">
                           <Link href={routes.request(item.id)} className="block min-w-0">
                             <span className="font-medium text-foreground transition-colors group-hover:text-primary">
                               {item.title}
@@ -300,7 +357,8 @@ export function OutboxPage() {
                           </Link>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -309,6 +367,9 @@ export function OutboxPage() {
             {filteredItems.length > 0 && (
               <div className="border-t border-border px-6 py-3 font-mono text-xs text-muted-foreground">
                 Показано {filteredItems.length} из {items.length}
+                {selectedItems.length > 0 && (
+                  <span className="text-primary"> · выделено {selectedItems.length}</span>
+                )}
                 {statusFilter !== 'all' && (
                   <>
                     {' '}
@@ -319,8 +380,12 @@ export function OutboxPage() {
               </div>
             )}
           </section>
+
+          {selectedItems.length > 0 && <div className="h-16" aria-hidden />}
         </div>
       )}
+
+      <OutboxBulkBar selected={selectedItems} onClear={() => setSelectedIds([])} />
     </DashboardShell>
   );
 }

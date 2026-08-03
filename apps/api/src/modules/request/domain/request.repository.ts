@@ -7,18 +7,9 @@ export interface OutboxFilters {
   limit: number;
 }
 
-export interface OutboxResult {
-  items: Request[];
-  total: number;
-}
-
 export abstract class RequestRepository {
   abstract findById(id: string): Promise<Request | null>;
   abstract save(request: Request): Promise<void>;
-  abstract findOutbox(
-    authorId: string,
-    filters: OutboxFilters,
-  ): Promise<OutboxResult>;
 }
 
 export abstract class RequestTypeReader {

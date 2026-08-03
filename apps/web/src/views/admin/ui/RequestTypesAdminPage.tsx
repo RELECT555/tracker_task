@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Pencil, Plus } from 'lucide-react';
+import { Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import {
   adminApi,
@@ -9,9 +9,9 @@ import {
   type CreateAdminRequestTypeInput,
 } from '@/entities/admin/api/adminApi';
 import {
-  RequestTypeDesigner,
+  RequestTypeWorkspace,
   type RequestTypeDesignerState,
-} from '@/features/admin/ui/RequestTypeDesigner';
+} from '@/features/admin/ui/RequestTypeWorkspace';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { formatAdminApiError } from '@/shared/lib/admin-errors';
 import { cn } from '@/shared/lib/utils';
@@ -37,7 +37,7 @@ function StatusBadge({ active }: { active: boolean }) {
   );
 }
 
-interface RequestTypeFormState extends RequestTypeDesignerState {}
+type RequestTypeFormState = RequestTypeDesignerState;
 
 function emptyForm(): RequestTypeFormState {
   return {
@@ -123,6 +123,47 @@ export function RequestTypesAdminPage() {
     setMutationError(null);
   };
 
+  if (mode === 'create') {
+    return (
+      <RequestTypeWorkspace
+        title="Новый тип запроса"
+        initial={emptyForm()}
+        routeTemplates={routeTemplates}
+        isPending={createMutation.isPending}
+        submitError={mutationError}
+        onCancel={() => {
+          setMode('list');
+          setMutationError(null);
+        }}
+        onSubmit={(payload) => {
+          setMutationError(null);
+          createMutation.mutate(payload);
+        }}
+      />
+    );
+  }
+
+  if (mode === 'edit' && editingType) {
+    return (
+      <RequestTypeWorkspace
+        title={editingType.name}
+        initial={toForm(editingType)}
+        routeTemplates={routeTemplates}
+        isPending={updateMutation.isPending}
+        submitError={mutationError}
+        onCancel={() => {
+          setMode('list');
+          setEditingType(null);
+          setMutationError(null);
+        }}
+        onSubmit={(payload) => {
+          setMutationError(null);
+          updateMutation.mutate({ id: editingType.id, input: payload });
+        }}
+      />
+    );
+  }
+
   return (
     <DashboardShell
       title="Типы запросов"
@@ -146,43 +187,6 @@ export function RequestTypesAdminPage() {
         <Alert variant="destructive" className="mt-4">
           <AlertDescription>{mutationError}</AlertDescription>
         </Alert>
-      ) : null}
-
-      {mode === 'create' ? (
-        <div className="mt-6">
-          <RequestTypeDesigner
-            title="Новый тип запроса"
-            initial={emptyForm()}
-            routeTemplates={routeTemplates}
-            isPending={createMutation.isPending}
-            submitError={mutationError}
-            onCancel={() => setMode('list')}
-            onSubmit={(payload) => {
-              setMutationError(null);
-              createMutation.mutate(payload);
-            }}
-          />
-        </div>
-      ) : null}
-
-      {mode === 'edit' && editingType ? (
-        <div className="mt-6">
-          <RequestTypeDesigner
-            title={`Редактирование: ${editingType.name}`}
-            initial={toForm(editingType)}
-            routeTemplates={routeTemplates}
-            isPending={updateMutation.isPending}
-            submitError={mutationError}
-            onCancel={() => {
-              setMode('list');
-              setEditingType(null);
-            }}
-            onSubmit={(payload) => {
-              setMutationError(null);
-              updateMutation.mutate({ id: editingType.id, input: payload });
-            }}
-          />
-        </div>
       ) : null}
 
       {mode === 'list' && isLoading && (

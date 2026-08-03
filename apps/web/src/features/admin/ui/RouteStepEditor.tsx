@@ -202,29 +202,41 @@ export function RouteStepEditor({ value, onChange }: RouteStepEditorProps) {
   );
 }
 
-export function validateRouteStepEditor(steps: RouteStepFormValue[]): string | null {
+export interface RouteStepIssue {
+  /** Index of the offending step, or null for route-level issues */
+  index: number | null;
+  message: string;
+}
+
+export function collectRouteStepIssues(steps: RouteStepFormValue[]): RouteStepIssue[] {
   if (steps.length === 0) {
-    return 'Добавьте хотя бы один шаг маршрута';
+    return [{ index: null, message: 'Добавьте хотя бы один шаг маршрута' }];
   }
+
+  const issues: RouteStepIssue[] = [];
 
   for (const [index, step] of steps.entries()) {
     if (!step.name.trim()) {
-      return `Укажите название шага ${index + 1}`;
+      issues.push({ index, message: `Шаг ${index + 1}: укажите название` });
     }
 
-    if (
-      step.assigneeType !== 'org_unit_head' &&
-      !step.assigneeRef.trim()
-    ) {
-      return `Укажите параметр назначения для шага ${index + 1}`;
+    if (step.assigneeType !== 'org_unit_head' && !step.assigneeRef.trim()) {
+      issues.push({
+        index,
+        message: `Шаг ${index + 1}: задайте параметр назначения`,
+      });
     }
 
     if (step.actions.length === 0) {
-      return `Выберите действия для шага ${index + 1}`;
+      issues.push({ index, message: `Шаг ${index + 1}: выберите действия` });
     }
   }
 
-  return null;
+  return issues;
+}
+
+export function validateRouteStepEditor(steps: RouteStepFormValue[]): string | null {
+  return collectRouteStepIssues(steps)[0]?.message ?? null;
 }
 
 export function createDefaultRouteSteps(): RouteStepFormValue[] {

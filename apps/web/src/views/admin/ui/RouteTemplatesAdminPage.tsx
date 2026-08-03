@@ -1,16 +1,14 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Rocket } from 'lucide-react';
+import { Loader2, Pencil, Plus, Rocket } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
   adminApi,
   type AdminRouteTemplate,
   type CreateAdminRouteTemplateInput,
 } from '@/entities/admin/api/adminApi';
-import {
-  RouteTemplateCanvasDesigner,
-} from '@/features/admin/ui/RouteTemplateCanvasDesigner';
+import { RouteTemplateWorkspace } from '@/features/admin/ui/RouteTemplateWorkspace';
 import {
   createDefaultRouteSteps,
   type RouteStepFormValue,
@@ -125,6 +123,8 @@ export function RouteTemplatesAdminPage() {
     mutationFn: adminApi.publishRouteTemplate,
     onSuccess: () => {
       setMutationError(null);
+      setMode('list');
+      setEditingTemplate(null);
       invalidate();
     },
     onError: (err: Error) => setMutationError(formatAdminApiError(err)),
@@ -144,6 +144,75 @@ export function RouteTemplatesAdminPage() {
     setMode('edit');
     setMutationError(null);
   };
+
+  /**
+   * Published versions are immutable — editing one means branching a draft copy
+   * of the next version and opening the editor on that draft.
+   */
+  const editPublished = async (template: AdminRouteTemplate) => {
+    const existingDraft = draftByTemplateId.get(template.id);
+    if (existingDraft) {
+      startEdit(existingDraft);
+      return;
+    }
+
+    try {
+      const created = await newVersionMutation.mutateAsync(template.id);
+      const fresh = await queryClient.fetchQuery({
+        queryKey: queryKeys.admin.routeTemplates(),
+        queryFn: () => adminApi.listRouteTemplates(),
+      });
+      const draft = fresh.data.find(
+        (item) => item.id === created.id && item.version === created.version,
+      );
+      if (draft) startEdit(draft);
+    } catch {
+      // Surfaced by newVersionMutation.onError
+    }
+  };
+
+  if (mode === 'create') {
+    return (
+      <RouteTemplateWorkspace
+        title="Новый маршрут"
+        initialName=""
+        initialSteps={createDefaultRouteSteps()}
+        isPending={createMutation.isPending}
+        submitError={mutationError}
+        onCancel={() => {
+          setMode('list');
+          setMutationError(null);
+        }}
+        onSubmit={(payload) => createMutation.mutate(payload)}
+      />
+    );
+  }
+
+  if (mode === 'edit' && editingTemplate) {
+    return (
+      <RouteTemplateWorkspace
+        title={`${editingTemplate.name || 'Маршрут'} · v${editingTemplate.version}`}
+        initialName={toForm(editingTemplate).name}
+        initialSteps={toForm(editingTemplate).steps}
+        isPending={updateMutation.isPending}
+        submitError={mutationError}
+        onCancel={() => {
+          setMode('list');
+          setEditingTemplate(null);
+          setMutationError(null);
+        }}
+        onSubmit={(payload) =>
+          updateMutation.mutate({
+            id: editingTemplate.id,
+            version: editingTemplate.version,
+            input: payload,
+          })
+        }
+        onPublish={() => publishMutation.mutate(editingTemplate.id)}
+        isPublishing={publishMutation.isPending}
+      />
+    );
+  }
 
   return (
     <DashboardShell
@@ -168,41 +237,6 @@ export function RouteTemplatesAdminPage() {
         <Alert variant="destructive" className="mt-4">
           <AlertDescription>{mutationError}</AlertDescription>
         </Alert>
-      ) : null}
-
-      {mode === 'create' ? (
-        <div className="mt-6">
-          <RouteTemplateCanvasDesigner
-            title="Новый маршрут"
-            initialName=""
-            initialSteps={createDefaultRouteSteps()}
-            isPending={createMutation.isPending}
-            onCancel={() => setMode('list')}
-            onSubmit={(payload) => createMutation.mutate(payload)}
-          />
-        </div>
-      ) : null}
-
-      {mode === 'edit' && editingTemplate ? (
-        <div className="mt-6">
-          <RouteTemplateCanvasDesigner
-            title={`Редактирование v${editingTemplate.version}`}
-            initialName={toForm(editingTemplate).name}
-            initialSteps={toForm(editingTemplate).steps}
-            isPending={updateMutation.isPending}
-            onCancel={() => {
-              setMode('list');
-              setEditingTemplate(null);
-            }}
-            onSubmit={(payload) =>
-              updateMutation.mutate({
-                id: editingTemplate.id,
-                version: editingTemplate.version,
-                input: payload,
-              })
-            }
-          />
-        </div>
       ) : null}
 
       {mode === 'list' && isLoading && (
@@ -235,8 +269,7 @@ export function RouteTemplatesAdminPage() {
                   const hasDraft = draftByTemplateId.has(template.id);
                   const isLatestVersion =
                     template.version === latestVersionById.get(template.id);
-                  const canNewVersion =
-                    template.isPublished && !hasDraft && isLatestVersion;
+                  const canEditPublished = template.isPublished && isLatestVersion;
 
                   return (
                     <tr key={`${template.id}-${template.version}`} className="align-top hover:bg-muted/30">
@@ -285,16 +318,32 @@ export function RouteTemplatesAdminPage() {
                               </Button>
                             </>
                           ) : null}
-                          {canNewVersion ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={newVersionMutation.isPending}
-                              onClick={() => newVersionMutation.mutate(template.id)}
-                            >
-                              <Plus className="h-4 w-4" />
-                              Новая версия
-                            </Button>
+                          {canEditPublished ? (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={newVersionMutation.isPending}
+                                onClick={() => editPublished(template)}
+                                title={
+                                  hasDraft
+                                    ? 'Открыть существующий черновик'
+                                    : `Создаст черновик v${template.version + 1}`
+                                }
+                              >
+                                {newVersionMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Pencil className="h-4 w-4" />
+                                )}
+                                Изменить
+                              </Button>
+                              <span className="pr-3 text-xs text-muted-foreground">
+                                {hasDraft
+                                  ? 'есть черновик новой версии'
+                                  : `создаст черновик v${template.version + 1}`}
+                              </span>
+                            </>
                           ) : null}
                         </div>
                       </td>
