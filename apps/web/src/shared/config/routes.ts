@@ -15,4 +15,5 @@ export const routes = {
     settings: '/admin/settings',
   },
   login: '/login',
+  welcome: '/welcome',
 } as const;

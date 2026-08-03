@@ -209,6 +209,9 @@ export function OutboxPage() {
               </Link>
             </div>
 
+            {selectedItems.length > 0 ? (
+              <OutboxBulkBar selected={selectedItems} onClear={() => setSelectedIds([])} />
+            ) : (
             <div className="flex flex-wrap items-center gap-2 border-b border-border px-6 py-3">
               <Filter className="mr-1 h-3.5 w-3.5 text-muted-foreground" />
               {filterOptions.map((option) => (
@@ -237,6 +240,7 @@ export function OutboxPage() {
                 </button>
               ))}
             </div>
+            )}
 
             {filteredItems.length === 0 ? (
               <div className="px-6 py-12 text-center">
@@ -380,12 +384,8 @@ export function OutboxPage() {
               </div>
             )}
           </section>
-
-          {selectedItems.length > 0 && <div className="h-16" aria-hidden />}
         </div>
       )}
-
-      <OutboxBulkBar selected={selectedItems} onClear={() => setSelectedIds([])} />
     </DashboardShell>
   );
 }

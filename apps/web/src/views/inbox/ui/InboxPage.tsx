@@ -64,7 +64,10 @@ export function InboxPage() {
           : 'Запросы, назначенные на вас'
       }
     >
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div
+        data-tour="inbox-filters"
+        className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+      >
         <div className="flex flex-wrap items-center gap-2">
           <Filter className="mr-1 h-3.5 w-3.5 text-muted-foreground" />
           {scopeOptions.map((option) => (

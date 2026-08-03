@@ -8,8 +8,12 @@ import { authApi } from '@/entities/user/api/authApi';
 import { DEV_PASSWORD } from '@/features/auth/lib/dev-accounts';
 import { AUTH_EXPIRED_EVENT } from '@/shared/lib/auth-session';
 import { clearTokens, getAccessToken, setTokens } from '@/shared/lib/auth-storage';
+import { hasSeenWelcome } from '@/shared/lib/onboarding-storage';
 import { ApiError } from '@/shared/api/client';
 import { routes } from '@/shared/config/routes';
+
+/** Temporary: show the welcome tour after every login, not just the first. */
+const ALWAYS_SHOW_WELCOME = true;
 
 export function useAuth() {
   const queryClient = useQueryClient();
@@ -54,7 +58,13 @@ export function useAuth() {
       setTokens(data.accessToken, data.refreshToken);
       setHasToken(true);
       queryClient.setQueryData(['auth', 'me'], { user: data.user });
-      router.push(variables.redirectTo ?? routes.inbox);
+      // An explicit ?redirect= wins; otherwise first-time users get the tour.
+      // TODO: flip ALWAYS_SHOW_WELCOME back to false — it is on so the screen
+      // can be reviewed on every login.
+      const isFirstVisit = ALWAYS_SHOW_WELCOME || !hasSeenWelcome(data.user.id);
+      const target =
+        variables.redirectTo ?? (isFirstVisit ? routes.welcome : routes.inbox);
+      router.push(target);
       router.refresh();
     },
   });

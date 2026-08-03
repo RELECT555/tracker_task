@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { Download, Loader2, Send, X, XCircle } from 'lucide-react';
+import { Ban, Download, Loader2, Send, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { requestApi, type RequestListItem } from '@/entities/request/api/requestApi';
 import { cn } from '@/shared/lib/utils';
@@ -135,41 +135,42 @@ export function OutboxBulkBar({
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-6">
-      <div
-        className={cn(
-          'animate-in slide-in-from-bottom-2 fade-in duration-300 pointer-events-auto',
-          'max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border bg-card shadow-lg dark:shadow-black/40',
-        )}
-        role="region"
-        aria-label="Массовые операции"
-      >
-        {mode.kind === 'running' && (
-          <div className="h-0.5 w-full bg-primary/15">
-            <div
-              className="h-full bg-primary transition-[width] duration-300"
-              style={{ width: `${Math.round((mode.done / mode.total) * 100)}%` }}
-            />
-          </div>
-        )}
+    <div
+      className={cn(
+        'animate-in fade-in duration-300',
+        // Sits in place of the filter row — directly above the rows it acts on,
+        // so the actions never drift away from the checkboxes
+        'relative border-b border-border bg-primary/[0.06] dark:bg-primary/10',
+      )}
+      role="region"
+      aria-label="Массовые операции"
+    >
+      {mode.kind === 'running' && (
+        <div className="absolute inset-x-0 top-0 h-0.5 bg-primary/15">
+          <div
+            className="h-full bg-primary transition-[width] duration-300"
+            style={{ width: `${Math.round((mode.done / mode.total) * 100)}%` }}
+          />
+        </div>
+      )}
 
-        <div className="flex max-w-full items-center gap-3 overflow-x-auto whitespace-nowrap p-2 pl-3">
+      <div className="flex max-w-full items-center gap-3 overflow-x-auto whitespace-nowrap px-6 py-2">
             <div className="flex items-center gap-2.5">
-              <span className="flex h-7 min-w-7 items-center justify-center rounded-md bg-primary px-2 font-mono text-xs font-semibold tabular-nums text-primary-foreground">
+              <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-mono text-xs font-semibold tabular-nums text-primary">
                 {selected.length}
               </span>
-              <span className="text-sm font-medium">
+              <span className="text-sm font-medium text-muted-foreground">
                 {mode.kind === 'running'
                   ? `${operationLabels[mode.operation].verb}… ${mode.done}/${mode.total}`
                   : mode.kind === 'confirm'
                     ? mode.operation === 'cancel'
-                      ? `Отменить: ${cancellable.length}`
-                      : `Отправить: ${submittable.length}`
+                      ? `Отменить запросов: ${cancellable.length}`
+                      : `Отправить черновиков: ${submittable.length}`
                     : 'выбрано'}
               </span>
             </div>
 
-            <div className="h-6 w-px shrink-0 bg-border" />
+            <div className="h-5 w-px shrink-0 bg-border" />
 
             {mode.kind === 'confirm' ? (
               <div className="flex items-center gap-2">
@@ -215,7 +216,7 @@ export function OutboxBulkBar({
                     {mode.kind === 'running' && mode.operation === 'submit' ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <Send className="h-4 w-4" strokeWidth={1.75} />
+                      <Send className="h-4 w-4" strokeWidth={1.5} />
                     )}
                     На согласование
                     {submittable.length > 0 && <CountPill value={submittable.length} />}
@@ -236,7 +237,7 @@ export function OutboxBulkBar({
                     {mode.kind === 'running' && mode.operation === 'cancel' ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <XCircle className="h-4 w-4" strokeWidth={1.75} />
+                      <Ban className="h-4 w-4" strokeWidth={1.5} />
                     )}
                     Отменить
                     {cancellable.length > 0 && <CountPill value={cancellable.length} />}
@@ -249,12 +250,12 @@ export function OutboxBulkBar({
                     onClick={() => downloadCsv(selected)}
                     title="Выгрузить выбранные в CSV"
                   >
-                    <Download className="h-4 w-4" strokeWidth={1.75} />
+                    <Download className="h-4 w-4" strokeWidth={1.5} />
                     CSV
                   </Button>
                 </div>
 
-                <div className="h-6 w-px shrink-0 bg-border" />
+                <div className="h-5 w-px shrink-0 bg-border" />
 
                 <Button
                   size="icon"
@@ -269,7 +270,6 @@ export function OutboxBulkBar({
                 </Button>
               </>
             )}
-        </div>
       </div>
     </div>
   );
@@ -277,7 +277,7 @@ export function OutboxBulkBar({
 
 function CountPill({ value }: { value: number }) {
   return (
-    <span className="rounded-full bg-muted px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground">
+    <span className="rounded-full bg-foreground/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold tabular-nums">
       {value}
     </span>
   );

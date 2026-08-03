@@ -26,7 +26,7 @@ export const Checkbox = forwardRef<HTMLButtonElement, CheckboxProps>(
           if (!event.defaultPrevented) onCheckedChange?.(!checked);
         }}
         className={cn(
-          'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] border transition-all duration-150',
+          'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[6px] border transition-all duration-150',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
           'disabled:pointer-events-none disabled:opacity-40 active:scale-90',
           active

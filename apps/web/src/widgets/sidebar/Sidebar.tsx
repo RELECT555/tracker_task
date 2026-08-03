@@ -96,7 +96,10 @@ export function Sidebar() {
 
       <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 py-2">
         {navSections.map((section) => (
-          <div key={section.title}>
+          <div
+            key={section.title}
+            data-tour={section === workspaceSection ? 'sidebar-nav' : undefined}
+          >
             <p className="mb-2 px-3 text-[11px] font-medium uppercase tracking-wider text-sidebar-section">
               {section.title}
             </p>
