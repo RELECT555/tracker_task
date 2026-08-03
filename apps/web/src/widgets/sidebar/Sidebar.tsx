@@ -7,7 +7,6 @@ import {
   Inbox,
   Send,
   Bell,
-  LayoutDashboard,
   Settings,
   ChevronUp,
   LogIn,
@@ -20,6 +19,7 @@ import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { DEV_ACCOUNTS } from '@/features/auth/lib/dev-accounts';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
+import { WayoMark } from '@/shared/ui/wayo-mark';
 
 // re-export path already has DEV_ACCOUNTS
 
@@ -84,10 +84,12 @@ export function Sidebar() {
       style={{ '--sidebar-width': '16rem' } as React.CSSProperties}
     >
       <div className="flex h-16 items-center gap-3 px-5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md border border-sidebar-border/60">
-          <LayoutDashboard className="h-4 w-4 text-sidebar-primary" strokeWidth={1.5} />
-        </div>
-        <span className="font-mono text-sm font-semibold uppercase tracking-[0.2em] text-sidebar-foreground">
+        <WayoMark
+          framed
+          className="h-8 w-8 border-sidebar-border/60 bg-sidebar-accent text-sidebar-primary"
+          title="Wayo"
+        />
+        <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">
           Wayo
         </span>
       </div>

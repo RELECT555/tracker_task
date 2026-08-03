@@ -162,7 +162,7 @@ export class AdminController {
     });
 
     return {
-      data: result.items.map((item) => ({
+      data: result.items.map((item: (typeof result.items)[number]) => ({
         ...item,
         createdAt: item.createdAt.toISOString(),
       })),

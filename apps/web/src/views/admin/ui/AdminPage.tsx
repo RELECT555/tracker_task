@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
-import { Building2, ChevronRight, FileType, GitBranch, Users } from 'lucide-react';
+import { Building2, ChevronRight, FileType, GitBranch, ScrollText, Users } from 'lucide-react';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
 import { DashboardShell } from '@/widgets/dashboard-shell/DashboardShell';
@@ -30,6 +30,12 @@ const sections = [
     title: 'Подразделения',
     description: 'Оргструктура и руководители подразделений',
     icon: Building2,
+  },
+  {
+    href: routes.admin.audit,
+    title: 'Журнал аудита',
+    description: 'Кто менял роли, типы запросов и маршруты',
+    icon: ScrollText,
   },
 ];
 

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import { Building2, FileType, GitBranch, LayoutGrid, Users } from 'lucide-react';
+import { Building2, FileType, GitBranch, LayoutGrid, ScrollText, Users } from 'lucide-react';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
 import { PageBreadcrumbs } from '@/shared/ui/page-breadcrumbs';
@@ -19,6 +19,7 @@ const adminLinks: {
   { href: routes.admin.routeTemplates, label: 'Маршруты', icon: GitBranch },
   { href: routes.admin.users, label: 'Пользователи', icon: Users },
   { href: routes.admin.orgUnits, label: 'Подразделения', icon: Building2 },
+  { href: routes.admin.audit, label: 'Аудит', icon: ScrollText },
 ];
 
 function isLinkActive(pathname: string, href: string, exact?: boolean) {
@@ -47,7 +48,7 @@ export function AdminNav() {
 
       <nav
         aria-label="Разделы администрирования"
-        className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted/40 p-1 sm:grid-cols-3 lg:grid-cols-5 dark:border-border/80 dark:bg-accent/40"
+        className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted/40 p-1 sm:grid-cols-3 lg:grid-cols-6 dark:border-border/80 dark:bg-accent/40"
       >
         {adminLinks.map((link) => {
           const active = isLinkActive(pathname, link.href, link.exact);

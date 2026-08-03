@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { ValidationError } from '../../../shared/domain/domain.error';
+import { ValidationError } from '../../../../shared/domain/domain.error';
 import {
   AuditLogRepository,
   type ListAuditLogsResult,
-} from '../domain/audit-log.repository';
+} from '../../domain/audit-log.repository';
 
 export interface ListAuditLogsCommand {
   page?: number;
