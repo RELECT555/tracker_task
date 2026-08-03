@@ -71,7 +71,7 @@ function placeCard(rect: Rect | null, cardHeight: number): { top: number; left: 
 }
 
 export function TourOverlay() {
-  const { isActive, step, stepIndex, total, next, prev, stop } = useTour();
+  const { isActive, stop: step, index: stepIndex, total, next, prev, exit } = useTour();
   const pathname = usePathname();
   const cardRef = useRef<HTMLDivElement>(null);
   const [rect, setRect] = useState<Rect | null>(null);
@@ -123,13 +123,13 @@ export function TourOverlay() {
   useEffect(() => {
     if (!isActive) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') stop();
+      if (event.key === 'Escape') exit();
       if (event.key === 'ArrowRight') next();
       if (event.key === 'ArrowLeft') prev();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isActive, next, prev, stop]);
+  }, [isActive, next, prev, exit]);
 
   if (!mounted || !isActive || !step) {
     return null;
@@ -168,12 +168,12 @@ export function TourOverlay() {
         style={{ top: cardTop, left: cardLeft }}
       >
         <div className="flex items-start justify-between gap-3">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            Шаг {stepIndex + 1} из {total}
+          <span className="min-w-0 truncate text-[11px] font-medium uppercase tracking-wider text-primary">
+            {step.itemTitle}
           </span>
           <button
             type="button"
-            onClick={stop}
+            onClick={exit}
             aria-label="Закрыть тур"
             className="-mr-1 -mt-1 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
           >
@@ -186,23 +186,28 @@ export function TourOverlay() {
         </p>
         <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{step.text}</p>
 
-        <div className="mt-4 flex items-center gap-1.5">
-          {Array.from({ length: total }, (_, index) => (
-            <span
-              key={index}
-              className={cn(
-                'h-1.5 rounded-full transition-all',
-                index === stepIndex ? 'w-5 bg-primary' : 'w-1.5 bg-border',
-              )}
-            />
-          ))}
+        <div className="mt-4 flex items-center gap-2">
+          <div className="flex flex-1 items-center gap-1.5">
+            {Array.from({ length: total }, (_, dot) => (
+              <span
+                key={dot}
+                className={cn(
+                  'h-1.5 rounded-full transition-all',
+                  dot === stepIndex ? 'w-5 bg-primary' : 'w-1.5 bg-border',
+                )}
+              />
+            ))}
+          </div>
+          <span className="text-[11px] tabular-nums text-muted-foreground">
+            {stepIndex + 1}/{total}
+          </span>
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-2">
           <Button
             variant="ghost"
             size="sm"
-            onClick={stepIndex === 0 ? stop : prev}
+            onClick={stepIndex === 0 ? exit : prev}
             className="text-muted-foreground"
           >
             {stepIndex === 0 ? (

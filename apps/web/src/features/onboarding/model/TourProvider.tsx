@@ -10,7 +10,11 @@ import {
   useState,
 } from 'react';
 import { useAuth } from '@/features/auth/model/useAuth';
-import { TOUR_STEPS, type TourStep } from '@/features/onboarding/model/tour-steps';
+import {
+  buildTourQueue,
+  type TourQueueStop,
+} from '@/features/onboarding/model/onboarding-plan';
+import { routes } from '@/shared/config/routes';
 import {
   getCompletedSteps,
   getTourState,
@@ -20,13 +24,18 @@ import {
 
 type TourContextValue = {
   isActive: boolean;
-  stepIndex: number;
-  step: TourStep | null;
+  /** Position within the current run */
+  index: number;
+  stop: TourQueueStop | null;
   total: number;
-  start: (from?: number) => void;
+  /** Plan items completed by this user (tour runs and manual ticks alike) */
+  completed: string[];
+  /** Runs the tour for the given plan items, in order */
+  startTour: (itemIds: string[]) => void;
   next: () => void;
   prev: () => void;
-  stop: () => void;
+  exit: () => void;
+  toggleCompleted: (itemId: string) => void;
 };
 
 const TourContext = createContext<TourContextValue | null>(null);
@@ -43,69 +52,122 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
+  const [itemIds, setItemIds] = useState<string[]>([]);
+  const [index, setIndex] = useState(0);
   const [isActive, setIsActive] = useState(false);
-  const [stepIndex, setStepIndex] = useState(0);
+  const [completed, setCompletedState] = useState<string[]>([]);
 
-  // Restore a tour that was running before a reload / navigation.
+  const userId = user?.id ?? '';
+
+  useEffect(() => {
+    if (userId) {
+      setCompletedState(getCompletedSteps(userId));
+    }
+  }, [userId]);
+
+  // Restore a run that was in progress before a reload / navigation.
   useEffect(() => {
     const stored = getTourState();
-    if (stored.active && stored.step < TOUR_STEPS.length) {
+    if (stored.active && stored.itemIds.length > 0) {
+      setItemIds(stored.itemIds);
+      setIndex(stored.step);
       setIsActive(true);
-      setStepIndex(stored.step);
     }
   }, []);
 
-  const step = isActive ? (TOUR_STEPS[stepIndex] ?? null) : null;
+  const queue = useMemo(() => buildTourQueue(itemIds), [itemIds]);
+  const stop = isActive ? (queue[index] ?? null) : null;
 
-  // Each step lives on a specific page — walk there before highlighting.
+  // Each stop lives on a specific page — walk there before highlighting.
   useEffect(() => {
-    if (step && pathname !== step.route) {
-      router.push(step.route);
+    if (stop && pathname !== stop.route) {
+      router.push(stop.route);
     }
-  }, [step, pathname, router]);
+  }, [stop, pathname, router]);
 
-  // Visiting a step ticks off the matching item in the welcome plan.
-  useEffect(() => {
-    if (!step?.planStepId || !user?.id) return;
-    const done = getCompletedSteps(user.id);
-    if (!done.includes(step.planStepId)) {
-      setCompletedSteps(user.id, [...done, step.planStepId]);
-    }
-  }, [step, user?.id]);
+  const markCompleted = useCallback(
+    (itemId: string) => {
+      setCompletedState((current) => {
+        if (current.includes(itemId)) return current;
+        const next = [...current, itemId];
+        if (userId) setCompletedSteps(userId, next);
+        return next;
+      });
+    },
+    [userId],
+  );
 
-  const persist = useCallback((active: boolean, index: number) => {
+  const toggleCompleted = useCallback(
+    (itemId: string) => {
+      setCompletedState((current) => {
+        const next = current.includes(itemId)
+          ? current.filter((id) => id !== itemId)
+          : [...current, itemId];
+        if (userId) setCompletedSteps(userId, next);
+        return next;
+      });
+    },
+    [userId],
+  );
+
+  const persist = useCallback((active: boolean, ids: string[], position: number) => {
     setIsActive(active);
-    setStepIndex(index);
-    setTourState({ active, step: index });
+    setItemIds(ids);
+    setIndex(position);
+    setTourState({ active, itemIds: ids, step: position });
   }, []);
 
-  const start = useCallback((from = 0) => persist(true, from), [persist]);
-  const stop = useCallback(() => persist(false, 0), [persist]);
+  const startTour = useCallback(
+    (ids: string[]) => {
+      if (buildTourQueue(ids).length === 0) return;
+      persist(true, ids, 0);
+    },
+    [persist],
+  );
+
+  const exit = useCallback(() => persist(false, [], 0), [persist]);
+
+  /** Finishing a run returns to the plan, so progress is visible right away. */
+  const finish = useCallback(() => {
+    exit();
+    router.push(`${routes.welcome}?stage=plan`);
+  }, [exit, router]);
 
   const next = useCallback(() => {
-    if (stepIndex + 1 >= TOUR_STEPS.length) {
-      stop();
+    const current = queue[index];
+    if (!current) {
+      finish();
       return;
     }
-    persist(true, stepIndex + 1);
-  }, [persist, stepIndex, stop]);
+    // The row is ticked when its last stop is passed — not when it is opened.
+    if (current.isItemEnd) {
+      markCompleted(current.itemId);
+    }
+    if (index + 1 >= queue.length) {
+      finish();
+      return;
+    }
+    persist(true, itemIds, index + 1);
+  }, [queue, index, markCompleted, finish, persist, itemIds]);
 
   const prev = useCallback(() => {
-    persist(true, Math.max(0, stepIndex - 1));
-  }, [persist, stepIndex]);
+    persist(true, itemIds, Math.max(0, index - 1));
+  }, [persist, itemIds, index]);
 
   const value = useMemo<TourContextValue>(
     () => ({
       isActive,
-      stepIndex,
-      step,
-      total: TOUR_STEPS.length,
-      start,
+      index,
+      stop,
+      total: queue.length,
+      completed,
+      startTour,
       next,
       prev,
-      stop,
+      exit,
+      toggleCompleted,
     }),
-    [isActive, stepIndex, step, start, next, prev, stop],
+    [isActive, index, stop, queue.length, completed, startTour, next, prev, exit, toggleCompleted],
   );
 
   return <TourContext.Provider value={value}>{children}</TourContext.Provider>;

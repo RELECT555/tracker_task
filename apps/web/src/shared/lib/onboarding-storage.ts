@@ -6,9 +6,10 @@ const SEEN_KEY = 'tracker.welcome.seen';
 const PROGRESS_KEY = 'tracker.welcome.progress';
 const TOUR_KEY = 'tracker.tour.state';
 
-export type TourState = { active: boolean; step: number };
+/** `itemIds` is the run being walked; `step` is the position inside it. */
+export type TourState = { active: boolean; itemIds: string[]; step: number };
 
-const IDLE_TOUR: TourState = { active: false, step: 0 };
+const IDLE_TOUR: TourState = { active: false, itemIds: [], step: 0 };
 
 function readMap(key: string): Record<string, string[]> {
   if (typeof window === 'undefined') {
@@ -70,9 +71,10 @@ export function getTourState(): TourState {
     if (!raw) return IDLE_TOUR;
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return IDLE_TOUR;
-    const { active, step } = parsed as Partial<TourState>;
+    const { active, step, itemIds } = parsed as Partial<TourState>;
     return {
       active: active === true,
+      itemIds: Array.isArray(itemIds) ? itemIds.filter((id) => typeof id === 'string') : [],
       step: typeof step === 'number' && step >= 0 ? step : 0,
     };
   } catch {
