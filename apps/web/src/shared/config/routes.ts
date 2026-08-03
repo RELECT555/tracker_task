@@ -12,6 +12,7 @@ export const routes = {
     users: '/admin/users',
     orgUnits: '/admin/org-units',
     audit: '/admin/audit',
+    settings: '/admin/settings',
   },
   login: '/login',
 } as const;

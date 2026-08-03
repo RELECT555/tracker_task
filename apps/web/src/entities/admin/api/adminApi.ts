@@ -117,6 +117,14 @@ export interface AdminAuditLog {
   actor: { id: string; fullName: string; email: string } | null;
 }
 
+export interface AdminSettings {
+  slaAutoEscalationEnabled: boolean;
+}
+
+export interface UpdateAdminSettingsInput {
+  slaAutoEscalationEnabled?: boolean;
+}
+
 export const adminApi = {
   listRequestTypes: () =>
     apiFetch<{ data: AdminRequestType[] }>('/admin/request-types'),
@@ -195,4 +203,12 @@ export const adminApi = {
       limit: number;
     }>(`/admin/audit-logs${query ? `?${query}` : ''}`);
   },
+
+  getSettings: () => apiFetch<AdminSettings>('/admin/settings'),
+
+  updateSettings: (input: UpdateAdminSettingsInput) =>
+    apiFetch<AdminSettings>('/admin/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
 };

@@ -17,9 +17,9 @@ import {
   SelectValue,
 } from '@/shared/ui/select';
 
-function emptyField(): FieldSchemaItem {
+function emptyField(index = 0): FieldSchemaItem {
   return {
-    key: '',
+    key: uniqueFieldKey('text', index),
     label: '',
     type: 'text',
     required: false,
@@ -48,13 +48,10 @@ interface FieldSchemaEditorProps {
   variant?: 'full' | 'compact';
 }
 
-function slugifyKey(label: string, index: number): string {
-  const base = label
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/[^a-z0-9_]/g, '');
-  return base || `field_${index + 1}`;
+/** Stable internal key — not derived from label on every keystroke (that remounted rows). */
+function uniqueFieldKey(type: string, index: number): string {
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${type}_${index + 1}_${suffix}`;
 }
 
 const FIELD_PRESETS: { label: string; type: FieldSchemaItem['type'] }[] = [
@@ -85,7 +82,7 @@ export function FieldSchemaEditor({
   };
 
   const addField = () => {
-    onChange([...value, emptyField()]);
+    onChange([...value, emptyField(value.length)]);
   };
 
   const addPreset = (preset: (typeof FIELD_PRESETS)[number]) => {
@@ -93,7 +90,7 @@ export function FieldSchemaEditor({
     onChange([
       ...value,
       {
-        key: slugifyKey(preset.label, index),
+        key: uniqueFieldKey(preset.type, index),
         label: preset.label,
         type: preset.type,
         required: false,
@@ -143,20 +140,15 @@ export function FieldSchemaEditor({
               </thead>
               <tbody className="divide-y divide-border">
                 {value.map((field, index) => (
-                  <Fragment key={`${field.key || 'field'}-${index}`}>
+                  <Fragment key={field.key || `field-${index}`}>
                     <tr>
                       <td className="px-3 py-2">
                         <Input
                           value={field.label}
                           placeholder="Название поля"
-                          onChange={(event) => {
-                            const label = event.target.value;
-                            const patch: Partial<FieldSchemaItem> = { label };
-                            if (!field.key || field.key === slugifyKey(field.label, index)) {
-                              patch.key = slugifyKey(label, index);
-                            }
-                            updateField(index, patch);
-                          }}
+                          onChange={(event) =>
+                            updateField(index, { label: event.target.value })
+                          }
                           className="h-8"
                         />
                       </td>

@@ -21,11 +21,13 @@ import {
   PublishAdminRouteTemplateHandler,
 } from '../application/commands/publish-admin-route-template.handler';
 import { UpdateAdminUserHandler } from '../application/commands/update-admin-user.handler';
+import { UpdateAdminSettingsHandler } from '../application/commands/update-admin-settings.handler';
 import { ListAdminOrgUnitsHandler } from '../application/queries/list-admin-org-units.handler';
 import { ListAdminRolesHandler } from '../application/queries/list-admin-roles.handler';
 import { ListAdminUsersHandler } from '../application/queries/list-admin-users.handler';
 import { ListAdminRequestTypesHandler } from '../application/queries/list-admin-request-types.handler';
 import { ListAdminRouteTemplatesHandler } from '../application/queries/list-admin-route-templates.handler';
+import { GetAdminSettingsHandler } from '../application/queries/get-admin-settings.handler';
 import {
   CreateAdminRequestTypeDto,
   UpdateAdminRequestTypeDto,
@@ -34,6 +36,7 @@ import {
   CreateAdminRouteTemplateDto,
   UpdateAdminRouteTemplateDto,
 } from './dto/admin-route-template.dto';
+import { UpdateAdminSettingsDto } from './dto/admin-settings.dto';
 import { UpdateAdminUserDto } from './dto/admin-user.dto';
 import { AdminRoleGuard } from './guards/admin-role.guard';
 import { CurrentUser } from '../../../shared/presentation/decorators/current-user.decorator';
@@ -55,6 +58,8 @@ export class AdminController {
     private readonly updateUserHandler: UpdateAdminUserHandler,
     private readonly listOrgUnitsHandler: ListAdminOrgUnitsHandler,
     private readonly listAuditLogsHandler: ListAuditLogsHandler,
+    private readonly getSettingsHandler: GetAdminSettingsHandler,
+    private readonly updateSettingsHandler: UpdateAdminSettingsHandler,
   ) {}
 
   @Get('request-types')
@@ -170,5 +175,21 @@ export class AdminController {
       page: result.page,
       limit: result.limit,
     };
+  }
+
+  @Get('settings')
+  getSettings() {
+    return this.getSettingsHandler.execute();
+  }
+
+  @Patch('settings')
+  updateSettings(
+    @Body() dto: UpdateAdminSettingsDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.updateSettingsHandler.execute({
+      actorId: user.id,
+      ...dto,
+    });
   }
 }

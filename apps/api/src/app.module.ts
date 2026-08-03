@@ -8,6 +8,7 @@ import { RequestModule } from './modules/request/request.module';
 import { RoutingModule } from './modules/routing/routing.module';
 import { SlaModule } from './modules/sla/sla.module';
 import { PrismaModule } from './shared/infrastructure/prisma/prisma.module';
+import { SystemSettingsModule } from './shared/infrastructure/system-settings/system-settings.module';
 import { AuthMiddleware } from './shared/presentation/middleware/auth.middleware';
 
 @Module({
@@ -15,6 +16,7 @@ import { AuthMiddleware } from './shared/presentation/middleware/auth.middleware
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    SystemSettingsModule,
     HealthModule,
     AdminModule,
     IdentityModule,

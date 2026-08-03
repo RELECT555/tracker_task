@@ -337,6 +337,15 @@ async function main() {
     },
   });
 
+  await prisma.systemSetting.upsert({
+    where: { key: 'sla.auto_escalation_enabled' },
+    update: {},
+    create: {
+      key: 'sla.auto_escalation_enabled',
+      value: true,
+    },
+  });
+
   console.log('\nDev accounts (password: tracker)');
   console.log('─────────────────────────────────────────────────────────────');
   for (const user of DEV_USERS) {
