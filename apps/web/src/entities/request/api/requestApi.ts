@@ -92,6 +92,21 @@ export interface PaginatedResponse<T> {
   meta: { total: number; page: number; limit: number };
 }
 
+export interface SearchRequestsParams {
+  q?: string;
+  /** Empty means "any" — the server ignores unknown entries. */
+  status?: RequestStatus[];
+  priority?: RequestPriority[];
+  typeId?: string;
+  /** Inclusive `YYYY-MM-DD` day. */
+  dateFrom?: string;
+  /** Inclusive `YYYY-MM-DD` day. */
+  dateTo?: string;
+  sort?: 'recent' | 'oldest';
+  page?: number;
+  limit?: number;
+}
+
 export interface CreateRequestInput {
   typeId: string;
   title: string;
@@ -120,6 +135,23 @@ export const requestApi = {
     apiFetch<PaginatedResponse<RequestListItem>>(
       `/requests/outbox${status ? `?status=${status}` : ''}`,
     ),
+
+  search: (params: SearchRequestsParams) => {
+    const search = new URLSearchParams();
+    if (params.q) search.set('q', params.q);
+    if (params.status?.length) search.set('status', params.status.join(','));
+    if (params.priority?.length) search.set('priority', params.priority.join(','));
+    if (params.typeId) search.set('typeId', params.typeId);
+    if (params.dateFrom) search.set('dateFrom', params.dateFrom);
+    if (params.dateTo) search.set('dateTo', params.dateTo);
+    if (params.sort) search.set('sort', params.sort);
+    if (params.page && params.page > 1) search.set('page', String(params.page));
+    if (params.limit) search.set('limit', String(params.limit));
+
+    return apiFetch<PaginatedResponse<RequestListItem>>(
+      `/requests/search?${search.toString()}`,
+    );
+  },
 
   create: (input: CreateRequestInput) =>
     apiFetch<RequestListItem>('/requests', {

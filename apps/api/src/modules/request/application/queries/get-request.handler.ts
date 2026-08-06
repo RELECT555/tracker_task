@@ -4,6 +4,7 @@ import {
   AccessDeniedError,
   NotFoundError,
 } from '../../../../shared/domain/domain.error';
+import { AdminChecker } from '../../../../shared/infrastructure/access/admin.checker';
 import { PrismaService } from '../../../../shared/infrastructure/prisma/prisma.service';
 import {
   computeCommentPermissions,
@@ -20,6 +21,7 @@ export class GetRequestHandler {
   constructor(
     private readonly requestRepo: PrismaRequestRepository,
     private readonly prisma: PrismaService,
+    private readonly adminChecker: AdminChecker,
   ) {}
 
   async execute(requestId: string, actorId?: string) {
@@ -45,7 +47,10 @@ export class GetRequestHandler {
     const canView =
       canViewRequest({ ...viewer, isAdmin: false }) ||
       (actorId !== undefined &&
-        canViewRequest({ ...viewer, isAdmin: await this.isAdmin(actorId) }));
+        canViewRequest({
+          ...viewer,
+          isAdmin: await this.adminChecker.isAdmin(actorId),
+        }));
 
     if (!canView) {
       throw new AccessDeniedError('You do not have access to this request');
@@ -84,12 +89,5 @@ export class GetRequestHandler {
       comments: visibleComments,
       commentPermissions,
     };
-  }
-
-  private async isAdmin(userId: string): Promise<boolean> {
-    const count = await this.prisma.userRole.count({
-      where: { userId, role: { code: 'admin' }, user: { isActive: true } },
-    });
-    return count > 0;
   }
 }

@@ -376,7 +376,11 @@ export function RequestDetailPage({ requestId }: { requestId: string }) {
 
               {showHistory ? (
                 <DetailSection title="История изменений" icon={History}>
-                  <RequestHistoryTimeline embedded transitions={transitions} />
+                  <RequestHistoryTimeline
+                    embedded
+                    transitions={transitions}
+                    status={data.status}
+                  />
                 </DetailSection>
               ) : null}
 

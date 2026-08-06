@@ -63,7 +63,7 @@ export function useAuth() {
       // can be reviewed on every login.
       const isFirstVisit = ALWAYS_SHOW_WELCOME || !hasSeenWelcome(data.user.id);
       const target =
-        variables.redirectTo ?? (isFirstVisit ? routes.welcome : routes.inbox);
+        variables.redirectTo ?? (isFirstVisit ? routes.welcome : routes.home);
       router.push(target);
       router.refresh();
     },
@@ -77,7 +77,7 @@ export function useAuth() {
       setHasToken(true);
       queryClient.clear();
       queryClient.setQueryData(['auth', 'me'], { user: data.user });
-      router.push(routes.inbox);
+      router.push(routes.home);
       router.refresh();
     },
   });

@@ -23,8 +23,10 @@ import { UpdateRequestHandler } from '../application/commands/update-request.han
 import { GetRequestHandler } from '../application/queries/get-request.handler';
 import { ListInboxHandler } from '../application/queries/list-inbox.handler';
 import { ListOutboxHandler } from '../application/queries/list-outbox.handler';
+import { SearchRequestsHandler } from '../application/queries/search-requests.handler';
 import {
   ApproveRequestDto,
+  SearchRequestsQueryDto,
   AddCommentDto,
   CancelRequestDto,
   CreateRequestDto,
@@ -53,6 +55,7 @@ export class RequestController {
     private readonly getHandler: GetRequestHandler,
     private readonly listOutboxHandler: ListOutboxHandler,
     private readonly listInboxHandler: ListInboxHandler,
+    private readonly searchHandler: SearchRequestsHandler,
   ) {}
 
   @Post()
@@ -220,6 +223,15 @@ export class RequestController {
     });
   }
 
+  @Get('search')
+  search(
+    @CurrentUser() user: { id: string },
+    @Query() query: SearchRequestsQueryDto,
+  ) {
+    return this.searchHandler.execute({ ...query, actorId: user.id });
+  }
+
+  // Keep this last: a literal path such as `search` must not be captured as an id.
   @Get(':id')
   getById(@Param('id') id: string, @CurrentUser() user: { id: string }) {
     return this.getHandler.execute(id, user.id);

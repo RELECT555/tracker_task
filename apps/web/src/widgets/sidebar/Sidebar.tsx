@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import {
+  Home,
   Inbox,
   Send,
   Bell,
@@ -13,6 +14,7 @@ import {
   LogOut,
   Users,
   Check,
+  Search,
 } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
@@ -26,8 +28,10 @@ import { WayoMark } from '@/shared/ui/wayo-mark';
 const workspaceSection = {
   title: 'Рабочее пространство',
   items: [
+    { href: routes.home, label: 'Главная', icon: Home },
     { href: routes.inbox, label: 'Входящие', icon: Inbox },
     { href: routes.outbox, label: 'Исходящие', icon: Send },
+    { href: routes.search, label: 'Поиск', icon: Search },
     { href: routes.notifications, label: 'Уведомления', icon: Bell },
   ],
 };

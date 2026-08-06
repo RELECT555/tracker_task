@@ -14,6 +14,7 @@ import { UpdateRequestHandler } from './application/commands/update-request.hand
 import { GetRequestHandler } from './application/queries/get-request.handler';
 import { ListInboxHandler } from './application/queries/list-inbox.handler';
 import { ListOutboxHandler } from './application/queries/list-outbox.handler';
+import { SearchRequestsHandler } from './application/queries/search-requests.handler';
 import {
   RequestRepository,
   RequestTypeReader,
@@ -44,6 +45,7 @@ import {
     GetRequestHandler,
     ListOutboxHandler,
     ListInboxHandler,
+    SearchRequestsHandler,
     PrismaRequestRepository,
     { provide: RequestRepository, useExisting: PrismaRequestRepository },
     PrismaRequestTypeReader,

@@ -4,6 +4,7 @@ import { Moon, Sun, Monitor } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import { Button } from '@/shared/ui/button';
+import { HeaderSearch } from '@/widgets/header/HeaderSearch';
 import { NotificationBell } from '@/widgets/header/NotificationBell';
 
 export function Header({
@@ -49,6 +50,7 @@ export function Header({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <HeaderSearch />
           <div data-tour="notifications-bell" className="flex items-center">
             <NotificationBell />
           </div>

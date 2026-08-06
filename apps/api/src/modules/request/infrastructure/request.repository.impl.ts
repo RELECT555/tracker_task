@@ -3,7 +3,13 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../shared/infrastructure/prisma/prisma.service';
 import { Request } from '../domain/request.entity';
 import { OutboxFilters, RequestRepository } from '../domain/request.repository';
+import type { SearchCriteria } from '../domain/request.search';
 import { RequestMapper } from './request.mapper';
+
+export interface SearchScope {
+  actorId: string;
+  isAdmin: boolean;
+}
 
 @Injectable()
 export class PrismaRequestRepository extends RequestRepository {
@@ -71,6 +77,59 @@ export class PrismaRequestRepository extends RequestRepository {
     ]);
 
     return { records, total };
+  }
+
+  async searchWithRelations(criteria: SearchCriteria, scope: SearchScope) {
+    const where = this.buildSearchWhere(criteria, scope);
+
+    const [records, total] = await Promise.all([
+      this.prisma.request.findMany({
+        where,
+        include: { type: true, author: true },
+        orderBy: { createdAt: criteria.sort === 'oldest' ? 'asc' : 'desc' },
+        skip: (criteria.page - 1) * criteria.limit,
+        take: criteria.limit,
+      }),
+      this.prisma.request.count({ where }),
+    ]);
+
+    return { records, total };
+  }
+
+  /**
+   * Visibility mirrors inbox/outbox: authored or ever assigned. Route participants
+   * who have not been assigned yet live only in the `routeSnapshot` JSON and are
+   * intentionally out of scope here — see canViewRequest for the per-request rule.
+   */
+  private buildSearchWhere(
+    criteria: SearchCriteria,
+    scope: SearchScope,
+  ): Prisma.RequestWhereInput {
+    const createdAt =
+      criteria.createdFrom || criteria.createdBefore
+        ? {
+            ...(criteria.createdFrom ? { gte: criteria.createdFrom } : {}),
+            ...(criteria.createdBefore ? { lt: criteria.createdBefore } : {}),
+          }
+        : undefined;
+
+    return {
+      ...(scope.isAdmin
+        ? {}
+        : {
+            OR: [
+              { authorId: scope.actorId },
+              { assignments: { some: { assigneeId: scope.actorId } } },
+            ],
+          }),
+      ...(criteria.q
+        ? { title: { contains: criteria.q, mode: Prisma.QueryMode.insensitive } }
+        : {}),
+      ...(criteria.statuses.length ? { status: { in: criteria.statuses } } : {}),
+      ...(criteria.priorities.length ? { priority: { in: criteria.priorities } } : {}),
+      ...(criteria.typeId ? { typeId: criteria.typeId } : {}),
+      ...(createdAt ? { createdAt } : {}),
+    };
   }
 
   async findInboxWithRelations(

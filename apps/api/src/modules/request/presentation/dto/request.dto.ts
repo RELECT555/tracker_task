@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -75,6 +76,51 @@ export class OutboxQueryDto {
   page?: number;
 
   @IsOptional()
+  limit?: number;
+}
+
+export class SearchRequestsQueryDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  q?: string;
+
+  /** Comma-separated request statuses; unknown entries are ignored. */
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  /** Comma-separated priorities; unknown entries are ignored. */
+  @IsOptional()
+  @IsString()
+  priority?: string;
+
+  @IsOptional()
+  @IsUUID()
+  typeId?: string;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'dateFrom must be a YYYY-MM-DD day' })
+  dateFrom?: string;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'dateTo must be a YYYY-MM-DD day' })
+  dateTo?: string;
+
+  @IsOptional()
+  @IsEnum(['recent', 'oldest'])
+  sort?: 'recent' | 'oldest';
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   limit?: number;
 }
 

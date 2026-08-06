@@ -3,6 +3,7 @@ export const queryKeys = {
     inbox: (scope: 'active' | 'archive' = 'active', sort?: 'sla' | 'recent') =>
       ['requests', 'inbox', scope, sort ?? 'sla'] as const,
     outbox: (status?: string) => ['requests', 'outbox', status ?? 'all'] as const,
+    search: (params: Record<string, unknown>) => ['requests', 'search', params] as const,
     detail: (id: string) => ['requests', id] as const,
   },
   requestTypes: {

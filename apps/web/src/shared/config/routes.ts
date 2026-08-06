@@ -3,6 +3,7 @@ export const routes = {
   inbox: '/inbox',
   outbox: '/outbox',
   notifications: '/notifications',
+  search: '/search',
   newRequest: '/requests/new',
   request: (id: string) => `/requests/${id}`,
   admin: {
