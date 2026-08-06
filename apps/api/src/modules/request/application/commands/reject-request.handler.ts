@@ -5,6 +5,8 @@ import { PrismaService } from '../../../../shared/infrastructure/prisma/prisma.s
 import { RequestRepository } from '../../domain/request.repository';
 import { PrismaRequestRepository } from '../../infrastructure/request.repository.impl';
 import { RequestMapper } from '../../infrastructure/request.mapper';
+import { NotificationRecorder } from '../../../notification/application/notification-recorder';
+import { NotificationTypes } from '../../../notification/domain/notification-type';
 
 export interface RejectRequestCommand {
   requestId: string;
@@ -18,6 +20,7 @@ export class RejectRequestHandler {
     private readonly requestRepo: RequestRepository,
     private readonly prismaRequestRepo: PrismaRequestRepository,
     private readonly prisma: PrismaService,
+    private readonly notifications: NotificationRecorder,
   ) {}
 
   async execute(command: RejectRequestCommand) {
@@ -66,6 +69,13 @@ export class RejectRequestHandler {
           comment: command.reason,
         },
       });
+    });
+
+    await this.notifications.send({
+      userId: request.authorId,
+      type: NotificationTypes.REQUEST_REJECTED,
+      title: `Заявка отклонена: ${request.title}`,
+      requestId: request.id,
     });
 
     const record = await this.prismaRequestRepo.findByIdWithRelations(request.id);

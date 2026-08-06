@@ -14,6 +14,8 @@ import {
 } from '../../domain/request.repository';
 import { PrismaRequestRepository } from '../../infrastructure/request.repository.impl';
 import { RequestMapper } from '../../infrastructure/request.mapper';
+import { NotificationRecorder } from '../../../notification/application/notification-recorder';
+import { NotificationTypes } from '../../../notification/domain/notification-type';
 
 export interface SubmitRequestCommand {
   requestId: string;
@@ -34,6 +36,7 @@ export class SubmitRequestHandler {
     private readonly userReader: UserReader,
     private readonly routeBuilder: RouteBuilder,
     private readonly prisma: PrismaService,
+    private readonly notifications: NotificationRecorder,
   ) {}
 
   async execute(command: SubmitRequestCommand) {
@@ -57,6 +60,16 @@ export class SubmitRequestHandler {
 
     request.submitWithRoute(routeSnapshot);
     await this.persistSubmission(request, routeSnapshot, command.actorId);
+
+    const activeStep = routeSnapshot.steps[0];
+    if (activeStep) {
+      await this.notifications.send({
+        userId: activeStep.assignee.id,
+        type: NotificationTypes.REQUEST_ASSIGNED,
+        title: `Новая заявка на рассмотрение: ${request.title}`,
+        requestId: request.id,
+      });
+    }
 
     const record = await this.prismaRequestRepo.findByIdWithRelations(request.id);
     return RequestMapper.toDetail(record!, command.actorId);

@@ -9,9 +9,10 @@ import {
   FileText,
   Filter,
   Plus,
+  RotateCcw,
   Send,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RequestStatus } from '@tracker/shared';
 import { requestApi, type RequestListItem } from '@/entities/request/api/requestApi';
 import {
@@ -62,9 +63,15 @@ function formatCompletedAt(value: string | null) {
   return formatCreatedAt(value);
 }
 
+const DEFAULT_CONTAINER_SIZE = { width: undefined as number | undefined, height: undefined as number | undefined };
+
 export function OutboxPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [containerSize, setContainerSize] = useState(DEFAULT_CONTAINER_SIZE);
+  const [minSize, setMinSize] = useState<{ width?: number; height?: number }>({});
+  const sectionRef = useRef<HTMLElement>(null);
+  const minSizeLocked = useRef(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.requests.outbox(),
@@ -105,6 +112,14 @@ export function OutboxPage() {
       return alive.length === current.length ? current : alive;
     });
   }, [items]);
+
+  // Lock the resize minimum to the table's natural rendered size, so dragging can only grow it, never shrink below the default layout.
+  useEffect(() => {
+    if (minSizeLocked.current || !sectionRef.current || filteredItems.length === 0) return;
+    minSizeLocked.current = true;
+    const rect = sectionRef.current.getBoundingClientRect();
+    setMinSize({ width: Math.round(rect.width), height: Math.round(rect.height) });
+  }, [filteredItems.length]);
 
   const selectedItems = useMemo(
     () => items.filter((item) => selectedIds.includes(item.id)),
@@ -160,7 +175,7 @@ export function OutboxPage() {
 
       {data && items.length > 0 && (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 divide-x divide-border overflow-hidden rounded-xl border border-border bg-card xl:grid-cols-4">
+          <div className="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-xl border border-border bg-card sm:divide-y-0 xl:grid-cols-4">
             <StatTile
               icon={FileText}
               label="Всего"
@@ -191,8 +206,97 @@ export function OutboxPage() {
             />
           </div>
 
-          <section className="overflow-hidden rounded-xl border border-border bg-card">
-            <div className="flex flex-col gap-4 border-b border-border px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2 sm:hidden">
+            <Filter className="mr-1 h-3.5 w-3.5 text-muted-foreground" />
+            {filterOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setStatusFilter(option.id)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
+                  statusFilter === option.id
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
+                )}
+              >
+                {option.label}
+                <span
+                  className={cn(
+                    'rounded-full px-1.5 py-0.5 font-mono text-[10px] tabular-nums',
+                    statusFilter === option.id
+                      ? 'bg-primary-foreground/20 text-primary-foreground'
+                      : 'bg-background/80',
+                  )}
+                >
+                  {filterCounts[option.id]}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {filteredItems.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card px-6 py-12 text-center sm:hidden">
+              <p className="text-sm font-medium">
+                {statusFilter === 'done'
+                  ? 'Нет завершённых запросов'
+                  : 'Нет запросов в этой категории'}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {statusFilter === 'done'
+                  ? 'Одобренные, отклонённые и отменённые запросы появятся здесь.'
+                  : 'Попробуйте другой фильтр или создайте новый запрос.'}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={() => setStatusFilter('all')}
+              >
+                Показать все
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2.5 sm:hidden">
+              {filteredItems.map((item) => (
+                <Link
+                  key={`${item.id}-card`}
+                  href={routes.request(item.id)}
+                  className={cn(
+                    'block rounded-xl border border-border bg-card p-4 shadow-sm transition-colors active:bg-muted/40',
+                    priorityRowClass(item.priority),
+                  )}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-foreground">{item.title}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {item.type.name} · {formatCreatedAt(item.createdAt)}
+                    </p>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                    <RequestStatusBadge status={item.status} />
+                    <RequestPriorityBadge priority={item.priority} />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          <section
+            ref={sectionRef}
+            className="hidden resize flex-col overflow-auto rounded-xl border-2 border-border bg-card sm:flex"
+            style={{
+              width: containerSize.width,
+              height: containerSize.height,
+              minHeight: minSize.height,
+              minWidth: minSize.width,
+            }}
+            onMouseUp={(event) => {
+              const el = event.currentTarget as HTMLElement;
+              setContainerSize({ width: el.offsetWidth, height: el.offsetHeight });
+            }}
+          >
+            <div className="flex flex-col gap-4 border-b-2 border-border px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-base font-semibold">Список запросов</h2>
                 <p className="text-sm text-muted-foreground">
@@ -201,12 +305,24 @@ export function OutboxPage() {
                   {statusFilter === 'done' ? ' · архив завершённых' : ''}
                 </p>
               </div>
-              <Link href={routes.newRequest}>
-                <Button className="w-full sm:w-auto">
-                  <Plus className="h-4 w-4" />
-                  Создать запрос
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setContainerSize(DEFAULT_CONTAINER_SIZE)}
+                  title="Сбросить размер таблицы"
+                  className="hidden text-muted-foreground sm:inline-flex"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Сбросить размер
                 </Button>
-              </Link>
+                <Link href={routes.newRequest}>
+                  <Button className="w-full sm:w-auto">
+                    <Plus className="h-4 w-4" />
+                    Создать запрос
+                  </Button>
+                </Link>
+              </div>
             </div>
 
             {selectedItems.length > 0 ? (
@@ -267,8 +383,8 @@ export function OutboxPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-border bg-muted/30 dark:bg-muted/15">
-                      <th className="w-10 pl-6 pr-0 py-3">
+                    <tr className="sticky top-0 z-10 border-y-2 border-border bg-muted/50 backdrop-blur supports-[backdrop-filter]:bg-muted/40 dark:bg-muted/20">
+                      <th className="w-10 pl-6 pr-0 py-3.5">
                         <Checkbox
                           checked={allVisibleSelected}
                           indeterminate={visibleSelectedCount > 0 && !allVisibleSelected}
@@ -276,25 +392,25 @@ export function OutboxPage() {
                           aria-label="Выбрать все запросы на странице"
                         />
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Запрос
                       </th>
-                      <th className="hidden px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground sm:table-cell">
+                      <th className="hidden px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:table-cell">
                         Тип
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Статус
                       </th>
-                      <th className="hidden px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground md:table-cell">
+                      <th className="hidden px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground md:table-cell">
                         Приоритет
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Создан
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Завершён
                       </th>
-                      <th className="w-10 px-4 py-3" aria-hidden />
+                      <th className="w-10 px-4 py-3.5" aria-hidden />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -304,12 +420,12 @@ export function OutboxPage() {
                       <tr
                         key={item.id}
                         className={cn(
-                          'group transition-colors hover:bg-muted/30 dark:hover:bg-accent/20',
+                          'group transition-colors hover:bg-muted/40 dark:hover:bg-accent/20',
                           priorityRowClass(item.priority),
                           isSelected && 'bg-primary/[0.06] hover:bg-primary/10 dark:bg-primary/10',
                         )}
                       >
-                        <td className="w-10 pl-6 pr-0 py-4">
+                        <td className="w-10 pl-6 pr-0 py-3.5">
                           <Checkbox
                             checked={isSelected}
                             onCheckedChange={() => toggleItem(item.id)}
@@ -321,20 +437,20 @@ export function OutboxPage() {
                             aria-label={`Выбрать «${item.title}»`}
                           />
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="truncate px-4 py-3.5">
                           <Link href={routes.request(item.id)} className="block min-w-0">
-                            <span className="font-medium text-foreground transition-colors group-hover:text-primary">
+                            <span className="truncate font-medium text-foreground transition-colors group-hover:text-primary">
                               {item.title}
                             </span>
-                            <span className="mt-0.5 block text-xs text-muted-foreground sm:hidden">
+                            <span className="mt-0.5 block truncate text-xs text-muted-foreground sm:hidden">
                               {item.type.name}
                             </span>
                           </Link>
                         </td>
-                        <td className="hidden px-6 py-4 text-muted-foreground sm:table-cell">
+                        <td className="hidden truncate px-6 py-3.5 text-muted-foreground sm:table-cell">
                           {item.type.name}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-6 py-3.5">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <RequestStatusBadge status={item.status} />
                             <span className="md:hidden">
@@ -342,19 +458,25 @@ export function OutboxPage() {
                             </span>
                           </div>
                         </td>
-                        <td className="hidden px-6 py-4 md:table-cell">
+                        <td className="hidden px-6 py-3.5 md:table-cell">
                           <RequestPriorityBadge priority={item.priority} />
                         </td>
-                        <td className="px-6 py-4 font-mono text-xs text-muted-foreground tabular-nums">
+                        <td className="px-6 py-3.5 font-mono text-xs text-muted-foreground tabular-nums">
                           {formatCreatedAt(item.createdAt)}
                         </td>
-                        <td className="px-6 py-4 font-mono text-xs text-muted-foreground tabular-nums">
-                          {formatCompletedAt(item.completedAt)}
+                        <td className="px-6 py-3.5 font-mono text-xs tabular-nums">
+                          {item.completedAt ? (
+                            <span className="text-muted-foreground">
+                              {formatCompletedAt(item.completedAt)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground/40">—</span>
+                          )}
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="px-4 py-3.5">
                           <Link
                             href={routes.request(item.id)}
-                            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-accent hover:text-foreground"
+                            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100 hover:bg-accent hover:text-foreground"
                             aria-label={`Открыть «${item.title}»`}
                           >
                             <ChevronRight className="h-4 w-4" />
@@ -369,7 +491,7 @@ export function OutboxPage() {
             )}
 
             {filteredItems.length > 0 && (
-              <div className="border-t border-border px-6 py-3 font-mono text-xs text-muted-foreground">
+              <div className="border-t-2 border-border px-6 py-3 font-mono text-xs text-muted-foreground">
                 Показано {filteredItems.length} из {items.length}
                 {selectedItems.length > 0 && (
                   <span className="text-primary"> · выделено {selectedItems.length}</span>

@@ -128,6 +128,8 @@ model User {
 
   auditLogs    AuditLog[]
 
+  notifications Notification[]
+
 
 
   @@index([orgUnitId])
@@ -274,6 +276,8 @@ model Request {
 
   comments         Comment[]
 
+  notifications    Notification[]
+
 
 
   @@index([authorId])
@@ -419,6 +423,38 @@ model AuditLog {
   @@index([createdAt])
 
   @@map("audit_logs")
+
+}
+
+
+
+model Notification {
+
+  id        String    @id @default(uuid()) @db.Uuid
+
+  userId    String    @map("user_id") @db.Uuid
+
+  type      String    @db.VarChar(50)
+
+  title     String    @db.VarChar(500)
+
+  body      String?
+
+  requestId String?   @map("request_id") @db.Uuid
+
+  isRead    Boolean   @default(false) @map("is_read")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  request   Request?  @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+
+
+  @@index([userId, isRead, createdAt(sort: Desc)])
+
+  @@map("notifications")
 
 }
 

@@ -9,11 +9,11 @@ import { SlaIndicator } from '@/entities/request/ui/SlaIndicator';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { routes } from '@/shared/config/routes';
-import { AsciiDither } from '@/shared/ui/ascii-dither';
 import { buttonVariants } from '@/shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { Skeleton } from '@/shared/ui/skeleton';
+import { SilkShader } from '@/shared/ui/silk-shader';
 import { DashboardShell } from '@/widgets/dashboard-shell/DashboardShell';
 
 export function HomePage() {
@@ -40,7 +40,8 @@ export function HomePage() {
       description="Краткая сводка по вашим запросам"
     >
       <div className="relative mb-6 h-40 overflow-hidden rounded-lg border border-border bg-[#0b0f1a] sm:h-48">
-        <AsciiDither />
+        <SilkShader />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
         <div className="relative flex h-full flex-col justify-end gap-1 p-5 sm:p-6">
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/45">
             Wayo · согласования

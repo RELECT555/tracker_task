@@ -64,7 +64,13 @@ function initials(fullName: string) {
     .toUpperCase();
 }
 
-export function Sidebar() {
+export function Sidebar({
+  className,
+  onNavigate,
+}: {
+  className?: string;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const { user, isAuthenticated, logout, switchUser, isSwitchingUser } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -84,7 +90,10 @@ export function Sidebar() {
 
   return (
     <aside
-      className="flex h-full w-[var(--sidebar-width)] shrink-0 flex-col border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground dark:shadow-[4px_0_24px_-8px_rgba(0,0,0,0.6)]"
+      className={cn(
+        'flex h-full w-[var(--sidebar-width)] shrink-0 flex-col border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground dark:shadow-[4px_0_24px_-8px_rgba(0,0,0,0.6)]',
+        className,
+      )}
       style={{ '--sidebar-width': '16rem' } as React.CSSProperties}
     >
       <div className="flex h-16 items-center gap-3 px-5">
@@ -114,6 +123,7 @@ export function Sidebar() {
                   <Link
                     key={href}
                     href={href}
+                    onClick={onNavigate}
                     className={cn(
                       'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150',
                       active
@@ -214,7 +224,10 @@ export function Sidebar() {
               ) : (
                 <Link
                   href={routes.login}
-                  onClick={() => setMenuOpen(false)}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onNavigate?.();
+                  }}
                   className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50"
                 >
                   <LogIn className="h-4 w-4" strokeWidth={1.5} />

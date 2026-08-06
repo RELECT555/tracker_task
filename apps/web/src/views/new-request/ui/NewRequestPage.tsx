@@ -248,11 +248,21 @@ export function NewRequestPage() {
                 )}
               </CardContent>
 
-              <CardFooter className="justify-end gap-3 border-t border-border/60 bg-muted/20 px-6 py-4 dark:bg-muted/10">
-                <Button type="button" variant="outline" onClick={() => router.back()}>
+              <CardFooter className="flex-col-reverse gap-3 border-t border-border/60 bg-muted/20 px-6 py-4 dark:bg-muted/10 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.back()}
+                  className="w-full sm:w-auto"
+                >
                   Отмена
                 </Button>
-                <Button type="submit" disabled={createMutation.isPending} size="lg">
+                <Button
+                  type="submit"
+                  disabled={createMutation.isPending}
+                  size="lg"
+                  className="w-full sm:w-auto"
+                >
                   {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                   Создать черновик
                 </Button>

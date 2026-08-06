@@ -15,13 +15,13 @@ import { cn } from '@/shared/lib/utils';
  */
 
 /** Recipe parameters, 21st.dev "HS Office" preset (dither / solid bg). */
-const CELL_SIZE = 20;
-const COVERAGE = 62;
-const DENSITY = 37;
-const BRIGHTNESS = -42;
-const CONTRAST = -26;
+const CELL_SIZE = 7;
+const COVERAGE = 92;
+const DENSITY = 55;
+const BRIGHTNESS = -32;
+const CONTRAST = 10;
 const SATURATION = 102;
-const EDGE_EMPHASIS = 21;
+const EDGE_EMPHASIS = 55;
 const INVERT = false;
 const BG_COLOR = '#0b0f1a';
 const BG_OPACITY = 90;
@@ -74,19 +74,19 @@ function paintSource(ctx: CanvasRenderingContext2D, width: number, height: numbe
     height * 0.45,
     Math.max(width, height) * 0.7,
   );
-  glow.addColorStop(0, '#8b7bff');
-  glow.addColorStop(0.45, '#3b3f8f');
+  glow.addColorStop(0, '#4a437a');
+  glow.addColorStop(0.45, '#25264f');
   glow.addColorStop(1, '#05070f');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, width, height);
 
-  // The mark itself, scaled to the band's height and pushed left of centre.
-  const scale = height / 24;
+  // The mark itself, scaled to fill most of the band and centred on the glow.
+  const scale = (height * 1.15) / 24;
   ctx.save();
-  ctx.translate(width * 0.5 - 12 * scale, 0);
+  ctx.translate(width * 0.32 - 12 * scale, (height - 24 * scale) / 2);
   ctx.scale(scale, scale);
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 5.5;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.beginPath();

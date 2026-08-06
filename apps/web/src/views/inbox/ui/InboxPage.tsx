@@ -124,7 +124,50 @@ export function InboxPage() {
       )}
 
       {data && items.length > 0 && (
-        <Card className="overflow-hidden p-0">
+        <div className="space-y-2.5 sm:hidden">
+          {items.map((item) => (
+            <Link
+              key={`${item.id}-${item.currentStep.assignedAt}-card`}
+              href={routes.request(item.id)}
+              className={cn(
+                'block rounded-xl border border-border bg-card p-4 shadow-sm transition-colors active:bg-muted/40',
+                priorityRowClass(item.priority),
+              )}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-foreground">{item.title}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {item.author.fullName} · {item.type.name}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <RequestStatusBadge status={item.status} />
+                  <RequestPriorityBadge priority={item.priority} />
+                </div>
+              </div>
+              {isArchive ? (
+                <p className="mt-2 font-mono text-xs text-muted-foreground tabular-nums">
+                  {item.completedAt ? formatProcessedAt(item.completedAt) : '—'}
+                </p>
+              ) : (
+                <div className="mt-2">
+                  <SlaIndicator
+                    dueAt={item.currentStep.dueAt}
+                    assignedAt={item.currentStep.assignedAt}
+                    showLabel
+                  />
+                </div>
+              )}
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {data && items.length > 0 && (
+        <Card className="hidden overflow-hidden p-0 sm:block">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

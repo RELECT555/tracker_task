@@ -12,6 +12,10 @@ export const queryKeys = {
   users: {
     directory: () => ['users', 'directory'] as const,
   },
+  notifications: {
+    list: (unreadOnly?: boolean, page?: number) =>
+      ['notifications', unreadOnly ? 'unread' : 'all', page ?? 1] as const,
+  },
   admin: {
     requestTypes: () => ['admin', 'request-types'] as const,
     routeTemplates: () => ['admin', 'route-templates'] as const,

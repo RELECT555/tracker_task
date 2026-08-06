@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { NotificationModule } from '../notification/notification.module';
 import { RoutingModule } from '../routing/routing.module';
 import { AddCommentHandler } from './application/commands/add-comment.handler';
 import { EscalateRequestHandler } from './application/commands/escalate-request.handler';
@@ -28,7 +29,7 @@ import {
 } from '../routing/infrastructure/routing.readers.impl';
 
 @Module({
-  imports: [RoutingModule],
+  imports: [RoutingModule, NotificationModule],
   controllers: [RequestController],
   providers: [
     CreateRequestHandler,

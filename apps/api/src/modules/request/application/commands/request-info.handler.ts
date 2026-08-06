@@ -5,6 +5,8 @@ import { PrismaService } from '../../../../shared/infrastructure/prisma/prisma.s
 import { RequestRepository } from '../../domain/request.repository';
 import { PrismaRequestRepository } from '../../infrastructure/request.repository.impl';
 import { RequestMapper } from '../../infrastructure/request.mapper';
+import { NotificationRecorder } from '../../../notification/application/notification-recorder';
+import { NotificationTypes } from '../../../notification/domain/notification-type';
 
 export interface RequestInfoCommand {
   requestId: string;
@@ -18,6 +20,7 @@ export class RequestInfoHandler {
     private readonly requestRepo: RequestRepository,
     private readonly prismaRequestRepo: PrismaRequestRepository,
     private readonly prisma: PrismaService,
+    private readonly notifications: NotificationRecorder,
   ) {}
 
   async execute(command: RequestInfoCommand) {
@@ -64,6 +67,14 @@ export class RequestInfoHandler {
           comment: command.message,
         },
       });
+    });
+
+    await this.notifications.send({
+      userId: request.authorId,
+      type: NotificationTypes.REQUEST_INFO_REQUESTED,
+      title: `Требуется уточнение по заявке: ${request.title}`,
+      body: command.message,
+      requestId: request.id,
     });
 
     const record = await this.prismaRequestRepo.findByIdWithRelations(request.id);

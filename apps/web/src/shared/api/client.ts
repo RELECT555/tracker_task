@@ -1,7 +1,7 @@
 import { getAccessToken } from '@/shared/lib/auth-storage';
 import { handleUnauthorizedResponse } from '@/shared/lib/auth-session';
 
-const baseURL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+export const baseURL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
 
 type ApiFetchOptions = RequestInit & {
   skipAuth?: boolean;

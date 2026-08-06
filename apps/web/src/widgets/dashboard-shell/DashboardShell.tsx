@@ -17,7 +17,7 @@ export function DashboardShell({
   return (
     <>
       <Header title={title} description={description} titleAs={titleAs} />
-      <main className="flex-1 overflow-y-auto py-6">
+      <main className="flex-1 overflow-auto py-6">
         <PageContainer className={containerClassName}>{children}</PageContainer>
       </main>
     </>

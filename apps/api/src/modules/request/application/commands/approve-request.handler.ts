@@ -6,6 +6,8 @@ import { Request } from '../../domain/request.entity';
 import { RequestRepository } from '../../domain/request.repository';
 import { PrismaRequestRepository } from '../../infrastructure/request.repository.impl';
 import { RequestMapper } from '../../infrastructure/request.mapper';
+import { NotificationRecorder } from '../../../notification/application/notification-recorder';
+import { NotificationTypes } from '../../../notification/domain/notification-type';
 
 export interface ApproveRequestCommand {
   requestId: string;
@@ -19,6 +21,7 @@ export class ApproveRequestHandler {
     private readonly requestRepo: RequestRepository,
     private readonly prismaRequestRepo: PrismaRequestRepository,
     private readonly prisma: PrismaService,
+    private readonly notifications: NotificationRecorder,
   ) {}
 
   async execute(command: ApproveRequestCommand) {
@@ -82,6 +85,22 @@ export class ApproveRequestHandler {
         },
       });
     });
+
+    if (result.kind === 'advanced') {
+      await this.notifications.send({
+        userId: result.nextAssigneeId!,
+        type: NotificationTypes.REQUEST_ASSIGNED,
+        title: `Новая заявка на рассмотрение: ${request.title}`,
+        requestId: request.id,
+      });
+    } else {
+      await this.notifications.send({
+        userId: request.authorId,
+        type: NotificationTypes.REQUEST_COMPLETED,
+        title: `Заявка согласована: ${request.title}`,
+        requestId: request.id,
+      });
+    }
 
     const record = await this.prismaRequestRepo.findByIdWithRelations(request.id);
     return RequestMapper.toDetail(record!, command.actorId);

@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AdminModule } from './modules/admin/admin.module';
 import { HealthModule } from './modules/health/health.module';
 import { IdentityModule } from './modules/identity/identity.module';
+import { NotificationModule } from './modules/notification/notification.module';
 import { RequestModule } from './modules/request/request.module';
 import { RoutingModule } from './modules/routing/routing.module';
 import { SlaModule } from './modules/sla/sla.module';
@@ -25,6 +26,7 @@ import { AuthMiddleware } from './shared/presentation/middleware/auth.middleware
     RoutingModule,
     RequestModule,
     SlaModule,
+    NotificationModule,
   ],
   providers: [AuthMiddleware],
 })
@@ -36,6 +38,6 @@ export class AppModule implements NestModule {
         { path: 'auth/login', method: RequestMethod.POST },
         { path: 'auth/refresh', method: RequestMethod.POST },
       )
-      .forRoutes('requests', 'request-types', 'auth', 'admin', 'users');
+      .forRoutes('requests', 'request-types', 'auth', 'admin', 'users', 'notifications');
   }
 }
