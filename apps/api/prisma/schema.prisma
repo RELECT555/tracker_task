@@ -1,488 +1,379 @@
 generator client {
-
   provider = "prisma-client-js"
-
 }
-
-
 
 datasource db {
-
   provider = "postgresql"
 
-  url      = env("DATABASE_URL")
-
+  url = env("DATABASE_URL")
 }
 
-
-
 model Role {
+  id String @id @default(uuid()) @db.Uuid
 
-  id          String     @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(50)
 
-  code        String     @unique @db.VarChar(50)
-
-  name        String     @db.VarChar(100)
+  name String @db.VarChar(100)
 
   description String?
 
-  users       UserRole[]
-
-
+  users UserRole[]
 
   @@map("roles")
-
 }
 
-
-
 model UserRole {
-
   userId String @map("user_id") @db.Uuid
 
   roleId String @map("role_id") @db.Uuid
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@id([userId, roleId])
-
   @@map("user_roles")
-
 }
 
-
-
 model OrgUnit {
+  id String @id @default(uuid()) @db.Uuid
 
-  id       String    @id @default(uuid()) @db.Uuid
+  name String @db.VarChar(255)
 
-  name     String    @db.VarChar(255)
+  parentId String? @map("parent_id") @db.Uuid
 
-  parentId String?   @map("parent_id") @db.Uuid
+  headId String? @map("head_id") @db.Uuid
 
-  headId   String?   @map("head_id") @db.Uuid
+  path String @db.VarChar(1000)
 
-  path     String    @db.VarChar(1000)
-
-  parent   OrgUnit?  @relation("OrgHierarchy", fields: [parentId], references: [id])
+  parent OrgUnit? @relation("OrgHierarchy", fields: [parentId], references: [id])
 
   children OrgUnit[] @relation("OrgHierarchy")
 
-  head     User?     @relation("OrgUnitHead", fields: [headId], references: [id])
+  head User? @relation("OrgUnitHead", fields: [headId], references: [id])
 
-  users    User[]    @relation("UserOrgUnit")
-
-
+  users User[] @relation("UserOrgUnit")
 
   @@index([parentId])
-
   @@index([path])
-
   @@map("org_units")
-
 }
 
-
-
 model User {
+  id String @id @default(uuid()) @db.Uuid
 
-  id           String       @id @default(uuid()) @db.Uuid
+  email String @unique @db.VarChar(255)
 
-  email        String       @unique @db.VarChar(255)
+  passwordHash String? @map("password_hash") @db.VarChar(255)
 
-  passwordHash String?      @map("password_hash") @db.VarChar(255)
+  fullName String @map("full_name") @db.VarChar(255)
 
-  fullName     String       @map("full_name") @db.VarChar(255)
+  orgUnitId String @map("org_unit_id") @db.Uuid
 
-  orgUnitId    String       @map("org_unit_id") @db.Uuid
+  managerId String? @map("manager_id") @db.Uuid
 
-  managerId    String?      @map("manager_id") @db.Uuid
+  isActive Boolean @default(true) @map("is_active")
 
-  isActive     Boolean      @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
-  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz()
+  orgUnit OrgUnit @relation("UserOrgUnit", fields: [orgUnitId], references: [id])
 
-  orgUnit      OrgUnit      @relation("UserOrgUnit", fields: [orgUnitId], references: [id])
+  manager User? @relation("UserManager", fields: [managerId], references: [id])
 
-  manager      User?        @relation("UserManager", fields: [managerId], references: [id])
+  subordinates User[] @relation("UserManager")
 
-  subordinates User[]       @relation("UserManager")
+  roles UserRole[]
 
-  roles        UserRole[]
+  headedUnits OrgUnit[] @relation("OrgUnitHead")
 
-  headedUnits  OrgUnit[]    @relation("OrgUnitHead")
+  requests Request[]
 
-  requests     Request[]
+  assignments Assignment[]
 
-  assignments  Assignment[]
+  transitions Transition[]
 
-  transitions  Transition[]
+  comments Comment[]
 
-  comments     Comment[]
-
-  auditLogs    AuditLog[]
+  auditLogs AuditLog[]
 
   notifications Notification[]
 
-
-
   @@index([orgUnitId])
-
   @@index([managerId])
-
   @@index([email])
-
   @@map("users")
-
 }
-
-
 
 model RouteTemplate {
+  id String @default(uuid()) @db.Uuid
 
-  id          String              @default(uuid()) @db.Uuid
+  name String @db.VarChar(255)
 
-  name        String              @db.VarChar(255)
+  version Int @default(1)
 
-  version     Int                 @default(1)
+  isPublished Boolean @default(false) @map("is_published")
 
-  isPublished Boolean             @default(false) @map("is_published")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
-  updatedAt   DateTime            @updatedAt @map("updated_at") @db.Timestamptz()
-
-  steps       RouteStepTemplate[]
-
-
+  steps RouteStepTemplate[]
 
   @@id([id, version])
-
   @@map("route_templates")
-
 }
-
-
 
 model RouteStepTemplate {
+  id String @id @default(uuid()) @db.Uuid
 
-  id                   String        @id @default(uuid()) @db.Uuid
+  routeTemplateId String @map("route_template_id") @db.Uuid
 
-  routeTemplateId      String        @map("route_template_id") @db.Uuid
+  routeTemplateVersion Int @map("route_template_version")
 
-  routeTemplateVersion Int           @map("route_template_version")
+  stepOrder Int @map("step_order")
 
-  stepOrder            Int           @map("step_order")
+  name String @db.VarChar(255)
 
-  name                 String        @db.VarChar(255)
+  assigneeType String @map("assignee_type") @db.VarChar(50)
 
-  assigneeType         String        @map("assignee_type") @db.VarChar(50)
+  assigneeRef String @map("assignee_ref") @db.VarChar(255)
 
-  assigneeRef          String        @map("assignee_ref") @db.VarChar(255)
+  actions String[] @default(["approve", "reject"])
 
-  actions              String[]      @default(["approve", "reject"])
+  slaHours Int? @map("sla_hours")
 
-  slaHours             Int?          @map("sla_hours")
-
-  routeTemplate        RouteTemplate @relation(fields: [routeTemplateId, routeTemplateVersion], references: [id, version], onDelete: Cascade)
-
-
+  routeTemplate RouteTemplate @relation(fields: [routeTemplateId, routeTemplateVersion], references: [id, version], onDelete: Cascade)
 
   @@index([routeTemplateId, routeTemplateVersion])
-
   @@map("route_step_templates")
-
 }
-
-
 
 model RequestType {
+  id String @id @default(uuid()) @db.Uuid
 
-  id                     String   @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(50)
 
-  code                   String   @unique @db.VarChar(50)
+  name String @db.VarChar(255)
 
-  name                   String   @db.VarChar(255)
+  description String?
 
-  description            String?
+  fieldSchema Json @default("[]") @map("field_schema")
 
-  fieldSchema            Json     @default("[]") @map("field_schema")
+  defaultRouteTemplateId String? @map("default_route_template_id") @db.Uuid
 
-  defaultRouteTemplateId String?  @map("default_route_template_id") @db.Uuid
+  allowedManualRoutes String[] @default([]) @map("allowed_manual_routes") @db.Uuid
 
-  allowedManualRoutes    String[] @default([]) @map("allowed_manual_routes") @db.Uuid
+  allowsPersonalRoute Boolean @default(false) @map("allows_personal_route")
 
-  allowsPersonalRoute    Boolean  @default(false) @map("allows_personal_route")
+  maxPersonalRouteSteps Int @default(5) @map("max_personal_route_steps")
 
-  maxPersonalRouteSteps  Int      @default(5) @map("max_personal_route_steps")
+  isActive Boolean @default(true) @map("is_active")
 
-  isActive               Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
-  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz()
-
-  requests               Request[]
-
-
+  requests Request[]
 
   @@map("request_types")
-
 }
-
-
 
 model Request {
+  id String @id @default(uuid()) @db.Uuid
 
-  id               String       @id @default(uuid()) @db.Uuid
+  typeId String @map("type_id") @db.Uuid
 
-  typeId           String       @map("type_id") @db.Uuid
+  authorId String @map("author_id") @db.Uuid
 
-  authorId         String       @map("author_id") @db.Uuid
+  title String @db.VarChar(500)
 
-  title            String       @db.VarChar(500)
+  fields Json @default("{}")
 
-  fields           Json         @default("{}")
+  status String @default("draft") @db.VarChar(30)
 
-  status           String       @default("draft") @db.VarChar(30)
+  priority String @default("normal") @db.VarChar(20)
 
-  priority         String       @default("normal") @db.VarChar(20)
+  routeSnapshot Json? @map("route_snapshot")
 
-  routeSnapshot    Json?        @map("route_snapshot")
+  currentStepIndex Int? @map("current_step_index")
 
-  currentStepIndex Int?         @map("current_step_index")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
-  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz()
-
-  submittedAt      DateTime?    @map("submitted_at") @db.Timestamptz()
-
-  completedAt      DateTime?    @map("completed_at") @db.Timestamptz()
-
-  type             RequestType  @relation(fields: [typeId], references: [id])
-
-  author           User         @relation(fields: [authorId], references: [id])
-
-  assignments      Assignment[]
-
-  transitions      Transition[]
-
-  comments         Comment[]
-
-  notifications    Notification[]
-
-
-
-  @@index([authorId])
-
-  @@index([status])
-
-  @@index([typeId])
-
-  @@index([createdAt(sort: Desc)])
-
-  @@map("requests")
-
-}
-
-
-
-model Assignment {
-
-  id          String    @id @default(uuid()) @db.Uuid
-
-  requestId   String    @map("request_id") @db.Uuid
-
-  stepIndex   Int       @map("step_index")
-
-  assigneeId  String    @map("assignee_id") @db.Uuid
-
-  status      String    @default("pending") @db.VarChar(20)
-
-  assignedAt  DateTime  @default(now()) @map("assigned_at") @db.Timestamptz()
-
-  dueAt       DateTime? @map("due_at") @db.Timestamptz()
+  submittedAt DateTime? @map("submitted_at") @db.Timestamptz()
 
   completedAt DateTime? @map("completed_at") @db.Timestamptz()
 
-  request     Request   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  type RequestType @relation(fields: [typeId], references: [id])
 
-  assignee    User      @relation(fields: [assigneeId], references: [id])
+  author User @relation(fields: [authorId], references: [id])
 
+  assignments Assignment[]
 
+  transitions Transition[]
+
+  comments Comment[]
+
+  notifications Notification[]
+
+  @@index([authorId])
+  @@index([status])
+  @@index([typeId])
+  @@index([createdAt(sort: Desc)])
+  @@map("requests")
+}
+
+model Assignment {
+  id String @id @default(uuid()) @db.Uuid
+
+  requestId String @map("request_id") @db.Uuid
+
+  stepIndex Int @map("step_index")
+
+  assigneeId String @map("assignee_id") @db.Uuid
+
+  status String @default("pending") @db.VarChar(20)
+
+  assignedAt DateTime @default(now()) @map("assigned_at") @db.Timestamptz()
+
+  dueAt DateTime? @map("due_at") @db.Timestamptz()
+
+  completedAt DateTime? @map("completed_at") @db.Timestamptz()
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  assignee User @relation(fields: [assigneeId], references: [id])
 
   @@index([assigneeId, status])
-
   @@index([requestId])
-
   @@map("assignments")
-
 }
-
-
 
 model Transition {
+  id String @id @default(uuid()) @db.Uuid
 
-  id         String   @id @default(uuid()) @db.Uuid
+  requestId String @map("request_id") @db.Uuid
 
-  requestId  String   @map("request_id") @db.Uuid
+  fromStatus String? @map("from_status") @db.VarChar(30)
 
-  fromStatus String?  @map("from_status") @db.VarChar(30)
+  toStatus String @map("to_status") @db.VarChar(30)
 
-  toStatus   String   @map("to_status") @db.VarChar(30)
+  fromStep Int? @map("from_step")
 
-  fromStep   Int?     @map("from_step")
+  toStep Int? @map("to_step")
 
-  toStep     Int?     @map("to_step")
+  actorId String? @map("actor_id") @db.Uuid
 
-  actorId    String?  @map("actor_id") @db.Uuid
+  action String @db.VarChar(50)
 
-  action     String   @db.VarChar(50)
+  comment String?
 
-  comment    String?
+  metadata Json @default("{}")
 
-  metadata   Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
-  request    Request  @relation(fields: [requestId], references: [id], onDelete: Cascade)
-
-  actor      User?    @relation(fields: [actorId], references: [id])
-
-
+  actor User? @relation(fields: [actorId], references: [id])
 
   @@index([requestId, createdAt])
-
   @@map("transitions")
-
 }
-
-
 
 model Comment {
+  id String @id @default(uuid()) @db.Uuid
 
-  id         String   @id @default(uuid()) @db.Uuid
+  requestId String @map("request_id") @db.Uuid
 
-  requestId  String   @map("request_id") @db.Uuid
+  authorId String @map("author_id") @db.Uuid
 
-  authorId   String   @map("author_id") @db.Uuid
+  body String
 
-  body       String
+  isInternal Boolean @default(false) @map("is_internal")
 
-  isInternal Boolean  @default(false) @map("is_internal")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
-  request    Request  @relation(fields: [requestId], references: [id], onDelete: Cascade)
-
-  author     User     @relation(fields: [authorId], references: [id])
-
-
+  author User @relation(fields: [authorId], references: [id])
 
   @@index([requestId, createdAt])
-
   @@map("comments")
-
 }
-
-
 
 model AuditLog {
+  id String @id @default(uuid()) @db.Uuid
 
-  id         String   @id @default(uuid()) @db.Uuid
+  actorId String? @map("actor_id") @db.Uuid
 
-  actorId    String?  @map("actor_id") @db.Uuid
+  action String @db.VarChar(100)
 
-  action     String   @db.VarChar(100)
+  entityType String @map("entity_type") @db.VarChar(50)
 
-  entityType String   @map("entity_type") @db.VarChar(50)
+  entityId String @map("entity_id") @db.Uuid
 
-  entityId   String   @map("entity_id") @db.Uuid
+  payload Json @default("{}")
 
-  payload    Json     @default("{}")
+  ipAddress String? @map("ip_address") @db.VarChar(45)
 
-  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
-
-  actor      User?    @relation(fields: [actorId], references: [id])
-
-
+  actor User? @relation(fields: [actorId], references: [id])
 
   @@index([entityType, entityId, createdAt])
-
   @@index([actorId, createdAt])
-
   @@index([createdAt])
-
   @@map("audit_logs")
-
 }
-
-
 
 model Notification {
+  id String @id @default(uuid()) @db.Uuid
 
-  id        String    @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
 
-  userId    String    @map("user_id") @db.Uuid
+  type String @db.VarChar(50)
 
-  type      String    @db.VarChar(50)
+  title String @db.VarChar(500)
 
-  title     String    @db.VarChar(500)
+  body String?
 
-  body      String?
+  requestId String? @map("request_id") @db.Uuid
 
-  requestId String?   @map("request_id") @db.Uuid
+  isRead Boolean @default(false) @map("is_read")
 
-  isRead    Boolean   @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  request   Request?  @relation(fields: [requestId], references: [id], onDelete: SetNull)
-
-
+  request Request? @relation(fields: [requestId], references: [id], onDelete: SetNull)
 
   @@index([userId, isRead, createdAt(sort: Desc)])
-
   @@map("notifications")
-
 }
 
-
-
 model SystemSetting {
+  key String @id @db.VarChar(100)
 
-  key       String   @id @db.VarChar(100)
-
-  value     Json
+  value Json
 
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
   @@map("system_settings")
-
 }
 
-
-
 model RoadmapProject {
-  id         String             @id @default(uuid()) @db.Uuid
-  externalId String             @unique @map("external_id") @db.VarChar(100)
-  name       String             @db.VarChar(255)
-  url        String?            @db.VarChar(1000)
-  syncedAt   DateTime?          @map("synced_at") @db.Timestamptz()
-  createdAt  DateTime           @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt  DateTime           @updatedAt @map("updated_at") @db.Timestamptz()
+  id         String            @id @default(uuid()) @db.Uuid
+  externalId String            @unique @map("external_id") @db.VarChar(100)
+  name       String            @db.VarChar(255)
+  url        String?           @db.VarChar(1000)
+  syncedAt   DateTime?         @map("synced_at") @db.Timestamptz()
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz()
   workItems  RoadmapWorkItem[]
+  roles      RoadmapRole[]
 
   @@map("roadmap_projects")
 }
@@ -507,13 +398,19 @@ model RoadmapWorkItem {
 }
 
 model RoadmapRole {
-  id          String              @id @default(uuid()) @db.Uuid
-  name        String              @unique @db.VarChar(100)
-  color       String              @default("#6366f1") @db.VarChar(20)
-  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz()
-  allocations RoadmapAllocation[]
-  members     RoadmapRoleMember[]
+  id                      String              @id @default(uuid()) @db.Uuid
+  projectId               String?             @map("project_id") @db.Uuid
+  defaultPersonExternalId String?             @map("default_person_external_id") @db.VarChar(255)
+  name                    String              @db.VarChar(100)
+  color                   String              @default("#6366f1") @db.VarChar(20)
+  isMock                  Boolean             @default(false) @map("is_mock")
+  createdAt               DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  project                 RoadmapProject?     @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  defaultPerson           RoadmapPerson?      @relation("RoadmapRoleDefaultPerson", fields: [defaultPersonExternalId], references: [externalId], onDelete: SetNull)
+  allocations             RoadmapAllocation[]
+  members                 RoadmapRoleMember[]
 
+  @@unique([projectId, name])
   @@map("roadmap_roles")
 }
 
@@ -549,13 +446,15 @@ model RoadmapPeriodAllocation {
 }
 
 model RoadmapPerson {
-  id            String              @id @default(uuid()) @db.Uuid
-  externalId    String              @unique @map("external_id") @db.VarChar(255)
-  name          String              @db.VarChar(255)
-  email         String?             @db.VarChar(255)
-  isActive      Boolean             @default(true) @map("is_active")
-  syncedAt      DateTime            @map("synced_at") @db.Timestamptz()
+  id              String              @id @default(uuid()) @db.Uuid
+  externalId      String              @unique @map("external_id") @db.VarChar(255)
+  name            String              @db.VarChar(255)
+  email           String?             @db.VarChar(255)
+  isActive        Boolean             @default(true) @map("is_active")
+  isMock          Boolean             @default(false) @map("is_mock")
+  syncedAt        DateTime            @map("synced_at") @db.Timestamptz()
   roleMemberships RoadmapRoleMember[]
+  defaultForRoles RoadmapRole[]       @relation("RoadmapRoleDefaultPerson")
 
   @@index([isActive, name])
   @@map("roadmap_people")

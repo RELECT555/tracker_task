@@ -2,7 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Eye, EyeOff, GitBranch, Monitor, Moon, ShieldCheck, Sun, Timer } from 'lucide-react';
+import { CalendarDays, Eye, EyeOff, GitBranch, Monitor, Moon, Sun, Users } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { loginWithMicrosoft } from '@/features/auth/lib/microsoft-auth';
@@ -66,9 +66,9 @@ function LoginThemeToggle() {
 }
 
 const HIGHLIGHTS = [
-  { icon: GitBranch, text: 'Маршруты' },
-  { icon: Timer, text: 'Сроки' },
-  { icon: ShieldCheck, text: 'Аудит' },
+  { icon: GitBranch, text: 'Wayo · запросы' },
+  { icon: CalendarDays, text: 'Roadmap' },
+  { icon: Users, text: 'Загрузка команды' },
 ] as const;
 
 /**
@@ -84,11 +84,10 @@ function HeroCaption() {
         className="absolute -inset-x-10 -inset-y-12 rounded-[50%] bg-black/30 blur-3xl"
       />
       <p className="animate-element animate-delay-800 relative text-2xl font-medium leading-snug tracking-tight text-white">
-        Запрос проходит маршрут сам — вам остаётся решение.
+        Запросы в движении. Команда — с понятным планом.
       </p>
       <p className="animate-element animate-delay-900 relative mt-3 text-sm leading-relaxed text-white/75">
-        Wayo собирает согласования, сроки и историю решений в одном месте, чтобы не искать
-        статус запроса в почте и чатах.
+        Wayo помогает вести запросы и эскалации. В Roadmap вы планируете эпики и фичи из Azure DevOps, назначаете роли и распределяете часы команды.
       </p>
       <div className="animate-element animate-delay-1000 relative mt-6 flex flex-wrap items-center gap-x-6 gap-y-2">
         {HIGHLIGHTS.map(({ icon: Icon, text }) => (

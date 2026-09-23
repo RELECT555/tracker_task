@@ -17,6 +17,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:reset": "prisma migrate reset",
     "db:seed": "prisma db seed",
+    "db:seed:roadmap-mocks": "ts-node --transpile-only scripts/seed-roadmap-mocks.ts",
     "db:status": "prisma migrate status"
   },
   "dependencies": {

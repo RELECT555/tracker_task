@@ -1,5 +1,7 @@
 import {
+  BadRequestException,
   BadGatewayException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -16,6 +18,8 @@ type AzureWorkItem = {
 type AzurePerson = {
   descriptor: string;
   subjectKind?: string;
+  isDeletedInOrigin?: boolean;
+  metaType?: string;
   displayName?: string;
   mailAddress?: string;
   principalName?: string;
@@ -35,20 +39,36 @@ export class RoadmapService {
   }
 
   async listAzureProjects() {
-    const credentials = await this.integration.getCredentials();
-    const data = await this.azureJson<{ value: AzureProject[] }>(
-      `${credentials.organizationUrl}/_apis/projects?stateFilter=wellFormed&$top=1000&api-version=${this.apiVersion}`,
-      credentials,
-    );
     const saved = await this.prisma.roadmapProject.findMany({ select: { id: true, externalId: true } });
     const savedIds = new Map(saved.map((project) => [project.externalId, project.id]));
-    return {
-      data: data.value.map((project) => ({
-        ...project,
-        imported: savedIds.has(project.id),
-        roadmapId: savedIds.get(project.id),
-      })),
-    };
+    try {
+      const credentials = await this.integration.getCredentials();
+      const data = await this.azureJson<{ value: AzureProject[] }>(
+        `${credentials.organizationUrl}/_apis/projects?stateFilter=wellFormed&$top=1000&api-version=${this.apiVersion}`,
+        credentials,
+      );
+      return {
+        source: 'azure' as const,
+        data: data.value.map((project) => ({
+          ...project,
+          imported: savedIds.has(project.id),
+          roadmapId: savedIds.get(project.id),
+        })),
+      };
+    } catch (error) {
+      if (!saved.length) throw error;
+      const localProjects = await this.prisma.roadmapProject.findMany({ orderBy: { name: 'asc' } });
+      return {
+        source: 'cache' as const,
+        data: localProjects.map((project) => ({
+          id: project.externalId,
+          name: project.name,
+          url: project.url ?? undefined,
+          imported: true,
+          roadmapId: project.id,
+        })),
+      };
+    }
   }
 
   async syncProject(externalId: string, name: string, url?: string) {
@@ -126,7 +146,7 @@ export class RoadmapService {
       },
     });
     if (!project) throw new NotFoundException('Roadmap project was not found');
-    const roles = await this.listRoles();
+    const roles = await this.listRoles(projectId);
     return { ...project, roles };
   }
 
@@ -134,9 +154,9 @@ export class RoadmapService {
     const people = await this.prisma.roadmapPerson.findMany({
       where: { isActive: true },
       orderBy: { name: 'asc' },
-      select: { externalId: true, name: true, email: true },
+      select: { externalId: true, name: true, email: true, isMock: true },
     });
-    return { data: people.map((person) => ({ id: person.externalId, name: person.name, email: person.email })) };
+    return { data: people.map((person) => ({ id: person.externalId, name: person.name, email: person.email, isMock: person.isMock })) };
   }
 
   async syncAzurePeople() {
@@ -154,7 +174,19 @@ export class RoadmapService {
       people.push(...(data.value ?? []));
       continuationToken = response.headers.get('x-ms-continuationtoken');
     } while (continuationToken);
-    const validPeople = people.filter((person) => person.subjectKind === 'user' && person.displayName);
+    const serviceAccountPattern = /\b(?:agent pool service|build service|(?:project )?collection service accounts?|azure devops service|visual studio team services|team foundation service|release management service|adminpbi)\b/i;
+    const validPeople = people.filter((person) => {
+      const name = person.displayName?.trim();
+      const identity = `${name ?? ''} ${person.principalName ?? ''}`;
+      return person.subjectKind === 'user'
+        && !person.isDeletedInOrigin
+        && Boolean(name)
+        && Boolean(person.mailAddress || person.principalName)
+        && !serviceAccountPattern.test(identity);
+    });
+    if (people.length && !validPeople.length) {
+      throw new BadGatewayException('Azure DevOps did not return any eligible human user profiles; the existing user list was left unchanged');
+    }
     const externalIds = validPeople.map((person) => person.descriptor);
     await this.prisma.$transaction([
       ...validPeople.map((person) => this.prisma.roadmapPerson.upsert({
@@ -163,58 +195,118 @@ export class RoadmapService {
           externalId: person.descriptor,
           name: person.displayName!,
           email: person.mailAddress ?? person.principalName ?? null,
+          isMock: false,
           syncedAt: new Date(),
         },
         update: {
           name: person.displayName!,
           email: person.mailAddress ?? person.principalName ?? null,
           isActive: true,
+          isMock: false,
           syncedAt: new Date(),
         },
       })),
       this.prisma.roadmapPerson.updateMany({
-        where: { externalId: { notIn: externalIds.length ? externalIds : ['__none__'] } },
+        where: { isMock: false, externalId: { notIn: externalIds.length ? externalIds : ['__none__'] } },
         data: { isActive: false },
       }),
+      this.prisma.roadmapRole.updateMany({
+        where: { defaultPerson: { isMock: false }, defaultPersonExternalId: { notIn: externalIds.length ? externalIds : ['__none__'] } },
+        data: { defaultPersonExternalId: null },
+      }),
     ]);
-    return { synced: validPeople.length };
+    return { synced: validPeople.length, ignored: people.length - validPeople.length };
   }
 
-  async listRoles() {
+  async listRoles(projectId: string) {
+    if (!projectId) throw new BadRequestException('A project must be selected before loading its roles');
     const roles = await this.prisma.roadmapRole.findMany({
+      where: { projectId },
       orderBy: { name: 'asc' },
-      include: { members: { include: { person: true }, orderBy: { person: { name: 'asc' } } } },
+      include: {
+        members: { include: { person: true }, orderBy: { person: { name: 'asc' } } },
+        defaultPerson: true,
+      },
     });
     return roles.map((role) => ({
       id: role.id,
+      projectId: role.projectId,
       name: role.name,
       color: role.color,
+      isMock: role.isMock,
+      defaultPersonExternalId: role.defaultPersonExternalId,
+      defaultPersonName: role.defaultPerson?.name ?? null,
+      defaultPersonEmail: role.defaultPerson?.email ?? null,
+      defaultPersonIsMock: role.defaultPerson?.isMock ?? false,
       members: role.members.map(({ person }) => ({
         personExternalId: person.externalId,
         personName: person.name,
         personEmail: person.email,
         personIsActive: person.isActive,
+        personIsMock: person.isMock,
       })),
     }));
   }
 
-  createRole(dto: { name: string; color?: string }) {
+  async createRole(dto: { projectId: string; name: string; color?: string }) {
+    const project = await this.prisma.roadmapProject.findUnique({ where: { id: dto.projectId }, select: { id: true } });
+    if (!project) throw new NotFoundException('Import the Azure DevOps project before creating its roles');
     return this.prisma.roadmapRole.create({
-      data: { name: dto.name.trim(), color: dto.color ?? '#6366f1' },
+      data: { projectId: project.id, name: dto.name.trim(), color: dto.color ?? '#6366f1' },
+    });
+  }
+
+  async listRoleCatalog() {
+    return this.prisma.roadmapRole.findMany({
+      where: { projectId: null },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, color: true, isMock: true },
+    });
+  }
+
+  async createRoleTemplate(dto: { name: string; color?: string }) {
+    const name = dto.name.trim();
+    if (await this.prisma.roadmapRole.findFirst({ where: { projectId: null, name }, select: { id: true } })) {
+      throw new ConflictException('A role with this name already exists in the role catalog');
+    }
+    return this.prisma.roadmapRole.create({
+      data: { projectId: null, name, color: dto.color ?? '#6366f1' },
+      select: { id: true, name: true, color: true, isMock: true },
+    });
+  }
+
+  async addRoleFromCatalog(projectId: string, templateId: string) {
+    const [project, template] = await Promise.all([
+      this.prisma.roadmapProject.findUnique({ where: { id: projectId }, select: { id: true } }),
+      this.prisma.roadmapRole.findFirst({ where: { id: templateId, projectId: null } }),
+    ]);
+    if (!project) throw new NotFoundException('Import the Azure DevOps project before adding roles');
+    if (!template) throw new NotFoundException('The selected role is not in the role catalog');
+    if (await this.prisma.roadmapRole.findFirst({ where: { projectId, name: template.name }, select: { id: true } })) {
+      throw new ConflictException('This project already has a role with this name');
+    }
+    return this.prisma.roadmapRole.create({
+      data: { projectId, name: template.name, color: template.color, isMock: template.isMock },
     });
   }
 
   async adminPeople() {
     const people = await this.prisma.roadmapPerson.findMany({
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
-      include: { roleMemberships: { include: { role: { select: { id: true, name: true, color: true } } } } },
+      include: { roleMemberships: { include: { role: { select: { id: true, name: true, color: true, project: { select: { name: true } } } } } } },
     });
     return people.map((person) => ({
       id: person.externalId,
       name: person.name,
       email: person.email,
       isActive: person.isActive,
-      roles: person.roleMemberships.map((membership) => membership.role),
+      isMock: person.isMock,
+      roles: person.roleMemberships.map((membership) => ({
+        id: membership.role.id,
+        name: membership.role.name,
+        color: membership.role.color,
+        projectName: membership.role.project?.name ?? null,
+      })),
     }));
   }
 
@@ -234,21 +326,59 @@ export class RoadmapService {
         skipDuplicates: true,
       });
     }
+    if (personExternalIds.length) {
+      await this.prisma.roadmapRole.updateMany({
+        where: { id: roleId, defaultPersonExternalId: { notIn: personExternalIds } },
+        data: { defaultPersonExternalId: null },
+      });
+    } else {
+      await this.prisma.roadmapRole.update({ where: { id: roleId }, data: { defaultPersonExternalId: null } });
+    }
     const role = await this.prisma.roadmapRole.findUnique({
       where: { id: roleId },
       include: { members: { include: { person: true }, orderBy: { person: { name: 'asc' } } } },
     });
     return role ? {
       id: role.id,
+      projectId: role.projectId,
       name: role.name,
       color: role.color,
+      isMock: role.isMock,
       members: role.members.map(({ person }) => ({
         personExternalId: person.externalId,
         personName: person.name,
         personEmail: person.email,
         personIsActive: person.isActive,
+        personIsMock: person.isMock,
       })),
     } : null;
+  }
+
+  async setRoleDefaultPerson(roleId: string, personExternalId: string | null) {
+    const role = await this.prisma.roadmapRole.findUnique({ where: { id: roleId }, select: { id: true, projectId: true } });
+    if (!role || !role.projectId) throw new NotFoundException('Project role was not found');
+    if (personExternalId) {
+      const member = await this.prisma.roadmapRoleMember.findFirst({
+        where: { roleId, person: { externalId: personExternalId, isActive: true } },
+        select: { id: true },
+      });
+      if (!member) throw new BadRequestException('The default person must be active and assigned to this role');
+    }
+    const updated = await this.prisma.roadmapRole.update({
+      where: { id: roleId },
+      data: { defaultPersonExternalId: personExternalId },
+      include: { defaultPerson: true },
+    });
+    return {
+      id: updated.id,
+      projectId: updated.projectId,
+      name: updated.name,
+      color: updated.color,
+      defaultPersonExternalId: updated.defaultPersonExternalId,
+      defaultPersonName: updated.defaultPerson?.name ?? null,
+      defaultPersonEmail: updated.defaultPerson?.email ?? null,
+      defaultPersonIsMock: updated.defaultPerson?.isMock ?? false,
+    };
   }
 
   async deleteRole(id: string) {
@@ -257,6 +387,7 @@ export class RoadmapService {
   }
 
   async saveAllocation(dto: {
+    allocationId?: string;
     workItemId: string;
     roleId: string;
     personExternalId: string;
@@ -267,31 +398,51 @@ export class RoadmapService {
   }) {
     const workItem = await this.prisma.roadmapWorkItem.findUnique({
       where: { id: dto.workItemId },
-      select: { id: true },
+      select: { id: true, projectId: true },
     });
     if (!workItem) throw new NotFoundException('Roadmap work item was not found');
-    const allocation = await this.prisma.roadmapAllocation.upsert({
-      where: {
-        workItemId_roleId_personExternalId: {
-          workItemId: dto.workItemId,
-          roleId: dto.roleId,
-          personExternalId: dto.personExternalId,
+    const membership = await this.prisma.roadmapRoleMember.findFirst({
+      where: { roleId: dto.roleId, role: { projectId: workItem.projectId }, person: { externalId: dto.personExternalId, isActive: true } },
+      include: { person: true },
+    });
+    if (!membership) throw new BadRequestException('The person must be active and assigned to this role');
+    let allocation;
+    if (dto.allocationId) {
+      const current = await this.prisma.roadmapAllocation.findUnique({ where: { id: dto.allocationId }, select: { id: true, workItemId: true, roleId: true } });
+      if (!current || current.workItemId !== dto.workItemId || current.roleId !== dto.roleId) throw new NotFoundException('Roadmap allocation was not found');
+      const duplicate = await this.prisma.roadmapAllocation.findFirst({
+        where: { workItemId: dto.workItemId, roleId: dto.roleId, personExternalId: dto.personExternalId, id: { not: dto.allocationId } },
+        select: { id: true },
+      });
+      if (duplicate) throw new ConflictException('This person already has an estimate for this work item and role');
+      allocation = await this.prisma.roadmapAllocation.update({
+        where: { id: dto.allocationId },
+        data: { personExternalId: dto.personExternalId, personName: membership.person.name, personEmail: membership.person.email, estimatedHours: dto.estimatedHours },
+      });
+    } else {
+      allocation = await this.prisma.roadmapAllocation.upsert({
+        where: {
+          workItemId_roleId_personExternalId: {
+            workItemId: dto.workItemId,
+            roleId: dto.roleId,
+            personExternalId: dto.personExternalId,
+          },
         },
-      },
-      create: {
+        create: {
         workItemId: dto.workItemId,
         roleId: dto.roleId,
         personExternalId: dto.personExternalId,
-        personName: dto.personName,
-        personEmail: dto.personEmail,
+        personName: membership.person.name,
+        personEmail: membership.person.email,
         estimatedHours: dto.estimatedHours,
-      },
-      update: {
-        personName: dto.personName,
-        personEmail: dto.personEmail,
-        estimatedHours: dto.estimatedHours,
-      },
-    });
+        },
+        update: {
+          personName: membership.person.name,
+          personEmail: membership.person.email,
+          estimatedHours: dto.estimatedHours,
+        },
+      });
+    }
     await this.prisma.$transaction([
       this.prisma.roadmapPeriodAllocation.deleteMany({ where: { allocationId: allocation.id } }),
       ...dto.periods.map((period) =>

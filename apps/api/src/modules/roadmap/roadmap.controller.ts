@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { IsArray, IsDateString, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { RoadmapService } from './roadmap.service';
@@ -11,6 +11,7 @@ class PeriodDto {
 }
 
 class SaveAllocationDto {
+  @IsOptional() @IsString() allocationId?: string;
   @IsString() workItemId!: string;
   @IsString() roleId!: string;
   @IsString() personExternalId!: string;
@@ -50,8 +51,8 @@ export class RoadmapController {
   }
 
   @Get('roles')
-  roles() {
-    return this.roadmap.listRoles();
+  roles(@Query('projectId') projectId: string) {
+    return this.roadmap.listRoles(projectId);
   }
 
   @Put('allocations')

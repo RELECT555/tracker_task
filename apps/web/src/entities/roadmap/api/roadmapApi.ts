@@ -10,9 +10,15 @@ export interface AzureProject {
 
 export interface RoadmapRole {
   id: string;
+  projectId?: string | null;
   name: string;
   color: string;
-  members?: { personExternalId: string; personName: string; personEmail: string | null; personIsActive: boolean }[];
+  isMock?: boolean;
+  defaultPersonExternalId?: string | null;
+  defaultPersonName?: string | null;
+  defaultPersonEmail?: string | null;
+  defaultPersonIsMock?: boolean;
+  members?: { personExternalId: string; personName: string; personEmail: string | null; personIsActive: boolean; personIsMock?: boolean }[];
 }
 
 export interface RoadmapPerson {
@@ -20,7 +26,8 @@ export interface RoadmapPerson {
   name: string;
   email: string | null;
   isActive?: boolean;
-  roles?: Pick<RoadmapRole, 'id' | 'name' | 'color'>[];
+  isMock?: boolean;
+  roles?: (Pick<RoadmapRole, 'id' | 'name' | 'color'> & { projectName?: string | null })[];
 }
 
 export interface RoadmapPeriod {
@@ -89,7 +96,7 @@ export const roadmapApi = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
-  projects: () => apiFetch<{ data: AzureProject[] }>('/roadmap/projects'),
+  projects: () => apiFetch<{ data: AzureProject[]; source?: 'azure' | 'cache' }>('/roadmap/projects'),
   syncProject: (project: AzureProject) =>
     apiFetch<{ projectId: string; importedWorkItems: number }>(
       `/roadmap/projects/${encodeURIComponent(project.id)}/sync`,
@@ -101,21 +108,35 @@ export const roadmapApi = {
   plan: (projectId: string) =>
     apiFetch<RoadmapProjectPlan>(`/roadmap/projects/${projectId}/plan`),
   people: () => apiFetch<{ data: RoadmapPerson[] }>('/roadmap/people'),
-  roles: () => apiFetch<RoadmapRole[]>('/roadmap/roles'),
+  roles: (projectId: string) => apiFetch<RoadmapRole[]>(`/roadmap/roles?projectId=${encodeURIComponent(projectId)}`),
   adminPeople: () => apiFetch<RoadmapPerson[]>('/roadmap/admin/users'),
-  syncAdminPeople: () => apiFetch<{ synced: number }>('/roadmap/admin/users/sync', { method: 'POST', body: '{}' }),
-  adminRoles: () => apiFetch<RoadmapRole[]>('/roadmap/admin/roles'),
-  createRole: (name: string, color?: string) =>
-    apiFetch<RoadmapRole>('/roadmap/admin/roles', {
+  syncAdminPeople: () => apiFetch<{ synced: number; ignored: number }>('/roadmap/admin/users/sync', { method: 'POST', body: '{}' }),
+  adminRoles: (projectId: string) => apiFetch<RoadmapRole[]>(`/roadmap/admin/roles?projectId=${encodeURIComponent(projectId)}`),
+  roleCatalog: () => apiFetch<Pick<RoadmapRole, 'id' | 'name' | 'color' | 'isMock'>[]>('/roadmap/admin/role-catalog'),
+  createRoleTemplate: (name: string, color?: string) =>
+    apiFetch<Pick<RoadmapRole, 'id' | 'name' | 'color' | 'isMock'>>('/roadmap/admin/role-catalog', {
       method: 'POST',
       body: JSON.stringify({ name, color }),
+    }),
+  addRoleFromCatalog: (projectId: string, templateId: string) =>
+    apiFetch<RoadmapRole>('/roadmap/admin/roles/from-catalog', {
+      method: 'POST',
+      body: JSON.stringify({ projectId, templateId }),
+    }),
+  createRole: (projectId: string, name: string, color?: string) =>
+    apiFetch<RoadmapRole>('/roadmap/admin/roles', {
+      method: 'POST',
+      body: JSON.stringify({ projectId, name, color }),
     }),
   updateRole: (id: string, input: { name?: string; color?: string }) =>
     apiFetch<RoadmapRole>(`/roadmap/admin/roles/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
   setRoleMembers: (id: string, personExternalIds: string[]) =>
     apiFetch<RoadmapRole>(`/roadmap/admin/roles/${encodeURIComponent(id)}/members`, { method: 'PUT', body: JSON.stringify({ personExternalIds }) }),
+  setRoleDefaultPerson: (id: string, personExternalId: string | null) =>
+    apiFetch<RoadmapRole>(`/roadmap/admin/roles/${encodeURIComponent(id)}/default-person`, { method: 'PUT', body: JSON.stringify({ personExternalId }) }),
   deleteRole: (id: string) => apiFetch<{ deleted: boolean }>(`/roadmap/admin/roles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   saveAllocation: (input: {
+    allocationId?: string;
     workItemId: string;
     roleId: string;
     personExternalId: string;
