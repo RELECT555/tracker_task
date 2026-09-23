@@ -17,4 +17,10 @@ export const routes = {
   },
   login: '/login',
   welcome: '/welcome',
+  workspaces: '/workspaces',
+  roadmap: '/roadmap',
+  roadmapAdminHome: '/roadmap/admin',
+  roadmapAdmin: '/roadmap/admin/integrations',
+  roadmapAdminUsers: '/roadmap/admin/users',
+  roadmapAdminRoles: '/roadmap/admin/roles',
 } as const;

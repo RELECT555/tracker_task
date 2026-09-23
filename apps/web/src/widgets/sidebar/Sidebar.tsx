@@ -15,6 +15,7 @@ import {
   Users,
   Check,
   Search,
+  PanelsTopLeft,
 } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
@@ -96,7 +97,12 @@ export function Sidebar({
       )}
       style={{ '--sidebar-width': '16rem' } as React.CSSProperties}
     >
-      <div className="flex h-16 items-center gap-3 px-5">
+      <Link
+        href={routes.workspaces}
+        onClick={onNavigate}
+        title="Сменить рабочее пространство"
+        className="group flex h-16 items-center gap-3 px-5"
+      >
         <WayoMark
           framed
           className="h-8 w-8 border-sidebar-border/60 bg-sidebar-accent text-sidebar-primary"
@@ -105,7 +111,8 @@ export function Sidebar({
         <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">
           Wayo
         </span>
-      </div>
+        <PanelsTopLeft className="ml-auto h-4 w-4 text-sidebar-muted opacity-0 transition-opacity group-hover:opacity-100" strokeWidth={1.5} />
+      </Link>
 
       <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 py-2">
         {navSections.map((section) => (
