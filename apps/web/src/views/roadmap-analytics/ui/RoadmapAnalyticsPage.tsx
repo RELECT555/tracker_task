@@ -9,6 +9,8 @@ import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
 
 const numberFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
+const compactFormat = new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 });
+const statusPalette = ['#625bf6', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#94a3b8'];
 
 function currentQuarter() {
   const date = new Date();
@@ -28,6 +30,92 @@ function MetricCard({ title, value, note, icon: Icon }: { title: string; value: 
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon className="h-5 w-5" strokeWidth={1.7} /></span>
     </div>
     <p className="mt-3 text-xs text-muted-foreground">{note}</p>
+  </Card>;
+}
+
+function RoleEstimateChart({ roles, totalHours, quarterHours, quarterLabel }: {
+  roles: { id: string; name: string; color: string; estimated: number; planned: number }[];
+  totalHours: number;
+  quarterHours: number;
+  quarterLabel: string;
+}) {
+  const maxValue = Math.max(1, ...roles.map((role) => role.estimated));
+  const left = 48;
+  const top = 18;
+  const plotWidth = 650;
+  const plotHeight = 166;
+  const baseY = top + plotHeight;
+  const groupWidth = plotWidth / Math.max(roles.length, 1);
+  const barWidth = Math.min(52, groupWidth * 0.58);
+
+  return <Card className="overflow-hidden">
+    <CardHeader className="flex flex-row items-start justify-between gap-4 pb-2">
+      <div className="space-y-1.5"><CardTitle className="text-base">Оценка по ролям</CardTitle><CardDescription>Сумма оценок назначений · {numberFormat.format(totalHours)} ч</CardDescription></div>
+      <div className="shrink-0 rounded-lg border border-primary/15 bg-primary/[0.045] px-3 py-2 text-right"><p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{quarterLabel}</p><p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">{numberFormat.format(quarterHours)} ч</p></div>
+    </CardHeader>
+    <CardContent className="pt-3">
+      {roles.length ? <>
+        <div className="relative rounded-xl bg-muted/20 px-2 pt-2">
+          <svg viewBox="0 0 720 252" role="img" aria-label={`Столбчатая диаграмма оценок по ${roles.length} ролям`} className="h-[230px] w-full overflow-visible">
+            <defs>{roles.map((role, index) => <linearGradient key={role.id} id={`role-gradient-${index}`} x1="0" x2="0" y1="1" y2="0"><stop offset="0%" stopColor={role.color} stopOpacity="0.68" /><stop offset="100%" stopColor={role.color} /></linearGradient>)}</defs>
+            {[0, 1, 2, 3, 4].map((tick) => {
+              const y = baseY - (plotHeight * tick) / 4;
+              return <g key={tick}>
+                <line x1={left} x2={left + plotWidth} y1={y} y2={y} stroke="hsl(var(--border))" strokeDasharray={tick === 0 ? undefined : '3 5'} strokeWidth={tick === 0 ? 1.4 : 1} />
+                <text x={left - 8} y={y + 3.5} fill="hsl(var(--muted-foreground))" fontSize="10" textAnchor="end">{compactFormat.format((maxValue * tick) / 4)}</text>
+              </g>;
+            })}
+            {roles.map((role, index) => {
+              const centerX = left + groupWidth * (index + 0.5);
+              const height = role.estimated ? Math.max(3, (role.estimated / maxValue) * plotHeight) : 0;
+              const labelLines = role.name.split(/\s+/);
+              const labelFirst = labelLines[0].length > 10 ? `${labelLines[0].slice(0, 9)}…` : labelLines[0];
+              const labelSecond = labelLines.slice(1).join(' ');
+              return <g key={role.id}>
+                <title>{`${role.name}: ${numberFormat.format(role.estimated)} ч оценки; ${numberFormat.format(role.planned)} ч запланировано на ${quarterLabel}`}</title>
+                {role.estimated > 0 ? <>
+                  <rect x={centerX - barWidth / 2 + 3} y={baseY - height + 5} width={barWidth} height={height} rx="9" fill={role.color} opacity="0.12" />
+                  <rect x={centerX - barWidth / 2} y={baseY - height} width={barWidth} height={height} rx="8" fill={`url(#role-gradient-${index})`} />
+                  <text x={centerX} y={Math.max(top + 10, baseY - height - 8)} fill="hsl(var(--foreground))" fontSize="10" fontWeight="600" textAnchor="middle">{compactFormat.format(role.estimated)}</text>
+                </> : <circle cx={centerX} cy={baseY - 1} r="3" fill={role.color} opacity="0.55" />}
+                <circle cx={centerX} cy={baseY + 12} r="3.5" fill={role.color} />
+                <text x={centerX} y={baseY + 30} fill="hsl(var(--foreground))" fontSize="10.5" textAnchor="middle">{labelFirst}</text>
+                {labelSecond ? <text x={centerX} y={baseY + 44} fill="hsl(var(--muted-foreground))" fontSize="9.5" textAnchor="middle">{labelSecond.length > 13 ? `${labelSecond.slice(0, 12)}…` : labelSecond}</text> : null}
+              </g>;
+            })}
+          </svg>
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-muted-foreground"><span>Часы назначений по ролям</span><span>Наведите на столбец для подробностей</span></div>
+      </> : <p className="py-12 text-center text-sm text-muted-foreground">В проекте пока нет ролей и назначений.</p>}
+    </CardContent>
+  </Card>;
+}
+
+function FeatureStatusChart({ rows }: { rows: { status: string; count: number }[] }) {
+  const total = rows.reduce((sum, row) => sum + row.count, 0);
+  let currentDegree = 0;
+  const stops = rows.map((row, index) => {
+    const start = currentDegree;
+    currentDegree += total ? (row.count / total) * 360 : 0;
+    return `${statusPalette[index % statusPalette.length]} ${start}deg ${currentDegree}deg`;
+  });
+
+  return <Card className="overflow-hidden">
+    <CardHeader className="pb-2"><CardTitle className="text-base">Состояние фич</CardTitle><CardDescription>Распределение задач по статусам Azure DevOps</CardDescription></CardHeader>
+    <CardContent className="pt-4">
+      {rows.length ? <div className="flex flex-col items-center gap-7 sm:flex-row sm:items-center sm:gap-8">
+        <div className="relative flex h-44 w-44 shrink-0 items-center justify-center rounded-full p-[15px] shadow-[0_10px_28px_hsl(var(--foreground)/0.08)]" style={{ background: `conic-gradient(from -90deg, ${stops.join(', ')})` }} role="img" aria-label={`Кольцевая диаграмма статусов: ${rows.map((row) => `${row.status} — ${row.count}`).join(', ')}`}>
+          <div className="flex h-full w-full flex-col items-center justify-center rounded-full border border-border/70 bg-card text-center"><span className="text-3xl font-semibold tracking-tight tabular-nums text-foreground">{total}</span><span className="mt-0.5 text-xs text-muted-foreground">фич</span><span className="mt-2 h-px w-10 bg-border" /><span className="mt-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">всего</span></div>
+        </div>
+        <ul className="w-full min-w-0 space-y-3" aria-label="Легенда статусов">
+          {rows.map((row, index) => <li key={row.status} className="flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/40">
+            <span className="h-3 w-3 shrink-0 rounded-full ring-4 ring-muted/60" style={{ backgroundColor: statusPalette[index % statusPalette.length] }} />
+            <span className="min-w-0 flex-1 truncate text-sm text-foreground">{row.status}</span>
+            <span className="text-right"><span className="block text-sm font-semibold tabular-nums text-foreground">{row.count}</span><span className="text-[10px] tabular-nums text-muted-foreground">{Math.round((row.count / total) * 100)}%</span></span>
+          </li>)}
+        </ul>
+      </div> : <p className="py-12 text-center text-sm text-muted-foreground">В проекте пока нет фич.</p>}
+    </CardContent>
   </Card>;
 }
 
@@ -74,9 +162,6 @@ export function RoadmapAnalyticsPage() {
       planned: roleAllocations.reduce((sum, allocation) => sum + allocation.periods.reduce((periodSum, period) => periodSum + (quarter.monthKeys.includes(period.monthKey ?? '') ? Number(period.hours) : 0), 0), 0),
     };
   }).sort((a, b) => b.estimated - a.estimated), [allocations, plan?.roles, quarter.monthKeys]);
-  const maxRoleEstimate = Math.max(1, ...roleRows.map((role) => role.estimated));
-  const maxStatusCount = Math.max(1, ...statusRows.map((row) => row.count));
-
   useEffect(() => {
     if (projectId && projects.some((item) => item.id === projectId)) return;
     const firstImported = projects.find((item) => item.imported);
@@ -106,25 +191,9 @@ export function RoadmapAnalyticsPage() {
           <MetricCard title="План на квартал" value={`${numberFormat.format(quarterHours)} ч`} note="Часы в месячных корзинах квартала" icon={Clock3} />
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader className="pb-4"><CardTitle className="text-base">Оценка по ролям</CardTitle><CardDescription>Сумма оценок назначений · всего {numberFormat.format(totalEstimatedHours)} ч</CardDescription></CardHeader>
-            <CardContent className="space-y-4">
-              {roleRows.length ? roleRows.map((role) => <div key={role.id} className="space-y-1.5">
-                <div className="flex items-center justify-between gap-3 text-sm"><span className="flex min-w-0 items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: role.color }} /><span className="truncate text-foreground">{role.name}</span></span><span className="shrink-0 text-xs tabular-nums text-muted-foreground">{numberFormat.format(role.estimated)} ч <span className="mx-1 text-border">·</span> {numberFormat.format(role.planned)} ч в квартале</span></div>
-                <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full transition-[width]" style={{ width: `${Math.max(role.estimated ? 2 : 0, role.estimated / maxRoleEstimate * 100)}%`, backgroundColor: role.color }} /></div>
-              </div>) : <p className="py-5 text-center text-sm text-muted-foreground">В проекте пока нет ролей и назначений.</p>}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-4"><CardTitle className="text-base">Состояние фич</CardTitle><CardDescription>Распределение по статусам из Azure DevOps</CardDescription></CardHeader>
-            <CardContent className="space-y-3">
-              {statusRows.length ? statusRows.map((row, index) => <div key={row.status} className="grid grid-cols-[minmax(0,1fr)_2fr_auto] items-center gap-3 text-sm">
-                <span className="truncate text-foreground">{row.status}</span><div className="h-2 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${index === 0 ? 'bg-primary' : index === 1 ? 'bg-sky-500' : 'bg-muted-foreground/40'}`} style={{ width: `${row.count / maxStatusCount * 100}%` }} /></div><span className="w-8 text-right text-xs tabular-nums text-muted-foreground">{row.count}</span>
-              </div>) : <p className="py-5 text-center text-sm text-muted-foreground">В проекте пока нет фич.</p>}
-            </CardContent>
-          </Card>
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+          <RoleEstimateChart roles={roleRows} totalHours={totalEstimatedHours} quarterHours={quarterHours} quarterLabel={`Q${quarter.quarter} ${quarter.year}`} />
+          <FeatureStatusChart rows={statusRows} />
         </section>
       </> : null}
     </div>

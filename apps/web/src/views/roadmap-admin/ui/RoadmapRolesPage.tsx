@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Check, Pipette, Plus, Save, Search, ShieldCheck, Users, X } from 'lucide-react';
+import { AlertCircle, Check, FolderKanban, Layers3, Pipette, Plus, Save, Search, ShieldCheck, Users, X } from 'lucide-react';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
 import { routes } from '@/shared/config/routes';
@@ -13,9 +13,9 @@ import { ColorMark } from '@/shared/ui/color-mark';
 export function RoadmapRolesPage() {
   const client = useQueryClient();
   const projectsQuery = useQuery({ queryKey: ['roadmap', 'azure-projects'], queryFn: roadmapApi.projects });
-  const projects = projectsQuery.data?.data ?? [];
+  const projects = useMemo(() => projectsQuery.data?.data ?? [], [projectsQuery.data?.data]);
   const catalogQuery = useQuery({ queryKey: ['roadmap', 'admin', 'role-catalog'], queryFn: roadmapApi.roleCatalog });
-  const catalog = catalogQuery.data ?? [];
+  const catalog = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const roadmapProjectId = selectedProject?.roadmapId ?? '';
@@ -25,24 +25,29 @@ export function RoadmapRolesPage() {
     enabled: Boolean(roadmapProjectId),
   });
   const peopleQuery = useQuery({ queryKey: ['roadmap', 'admin', 'users'], queryFn: roadmapApi.adminPeople });
-  const roles = rolesQuery.data ?? [];
+  const roles = useMemo(() => rolesQuery.data ?? [], [rolesQuery.data]);
   const people = (peopleQuery.data ?? []).filter((person) => person.isActive);
   const [section, setSection] = useState<'catalog' | 'project'>('catalog');
   const [selectedId, setSelectedId] = useState('');
   const [showAddCatalog, setShowAddCatalog] = useState(false);
   const [showTemplateCreate, setShowTemplateCreate] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState('');
+  const [catalogSearch, setCatalogSearch] = useState('');
   const [name, setName] = useState('');
   const [color, setColor] = useState('#6366f1');
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const selectedRole = roles.find((role) => role.id === selectedId);
-  const selectedRoleMemberIds = selectedRole?.members?.map((member) => member.personExternalId) ?? [];
+  const selectedRoleMemberIds = useMemo(() => selectedRole?.members?.map((member) => member.personExternalId) ?? [], [selectedRole?.members]);
   const visiblePeople = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('ru-RU');
     if (!term) return people;
     return people.filter((person) => `${person.name} ${person.email ?? ''}`.toLocaleLowerCase('ru-RU').includes(term));
   }, [people, search]);
+  const visibleCatalog = useMemo(() => {
+    const term = catalogSearch.trim().toLocaleLowerCase('ru-RU');
+    return term ? catalog.filter((role) => role.name.toLocaleLowerCase('ru-RU').includes(term)) : catalog;
+  }, [catalog, catalogSearch]);
   const dirty = Boolean(selectedRole) && (
     name.trim() !== selectedRole?.name || color !== selectedRole?.color ||
     memberIds.length !== selectedRoleMemberIds.length || memberIds.some((id) => !selectedRoleMemberIds.includes(id))
@@ -68,7 +73,7 @@ export function RoadmapRolesPage() {
     setName(selectedRole.name);
     setColor(selectedRole.color);
     setMemberIds(selectedRoleMemberIds);
-  }, [selectedRole]);
+  }, [selectedRole, selectedRoleMemberIds]);
 
   const refresh = async () => {
     await Promise.all([
@@ -110,37 +115,42 @@ export function RoadmapRolesPage() {
 
   return (
     <main className="min-h-0 flex-1 overflow-auto px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-5">
+      <div className="mx-auto max-w-[1500px] space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Роли</h1>
+          <div><h1 className="text-2xl font-semibold tracking-tight text-foreground">Роли</h1><p className="mt-1 text-sm text-muted-foreground">Каталог ролей и состав команды по проектам</p></div>
           <div className="flex flex-wrap items-center gap-2">
             {section === 'project' ? <AzureProjectPicker projects={projects} value={selectedProjectId} onChange={setSelectedProjectId} disabled={projectsQuery.isLoading} placeholder="Выбрать проект" /> : null}
             <Link href={routes.roadmapAdminUsers} className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"><Users className="h-4 w-4" />Пользователи</Link>
           </div>
         </div>
 
-        <nav className="flex w-fit gap-1 rounded-xl border border-border bg-card p-1" aria-label="Разделы ролей">
-          <button type="button" onClick={() => setSection('catalog')} aria-current={section === 'catalog' ? 'page' : undefined} className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${section === 'catalog' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>Создание ролей <span className="ml-1 opacity-75">{catalog.length}</span></button>
-          <button type="button" onClick={() => setSection('project')} aria-current={section === 'project' ? 'page' : undefined} className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${section === 'project' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>Наполнение проектов</button>
+        <nav className="flex w-fit gap-1 rounded-xl border border-border bg-muted/50 p-1" aria-label="Разделы ролей">
+          <button type="button" onClick={() => setSection('catalog')} aria-current={section === 'catalog' ? 'page' : undefined} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${section === 'catalog' ? 'bg-card text-foreground shadow-sm ring-1 ring-border/70' : 'text-muted-foreground hover:text-foreground'}`}><Layers3 className="h-4 w-4" />Каталог <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] tabular-nums">{catalog.length}</span></button>
+          <button type="button" onClick={() => setSection('project')} aria-current={section === 'project' ? 'page' : undefined} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${section === 'project' ? 'bg-card text-foreground shadow-sm ring-1 ring-border/70' : 'text-muted-foreground hover:text-foreground'}`}><FolderKanban className="h-4 w-4" />Роли проекта</button>
         </nav>
 
         {error ? <div role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error instanceof Error ? error.message : 'Не удалось сохранить изменения'}</div> : null}
 
         {section === 'catalog' ? <section className="overflow-hidden rounded-xl border border-border bg-card">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
-            <div><h2 className="text-base font-semibold text-foreground">Каталог ролей</h2><p className="mt-1 text-sm text-muted-foreground">Создайте роль один раз, затем добавляйте её в нужные проекты.</p></div>
-            <Button type="button" onClick={() => { setShowTemplateCreate((open) => !open); createTemplate.reset(); }} className="gap-2"><Plus className="h-4 w-4" />Создать роль</Button>
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-5 py-5 sm:px-6">
+            <div><div className="flex items-center gap-2"><h2 className="text-base font-semibold text-foreground">Каталог ролей</h2><span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">{catalog.length}</span></div><p className="mt-1 text-sm text-muted-foreground">Создайте роль один раз и добавляйте её в проекты.</p></div>
+            <Button type="button" onClick={() => { setShowTemplateCreate((open) => !open); createTemplate.reset(); }} className="h-10 gap-2 px-4"><Plus className="h-4 w-4" />Создать роль</Button>
           </div>
-          {showTemplateCreate ? <form onSubmit={(event) => { event.preventDefault(); if (newTemplateName.trim()) createTemplate.mutate(); }} className="flex flex-wrap items-end gap-2 border-b border-border p-4">
-            <label htmlFor="new-role-template" className="min-w-52 flex-1 text-sm font-medium text-foreground">Название роли
+          {showTemplateCreate ? <form onSubmit={(event) => { event.preventDefault(); if (newTemplateName.trim()) createTemplate.mutate(); }} className="flex flex-wrap items-end gap-3 border-b border-border bg-muted/20 p-4 sm:px-6">
+            <label htmlFor="new-role-template" className="min-w-52 flex-1 text-sm font-medium text-foreground">Новая роль
               <input id="new-role-template" autoFocus value={newTemplateName} onChange={(event) => setNewTemplateName(event.target.value)} placeholder="Например, Аналитик" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm font-normal text-foreground outline-none focus:ring-2 focus:ring-primary/30" />
             </label>
             <Button type="button" variant="ghost" onClick={() => { setShowTemplateCreate(false); setNewTemplateName(''); }}><X className="h-4 w-4" />Отмена</Button>
             <Button type="submit" disabled={!newTemplateName.trim() || createTemplate.isPending}><Plus className="h-4 w-4" />{createTemplate.isPending ? 'Создание…' : 'Создать роль'}</Button>
           </form> : null}
-          {catalogQuery.isLoading ? <p className="px-4 py-8 text-sm text-muted-foreground">Загружаем каталог…</p> : catalog.length ? <div className="grid gap-2 p-4 sm:grid-cols-2 xl:grid-cols-3">
-            {catalog.map((template) => <div key={template.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-border/70 bg-background px-3 py-3"><ColorMark color={template.color} size="md" /><span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{template.name}</span>{template.isMock ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-amber-700 dark:text-amber-300">демо</span> : null}</div>)}
-          </div> : <div className="px-5 py-12 text-center"><ShieldCheck className="mx-auto h-8 w-8 text-muted-foreground/60" /><p className="mt-3 text-sm font-medium text-foreground">Каталог пока пуст</p><p className="mt-1 text-sm text-muted-foreground">Создайте первую роль — потом её можно будет добавить в любой проект.</p></div>}
+          {catalog.length > 4 ? <div className="border-b border-border px-5 py-3 sm:px-6"><label className="relative block max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input value={catalogSearch} onChange={(event) => setCatalogSearch(event.target.value)} placeholder="Найти роль" aria-label="Найти роль в каталоге" className="h-10 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20" /></label></div> : null}
+          {catalogQuery.isLoading ? <p className="px-5 py-8 text-sm text-muted-foreground sm:px-6">Загружаем каталог…</p> : catalog.length ? visibleCatalog.length ? <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3 2xl:grid-cols-4">
+            {visibleCatalog.map((template) => <div key={template.id} className="group flex min-h-[68px] min-w-0 items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 transition-colors hover:bg-muted/40" style={{ borderLeftWidth: 3, borderLeftColor: template.color }}>
+              <ColorMark color={template.color} size="md" />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{template.name}</span>
+              {template.isMock ? <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">демо</span> : null}
+            </div>)}
+          </div> : <div className="px-5 py-10 text-center text-sm text-muted-foreground">Роли по запросу «{catalogSearch}» не найдены.</div> : <div className="px-5 py-12 text-center"><ShieldCheck className="mx-auto h-8 w-8 text-muted-foreground/60" /><p className="mt-3 text-sm font-medium text-foreground">Каталог пока пуст</p><p className="mt-1 text-sm text-muted-foreground">Создайте первую роль, чтобы добавить её в проект.</p></div>}
         </section> : <>
           {selectedProject && !selectedProject.imported ? <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-4 text-sm text-foreground"><p className="font-medium">Сначала импортируйте проект в Roadmap</p><p className="mt-1 text-muted-foreground">Роли будут сохранены отдельно для проекта «{selectedProject.name}».</p><Link href={routes.roadmap} className="mt-3 inline-flex text-sm font-medium text-primary hover:underline">Открыть план проекта</Link></div> : null}
           {!selectedProject && !projectsQuery.isLoading ? <div className="rounded-xl border border-dashed border-border bg-card px-5 py-10 text-center"><p className="text-sm font-medium text-foreground">Нет проектов</p><p className="mt-1 text-sm text-muted-foreground">Импортируйте проект из Azure DevOps, чтобы добавить в него роли.</p><Link href={routes.roadmap} className="mt-3 inline-flex text-sm font-medium text-primary hover:underline">Перейти к планированию</Link></div> : null}
