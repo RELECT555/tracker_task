@@ -48,8 +48,7 @@ export function RoadmapIntegrationsPage() {
     <main className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-4xl space-y-6">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Администрирование Roadmap</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Интеграции</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Интеграции</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
             Подключайте источники проектов, work items и участников команды. Секреты доступны только API и не возвращаются в браузер.
           </p>

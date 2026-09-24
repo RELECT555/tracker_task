@@ -35,8 +35,7 @@ export function RoadmapAdminHomePage() {
           <div className="pointer-events-none absolute -right-14 -top-24 h-64 w-64 rounded-full bg-primary/[0.08] blur-3xl" />
           <div className="relative flex flex-wrap items-end justify-between gap-5">
             <div>
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary"><span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10"><FolderKanban className="h-3.5 w-3.5" /></span>Roadmap · Администрирование</div>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Центр управления</h1>
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Центр управления</h1>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">Подключение Azure DevOps, участники команды и роли проекта — всё в одном месте.</p>
             </div>
             <Link href={routes.roadmap} className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"><span className="h-2 w-2 rounded-full bg-primary" />Открыть план<ArrowRight className="h-4 w-4" /></Link>

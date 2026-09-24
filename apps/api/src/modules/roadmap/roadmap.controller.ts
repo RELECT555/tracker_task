@@ -1,13 +1,24 @@
 import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
-import { IsArray, IsDateString, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsDateString, IsNumber, IsOptional, IsString, Matches, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { RoadmapService } from './roadmap.service';
 
 class PeriodDto {
+  @IsOptional() @Matches(/^\d{4}-(0[1-9]|1[0-2])$/) monthKey?: string;
   @IsString() label!: string;
   @IsDateString() startsAt!: string;
   @IsDateString() endsAt!: string;
   @IsNumber() @Min(0) hours!: number;
+}
+
+class QuarterMonthDto {
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/) monthKey!: string;
+  @IsNumber() @Min(0) hours!: number;
+}
+
+class SaveQuarterAllocationDto {
+  @IsArray() @ArrayMinSize(3) @ArrayMaxSize(3) @ValidateNested({ each: true }) @Type(() => QuarterMonthDto)
+  months!: QuarterMonthDto[];
 }
 
 class SaveAllocationDto {
@@ -58,5 +69,10 @@ export class RoadmapController {
   @Put('allocations')
   saveAllocation(@Body() dto: SaveAllocationDto) {
     return this.roadmap.saveAllocation(dto);
+  }
+
+  @Put('allocations/:allocationId/quarters/:quarterKey')
+  saveAllocationQuarter(@Param('allocationId') allocationId: string, @Param('quarterKey') quarterKey: string, @Body() dto: SaveQuarterAllocationDto) {
+    return this.roadmap.saveAllocationQuarter(allocationId, quarterKey, dto.months);
   }
 }

@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
-import { Check, ChevronUp, GitBranch, LogIn, LogOut, Rows3, Settings2, Users } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useTheme } from 'next-themes';
+import { Check, ChevronUp, GitBranch, LogIn, LogOut, Monitor, Moon, PanelsTopLeft, Rows3, Settings2, Sun, Users } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { DEV_ACCOUNTS } from '@/features/auth/lib/dev-accounts';
@@ -56,8 +57,25 @@ function ProfileMenu({ mobile = false }: { mobile?: boolean }) {
 export function RoadmapFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user } = useAuth();
+  const { theme, setTheme } = useTheme();
+  const [themeMounted, setThemeMounted] = useState(false);
   const isAdmin = isAdminUser(user);
   const isPlanner = pathname === routes.roadmap;
+  useEffect(() => setThemeMounted(true), []);
+  const themeLabel = !themeMounted ? 'Системная' : theme === 'dark' ? 'Тёмная' : theme === 'light' ? 'Светлая' : 'Системная';
+  const ThemeIcon = !themeMounted ? Monitor : theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
+  const cycleTheme = () => {
+    const order = ['light', 'dark', 'system'] as const;
+    const index = order.indexOf((theme as (typeof order)[number]) ?? 'system');
+    setTheme(order[(index + 1) % order.length]);
+  };
+  const breadcrumbs = [
+    { label: 'Roadmap', href: routes.roadmap },
+    ...(pathname.startsWith(routes.roadmapAdminHome) ? [{ label: 'Администрирование', href: routes.roadmapAdminHome }] : []),
+    ...(pathname === routes.roadmapAdminUsers ? [{ label: 'Пользователи' }] : []),
+    ...(pathname === routes.roadmapAdminRoles ? [{ label: 'Роли' }] : []),
+    ...(pathname === routes.roadmapAdmin ? [{ label: 'Интеграции' }] : []),
+  ];
 
   return (
     <div className="flex h-screen overflow-hidden bg-sidebar dark:bg-background">
@@ -107,12 +125,25 @@ export function RoadmapFrame({ children }: { children: React.ReactNode }) {
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary md:hidden">
               <GitBranch className="h-5 w-5" strokeWidth={1.7} />
             </span>
-            <div>
-              <p className="text-sm font-semibold tracking-tight text-foreground">Roadmap</p>
-              <p className="hidden text-xs text-muted-foreground sm:block">Планирование проектов и загрузки команды</p>
-            </div>
+            <nav aria-label="Хлебные крошки" className="min-w-0 overflow-x-auto">
+              <ol className="flex items-center gap-2 whitespace-nowrap text-sm">
+                {breadcrumbs.map((crumb, index) => <li key={crumb.label} className="flex items-center gap-2">
+                  {index ? <span aria-hidden="true" className="text-muted-foreground/50">/</span> : null}
+                  {'href' in crumb ? <Link href={crumb.href} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined} className={index === breadcrumbs.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground transition-colors hover:text-foreground'}>{crumb.label}</Link> : <span aria-current="page" className="font-semibold text-foreground">{crumb.label}</span>}
+                </li>)}
+              </ol>
+            </nav>
           </div>
-          <ProfileMenu mobile />
+          <div className="flex shrink-0 items-center gap-2">
+            <Link href={routes.workspaces} title="Сменить рабочее пространство" aria-label="Сменить рабочее пространство" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-2.5 text-sm text-foreground transition-colors hover:bg-muted sm:px-3">
+              <PanelsTopLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Сменить пространство</span>
+            </Link>
+            <button type="button" onClick={cycleTheme} title={`Тема: ${themeLabel}`} aria-label={`Тема: ${themeLabel}. Нажмите, чтобы переключить`} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:bg-muted">
+              <ThemeIcon className="h-4 w-4" />
+            </button>
+            <ProfileMenu mobile />
+          </div>
         </header>
         {children}
       </div>

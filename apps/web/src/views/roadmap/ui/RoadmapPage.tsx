@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { AlertCircle, ArrowDownToLine, CalendarDays, Check, ChevronDown, ChevronRight, Clock3, Equal, FolderKanban, Pencil, Plus, RefreshCw, Search, Trash2, Users, X } from 'lucide-react';
+import { AlertCircle, ArrowDownToLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, Maximize2, Minimize2, Pencil, Plus, RefreshCw, Users, X } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
@@ -12,10 +12,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 import {
   roadmapApi,
   type AzureProject,
+  type RoadmapAllocation,
   type RoadmapPeriod,
   type RoadmapRole,
   type RoadmapWorkItem,
 } from '@/entities/roadmap/api/roadmapApi';
+import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
 
 function ErrorMessage({ error }: { error: unknown }) {
   if (!error) return null;
@@ -27,17 +29,190 @@ function ErrorMessage({ error }: { error: unknown }) {
   );
 }
 
-function periodDefaults(): RoadmapPeriod {
-  const start = new Date();
-  start.setDate(1);
-  const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
-  const iso = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  return {
-    label: start.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }),
-    startsAt: iso(start),
-    endsAt: iso(end),
-    hours: 0,
+type QuarterMonth = { monthKey: string; label: string; startsAt: string; endsAt: string };
+
+function quarterMonths(year: number, quarter: number): QuarterMonth[] {
+  return Array.from({ length: 3 }, (_, index) => {
+    const month = (quarter - 1) * 3 + index;
+    const first = new Date(Date.UTC(year, month, 1));
+    const last = new Date(Date.UTC(year, month + 1, 0));
+    const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+    return {
+      monthKey,
+      label: new Intl.DateTimeFormat('ru-RU', { month: 'long', timeZone: 'UTC' }).format(first),
+      startsAt: first.toISOString().slice(0, 10),
+      endsAt: last.toISOString().slice(0, 10),
+    };
+  });
+}
+
+function QuarterHoursCell({ hours, label, disabled, onSave }: {
+  hours: number;
+  label: string;
+  disabled: boolean;
+  onSave: (hours: number) => Promise<boolean>;
+}) {
+  const [draft, setDraft] = useState(hours ? String(hours) : '');
+  useEffect(() => setDraft(hours ? String(hours) : ''), [hours]);
+
+  const save = async () => {
+    const next = draft.trim() ? Number(draft) : 0;
+    if (!Number.isFinite(next) || next < 0 || Math.abs(next * 2 - Math.round(next * 2)) > 1e-8) {
+      setDraft(hours ? String(hours) : '');
+      return;
+    }
+    if (next !== hours && !(await onSave(next))) setDraft(hours ? String(hours) : '');
   };
+
+  return <input
+    type="number"
+    min="0"
+    step="0.5"
+    value={draft}
+    disabled={disabled}
+    aria-label={label}
+    title={label}
+    placeholder="—"
+    onChange={(event) => setDraft(event.target.value)}
+    onBlur={() => void save()}
+    onKeyDown={(event) => {
+      if (event.key === 'Enter') event.currentTarget.blur();
+      if (event.key === 'Escape') { setDraft(hours ? String(hours) : ''); event.currentTarget.blur(); }
+    }}
+    className="h-9 w-20 rounded-md border border-border/60 bg-background px-2 text-right text-sm tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 hover:border-border focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+  />;
+}
+
+function QuarterPlanningGrid({
+  epics,
+  features,
+  months,
+  saving,
+  focusMode,
+  expandedEpics,
+  onToggleEpic,
+  onSaveQuarter,
+}: {
+  epics: RoadmapWorkItem[];
+  features: RoadmapWorkItem[];
+  months: QuarterMonth[];
+  saving: boolean;
+  focusMode: boolean;
+  expandedEpics: Set<string>;
+  onToggleEpic: (epicId: string) => void;
+  onSaveQuarter: (allocation: RoadmapAllocation, values: { monthKey: string; hours: number }[]) => Promise<boolean>;
+}) {
+  const monthHours = (allocations: RoadmapAllocation[], monthKey: string) => allocations.reduce((sum, allocation) =>
+    sum + allocation.periods.reduce((inner, period) => inner + (period.monthKey === monthKey ? Number(period.hours) : 0), 0), 0);
+  const plannedHours = (allocation: RoadmapAllocation) => allocation.periods.reduce((sum, period) => sum + Number(period.hours), 0);
+  const quarterHours = (allocations: RoadmapAllocation[]) => months.reduce((sum, month) => sum + monthHours(allocations, month.monthKey), 0);
+  const assignments = [...epics.flatMap((epic) => epic.allocations), ...features.flatMap((feature) => feature.allocations)];
+  const legacyPeriods = assignments.flatMap((allocation) => allocation.periods.filter((period) => !period.monthKey));
+  const legacyHours = legacyPeriods.reduce((sum, period) => sum + Number(period.hours), 0);
+
+  const renderSummary = (item: RoadmapWorkItem, itemAllocations: RoadmapAllocation[], epic = false) => (
+    <tr key={`summary-${item.id}`} className={`border-t border-border ${epic ? 'bg-muted/50' : 'bg-muted/20'}`}>
+      <th scope="row" className={`px-4 py-2.5 text-left text-sm font-semibold text-foreground ${epic ? '' : 'pl-9'}`}>
+        {epic ? <button type="button" aria-expanded={expandedEpics.has(item.id)} aria-label={`${expandedEpics.has(item.id) ? 'Свернуть' : 'Развернуть'} эпик ${item.title}`} onClick={() => onToggleEpic(item.id)} className="mr-1 inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted"><ChevronRight className={`h-4 w-4 transition-transform ${expandedEpics.has(item.id) ? 'rotate-90' : ''}`} /></button> : null}{item.title}
+        <span className="ml-2 text-[10px] font-normal text-muted-foreground">{epic ? 'Эпик' : 'Фича'} · {itemAllocations.length} назнач.</span>
+      </th>
+      {months.map((month) => <td key={month.monthKey} className="px-2 py-2.5 text-right text-sm tabular-nums text-muted-foreground">{monthHours(itemAllocations, month.monthKey) || '—'}</td>)}
+      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-semibold tabular-nums text-foreground">{quarterHours(itemAllocations) || '—'}</td>
+      <td className="px-3 py-2.5 text-right text-sm tabular-nums text-muted-foreground">{itemAllocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours) - plannedHours(allocation), 0) || '—'}</td>
+    </tr>
+  );
+
+  const renderAssignment = (item: RoadmapWorkItem, allocation: RoadmapAllocation, directEpic = false) => {
+    const allPlanned = plannedHours(allocation);
+    const remaining = Number(allocation.estimatedHours) - allPlanned;
+    const monthsPlanned = quarterHours([allocation]);
+    const distributeEvenly = () => {
+      const perMonth = Math.round((monthsPlanned / 3) * 2) / 2;
+      const values = months.map((month, index) => ({
+        monthKey: month.monthKey,
+        hours: index < 2 ? perMonth : Math.round((monthsPlanned - perMonth * 2) * 2) / 2,
+      }));
+      void onSaveQuarter(allocation, values);
+    };
+
+    return <tr key={`allocation-${allocation.id}`} className="border-t border-border/60 hover:bg-muted/10">
+      <th scope="row" className="min-w-72 px-4 py-2 text-left font-normal">
+        <div className="flex min-w-0 items-center gap-2 pl-8">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: allocation.role.color }} />
+          <span className="min-w-0 flex-1 truncate text-xs text-foreground">{directEpic ? 'На эпике · ' : ''}{allocation.role.name} · {allocation.personName}</span>
+          {monthsPlanned > 0 ? <button type="button" disabled={saving} onClick={distributeEvenly} className="shrink-0 rounded px-1.5 py-1 text-[10px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50">Ровно</button> : null}
+        </div>
+        {allocation.periods.some((period) => !period.monthKey) ? <p className="pl-10 pt-1 text-[10px] text-amber-700 dark:text-amber-300" title={allocation.periods.filter((period) => !period.monthKey).map((period) => `${period.label}: ${period.startsAt.slice(0, 10)}–${period.endsAt.slice(0, 10)}, ${Number(period.hours)} ч`).join('\n')}>Старые периоды: {allocation.periods.filter((period) => !period.monthKey).reduce((sum, period) => sum + Number(period.hours), 0)} ч</p> : null}
+      </th>
+      {months.map((month) => <td key={month.monthKey} className="px-2 py-1.5 text-right">
+        <QuarterHoursCell
+          hours={Number(allocation.periods.find((period) => period.monthKey === month.monthKey)?.hours ?? 0)}
+          label={`${item.title} · ${allocation.role.name} · ${allocation.personName} · ${month.label}`}
+          disabled={saving}
+          onSave={async (hours) => {
+            const values = months.map((entry) => ({
+              monthKey: entry.monthKey,
+              hours: entry.monthKey === month.monthKey
+                ? hours
+                : Number(allocation.periods.find((period) => period.monthKey === entry.monthKey)?.hours ?? 0),
+            }));
+            return onSaveQuarter(allocation, values);
+          }}
+        />
+      </td>)}
+      <td className="whitespace-nowrap px-3 py-2 text-right text-sm font-medium tabular-nums text-foreground">{monthsPlanned || '—'} ч</td>
+      <td className={`whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums ${remaining < 0 ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>{remaining < 0 ? `Перепланировано ${Math.abs(remaining)} ч` : `${remaining} ч`}</td>
+    </tr>;
+  };
+
+  const renderFeature = (feature: RoadmapWorkItem) => <Fragment key={`feature-${feature.id}`}>
+    {renderSummary(feature, feature.allocations)}
+    {feature.allocations.map((allocation) => renderAssignment(feature, allocation))}
+  </Fragment>;
+
+  const totalAllocations = assignments;
+  const totalEstimate = totalAllocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0);
+  const totalPlanned = totalAllocations.reduce((sum, allocation) => sum + plannedHours(allocation), 0);
+  const totalQuarter = quarterHours(totalAllocations);
+
+  return <div className={focusMode ? 'flex min-h-0 flex-1 flex-col gap-3' : 'space-y-3'}>
+    {legacyPeriods.length ? <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-800 dark:text-amber-200">Сохранены старые периоды без месячной детализации: {legacyHours} ч. Они не распределены по месяцам, но учитываются в проверке общей оценки.</div> : null}
+    {saving ? <p role="status" className="text-xs text-muted-foreground">Сохраняем план…</p> : null}
+    <div className={focusMode ? 'min-h-0 flex-1 overflow-auto' : 'overflow-auto'}>
+      <table className="w-full min-w-[780px] border-collapse text-left">
+        <thead className="sticky top-0 z-[1] bg-muted/90 backdrop-blur">
+          <tr className="border-b border-border text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <th scope="col" className="min-w-72 px-4 py-3">Эпик / фича · роль · участник</th>
+            {months.map((month) => <th key={month.monthKey} scope="col" className="min-w-28 px-3 py-3 text-right">{month.label} · ч</th>)}
+            <th scope="col" className="min-w-24 px-3 py-3 text-right">Квартал · ч</th>
+            <th scope="col" className="min-w-36 px-3 py-3 text-right">Не распределено · ч</th>
+          </tr>
+        </thead>
+        <tbody>
+          {epics.map((epic) => {
+            const children = features.filter((feature) => feature.parentExternalId === epic.externalId);
+            const epicAllocations = [...epic.allocations, ...children.flatMap((feature) => feature.allocations)];
+            return <Fragment key={`epic-${epic.id}`}>
+              {renderSummary(epic, epicAllocations, true)}
+              {expandedEpics.has(epic.id) ? <>
+                {epic.allocations.map((allocation) => renderAssignment(epic, allocation, true))}
+                {children.map(renderFeature)}
+              </> : null}
+            </Fragment>;
+          })}
+          {features.filter((feature) => !feature.parentExternalId || !epics.some((epic) => epic.externalId === feature.parentExternalId)).map(renderFeature)}
+        </tbody>
+        <tfoot className="border-t-2 border-border bg-muted/60">
+          <tr className="text-sm font-semibold text-foreground">
+            <th scope="row" className="px-4 py-3">Итого по проекту</th>
+            {months.map((month) => <td key={month.monthKey} className="px-3 py-3 text-right tabular-nums">{monthHours(totalAllocations, month.monthKey)} ч</td>)}
+            <td className="px-3 py-3 text-right tabular-nums">{totalQuarter} ч</td>
+            <td className="px-3 py-3 text-right text-xs tabular-nums text-muted-foreground">{totalEstimate - totalPlanned} ч</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>;
 }
 
 function AllocationEditor({
@@ -74,7 +249,6 @@ function AllocationEditor({
   const [open, setOpen] = useState(false);
   const [personId, setPersonId] = useState('');
   const [hours, setHours] = useState('');
-  const [periods, setPeriods] = useState<RoadmapPeriod[]>([]);
   const selectedPerson = people.find((person) => person.id === personId);
 
   const submit = (event: React.FormEvent) => {
@@ -88,7 +262,8 @@ function AllocationEditor({
       personName: selectedPerson.name,
       personEmail: selectedPerson.email,
       estimatedHours: Number(hours) || 0,
-      periods: periods.map((period) => ({
+      periods: (initial?.periods ?? []).map((period) => ({
+        monthKey: period.monthKey,
         label: period.label,
         startsAt: period.startsAt,
         endsAt: period.endsAt,
@@ -97,13 +272,11 @@ function AllocationEditor({
     });
     setOpen(false);
     setHours('');
-    setPeriods([]);
   };
 
   const startEditing = () => {
     setPersonId(initial?.personExternalId ?? defaultPersonExternalId ?? '');
     setHours(initial ? String(initial.estimatedHours) : '');
-    setPeriods(initial?.periods ?? []);
   };
 
   return (
@@ -148,25 +321,6 @@ function AllocationEditor({
                 <span className="absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">часов</span>
               </div>
             </label>
-            <section className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm font-medium">План по периодам</p><p className="text-xs text-muted-foreground">Необязательно</p></div>
-                <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setPeriods((all) => [...all, periodDefaults()])}><CalendarDays className="h-3.5 w-3.5" />Добавить</Button>
-              </div>
-              {periods.length ? periods.map((period, index) => (
-                <div key={index} className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
-                  <div className="flex gap-2">
-                    <input aria-label="Название периода" value={period.label} onChange={(event) => setPeriods((all) => all.map((entry, i) => i === index ? { ...entry, label: event.target.value } : entry))} className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2.5 text-sm" placeholder="Название периода" />
-                    <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive" aria-label="Удалить период" onClick={() => setPeriods((all) => all.filter((_, i) => i !== index))}><Trash2 className="h-4 w-4" /></Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="space-y-1 text-[11px] text-muted-foreground">С даты<input aria-label="Начало периода" type="date" value={period.startsAt.slice(0, 10)} onChange={(event) => setPeriods((all) => all.map((entry, i) => i === index ? { ...entry, startsAt: event.target.value } : entry))} className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-2 text-xs text-foreground" /></label>
-                    <label className="space-y-1 text-[11px] text-muted-foreground">По дату<input aria-label="Конец периода" type="date" value={period.endsAt.slice(0, 10)} onChange={(event) => setPeriods((all) => all.map((entry, i) => i === index ? { ...entry, endsAt: event.target.value } : entry))} className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-2 text-xs text-foreground" /></label>
-                  </div>
-                  <label className="block space-y-1 text-[11px] text-muted-foreground">Часов за период<input type="number" min="0" step="0.5" value={period.hours} onChange={(event) => setPeriods((all) => all.map((entry, i) => i === index ? { ...entry, hours: Number(event.target.value) } : entry))} className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm text-foreground" /></label>
-                </div>
-              )) : <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">Добавьте периоды, если хотите распределить оценку по времени.</p>}
-            </section>
           </div>
           <div className="flex justify-end gap-2 border-t border-border bg-muted/20 px-4 py-3">
             <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>Отмена</Button>
@@ -185,11 +339,28 @@ export function RoadmapPage() {
   const [selectedAzureProjectId, setSelectedAzureProjectId] = useState('');
   const [roadmapProjectId, setRoadmapProjectId] = useState('');
   const [view, setView] = useState<'roles' | 'periods'>('roles');
+  const [focusMode, setFocusMode] = useState(false);
+  const [quarterSelection, setQuarterSelection] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), quarter: Math.floor(now.getMonth() / 3) + 1 };
+  });
   const [expandedEpics, setExpandedEpics] = useState<Set<string>>(() => new Set());
   const [rolePickerOpen, setRolePickerOpen] = useState(false);
   const [defaultRolePickerId, setDefaultRolePickerId] = useState<string | null>(null);
-  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
-  const [projectSearch, setProjectSearch] = useState('');
+
+  useEffect(() => {
+    if (!focusMode) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFocusMode(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [focusMode]);
 
   const connectionQuery = useQuery({ queryKey: ['roadmap', 'connection'], queryFn: roadmapApi.connection });
   const configured = connectionQuery.data?.configured ?? false;
@@ -200,7 +371,6 @@ export function RoadmapPage() {
   const people = peopleQuery.data?.data ?? [];
   const usingCachedProjects = projectsQuery.data?.source === 'cache';
   const selectedProject = projects.find((project) => project.id === selectedAzureProjectId);
-  const filteredProjects = projects.filter((project) => project.name.toLocaleLowerCase('ru-RU').includes(projectSearch.trim().toLocaleLowerCase('ru-RU')));
 
   useEffect(() => {
     if (selectedAzureProjectId || !projects.length) return;
@@ -236,6 +406,10 @@ export function RoadmapPage() {
     mutationFn: roadmapApi.saveAllocation,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
   });
+  const saveQuarterMutation = useMutation({
+    mutationFn: ({ allocationId, quarterKey, months }: { allocationId: string; quarterKey: string; months: { monthKey: string; hours: number }[] }) => roadmapApi.saveAllocationQuarter(allocationId, quarterKey, months),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
+  });
   const addRoleMutation = useMutation({
     mutationFn: (templateId: string) => roadmapApi.addRoleFromCatalog(roadmapProjectId, templateId),
     onSuccess: async () => {
@@ -263,6 +437,26 @@ export function RoadmapPage() {
     ...(plan?.roles.flatMap((role) => role.defaultPersonExternalId ? [role.defaultPersonExternalId] : []) ?? []),
   ]).size;
   const totalHours = plan?.workItems.reduce((sum, item) => sum + item.allocations.reduce((inner, allocation) => inner + Number(allocation.estimatedHours), 0), 0) ?? 0;
+  const currentQuarterKey = `${quarterSelection.year}-Q${quarterSelection.quarter}`;
+  const currentQuarterMonths = quarterMonths(quarterSelection.year, quarterSelection.quarter);
+  const allEpicsExpanded = epics.length > 0 && epics.every((epic) => expandedEpics.has(epic.id));
+  const quarterTotalHours = plannedItems
+    .filter((item) => item.type.toLowerCase() === 'feature' || item.type.toLowerCase() === 'epic')
+    .flatMap((item) => item.allocations)
+    .reduce((sum, allocation) => sum + allocation.periods.reduce((inner, period) => inner + (currentQuarterMonths.some((month) => month.monthKey === period.monthKey) ? Number(period.hours) : 0), 0), 0);
+
+  const shiftQuarter = (offset: number) => setQuarterSelection((current) => {
+    const date = new Date(current.year, (current.quarter - 1) * 3 + offset * 3, 1);
+    return { year: date.getFullYear(), quarter: Math.floor(date.getMonth() / 3) + 1 };
+  });
+  const saveQuarter = async (allocation: RoadmapAllocation, months: { monthKey: string; hours: number }[]) => {
+    try {
+      await saveQuarterMutation.mutateAsync({ allocationId: allocation.id, quarterKey: currentQuarterKey, months });
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   function splitEvenly(workItemId: string, allocations: RoadmapWorkItem['allocations']) {
     if (allocations.length < 2) return;
@@ -273,13 +467,13 @@ export function RoadmapPage() {
         : roundedShare;
     };
     const totalEstimatedHours = allocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0);
-    const periodTotals = new Map<string, { label: string; startsAt: string; endsAt: string; hours: number }>();
+    const periodTotals = new Map<string, { monthKey?: string; label: string; startsAt: string; endsAt: string; hours: number }>();
     allocations.flatMap((allocation) => allocation.periods).forEach((period) => {
-      const key = `${period.label}|${period.startsAt.slice(0, 10)}|${period.endsAt.slice(0, 10)}`;
+      const key = period.monthKey ?? `${period.label}|${period.startsAt.slice(0, 10)}|${period.endsAt.slice(0, 10)}`;
       const existing = periodTotals.get(key);
       periodTotals.set(key, existing
         ? { ...existing, hours: existing.hours + Number(period.hours) }
-        : { label: period.label, startsAt: period.startsAt, endsAt: period.endsAt, hours: Number(period.hours) });
+        : { monthKey: period.monthKey ?? undefined, label: period.label, startsAt: period.startsAt, endsAt: period.endsAt, hours: Number(period.hours) });
     });
     splitMutation.mutate(allocations.map((allocation, index) => ({
       workItemId,
@@ -289,6 +483,7 @@ export function RoadmapPage() {
       personEmail: allocation.personEmail,
       estimatedHours: share(totalEstimatedHours, index),
       periods: [...periodTotals.values()].map((period) => ({
+        monthKey: period.monthKey,
         label: period.label,
         startsAt: period.startsAt,
         endsAt: period.endsAt,
@@ -382,7 +577,7 @@ export function RoadmapPage() {
     );
   }
 
-  const errors = [connectionQuery.error, projectsQuery.error, peopleQuery.error, planQuery.error, syncMutation.error, saveMutation.error, splitMutation.error, addRoleMutation.error, setRoleDefaultMutation.error, roleCatalogQuery.error];
+  const errors = [connectionQuery.error, projectsQuery.error, peopleQuery.error, planQuery.error, syncMutation.error, saveMutation.error, saveQuarterMutation.error, splitMutation.error, addRoleMutation.error, setRoleDefaultMutation.error, roleCatalogQuery.error];
 
   return (
     <main className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8">
@@ -393,34 +588,13 @@ export function RoadmapPage() {
               <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">План проекта</h1>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Popover open={projectPickerOpen} onOpenChange={setProjectPickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button type="button" variant="outline" className="h-10 w-[min(360px,calc(100vw-2rem))] justify-between px-3 text-left" disabled={!projects.length} aria-label="Выбрать проект Azure DevOps">
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"><FolderKanban className="h-3.5 w-3.5" /></span>
-                      <span className="min-w-0"><span className="block truncate text-sm font-medium">{selectedProject?.name ?? (configured ? 'Выбрать проект Azure DevOps' : 'Выбрать локальный проект')}</span><span className="block text-[10px] font-normal text-muted-foreground">{selectedProject ? selectedProject.imported ? 'План проекта' : 'Доступен для импорта' : 'Проекты Azure DevOps'}</span></span>
-                    </span>
-                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="end" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-xl p-0">
-                  <div className="border-b border-border p-2.5">
-                    <label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input autoFocus value={projectSearch} onChange={(event) => setProjectSearch(event.target.value)} placeholder="Найти проект…" className="h-9 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-primary/30" /></label>
-                  </div>
-                  <div className="max-h-80 overflow-y-auto p-1.5">
-                    {filteredProjects.length ? <>
-                      {filteredProjects.some((project) => project.imported) ? <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">В Roadmap</p> : null}
-                      {filteredProjects.filter((project) => project.imported).map((project) => <button key={project.id} type="button" onClick={() => { setSelectedAzureProjectId(project.id); setProjectPickerOpen(false); setProjectSearch(''); }} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted ${project.id === selectedAzureProjectId ? 'bg-primary/5' : ''}`}>
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600"><Check className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-foreground">{project.name}</span><span className="block text-[10px] text-muted-foreground">Импортирован · план готов</span></span>{project.id === selectedAzureProjectId ? <Check className="h-4 w-4 shrink-0 text-primary" /> : null}
-                      </button>)}
-                      {filteredProjects.some((project) => !project.imported) ? <p className="px-2.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Доступны для импорта</p> : null}
-                      {filteredProjects.filter((project) => !project.imported).map((project) => <button key={project.id} type="button" onClick={() => { setSelectedAzureProjectId(project.id); setProjectPickerOpen(false); setProjectSearch(''); }} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted ${project.id === selectedAzureProjectId ? 'bg-primary/5' : ''}`}>
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><ArrowDownToLine className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-foreground">{project.name}</span><span className="block text-[10px] text-muted-foreground">Не импортирован</span></span>{project.id === selectedAzureProjectId ? <Check className="h-4 w-4 shrink-0 text-primary" /> : null}
-                      </button>)}
-                    </> : <div className="px-3 py-8 text-center"><Search className="mx-auto h-5 w-5 text-muted-foreground/60" /><p className="mt-2 text-sm font-medium text-foreground">Проект не найден</p><p className="mt-1 text-xs text-muted-foreground">Попробуйте изменить запрос.</p></div>}
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <AzureProjectPicker
+                projects={projects}
+                value={selectedAzureProjectId}
+                onChange={setSelectedAzureProjectId}
+                disabled={projectsQuery.isLoading}
+                placeholder={configured ? 'Выбрать проект Azure DevOps' : 'Выбрать локальный проект'}
+              />
               <Button
                 onClick={() => selectedProject && syncMutation.mutate(selectedProject)}
                 disabled={!selectedProject || syncMutation.isPending || usingCachedProjects}
@@ -463,8 +637,8 @@ export function RoadmapPage() {
                   <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{plan.workItems.length}</p>
                 </div>
                 <div className="rounded-xl border border-border bg-card px-4 py-3">
-                  <p className="text-xs text-muted-foreground">Общая оценка</p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{totalHours} <span className="text-sm font-normal text-muted-foreground">часов</span></p>
+                  <p className="text-xs text-muted-foreground">{view === 'periods' ? `План Q${quarterSelection.quarter}` : 'Общая оценка'}</p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{view === 'periods' ? quarterTotalHours : totalHours} <span className="text-sm font-normal text-muted-foreground">часов</span></p>
                 </div>
                 <div className="rounded-xl border border-border bg-card px-4 py-3">
                   <p className="text-xs text-muted-foreground">Участники в плане</p>
@@ -472,7 +646,15 @@ export function RoadmapPage() {
                 </div>
               </section>
 
-              <section className="overflow-hidden rounded-xl border border-border bg-card">
+              {focusMode ? <div className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm" aria-hidden="true" /> : null}
+              <section
+                role={focusMode ? 'dialog' : undefined}
+                aria-modal={focusMode ? true : undefined}
+                aria-label={focusMode ? 'Режим заполнения плана' : undefined}
+                className={focusMode
+                  ? 'fixed inset-3 z-50 flex h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl'
+                  : 'overflow-hidden rounded-xl border border-border bg-card'}
+              >
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
                   <div>
                     <h2 className="font-medium text-foreground">{plan.name}</h2>
@@ -480,12 +662,31 @@ export function RoadmapPage() {
                       {plan.syncedAt ? `Синхронизировано ${new Date(plan.syncedAt).toLocaleString('ru-RU')}` : 'Данные ещё не синхронизированы'}
                     </p>
                   </div>
-                  {canConfigure ? <Link href={routes.roadmapAdminRoles} className="inline-flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm font-medium text-foreground hover:bg-muted"><Users className="h-4 w-4" />Управление ролями</Link> : null}
+                  <div className="flex items-center gap-2">
+                    {canConfigure ? <Link href={routes.roadmapAdminRoles} className="inline-flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm font-medium text-foreground hover:bg-muted"><Users className="h-4 w-4" />Управление ролями</Link> : null}
+                    <Button type="button" variant={focusMode ? 'secondary' : 'outline'} size="sm" onClick={() => {
+                      if (!focusMode && view === 'periods') setExpandedEpics(new Set(epics.map((epic) => epic.id)));
+                      setFocusMode((current) => !current);
+                    }} className="h-9 gap-2" aria-label={focusMode ? 'Выйти из режима фокуса' : 'Включить режим фокуса'}>
+                      {focusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                      {focusMode ? 'Выйти' : 'Фокус'}
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-1 border-b border-border px-4 py-2">
-                  <Button type="button" size="sm" variant={view === 'roles' ? 'secondary' : 'ghost'} onClick={() => setView('roles')} className="h-8 gap-1.5"><Users className="h-3.5 w-3.5" />По ролям</Button>
-                  <Button type="button" size="sm" variant={view === 'periods' ? 'secondary' : 'ghost'} onClick={() => setView('periods')} className="h-8 gap-1.5"><Clock3 className="h-3.5 w-3.5" />По периодам</Button>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
+                  <div className="flex items-center gap-1">
+                    <Button type="button" size="sm" variant={view === 'roles' ? 'secondary' : 'ghost'} onClick={() => setView('roles')} className="h-8 gap-1.5"><Users className="h-3.5 w-3.5" />По ролям</Button>
+                    <Button type="button" size="sm" variant={view === 'periods' ? 'secondary' : 'ghost'} onClick={() => setView('periods')} className="h-8 gap-1.5"><Clock3 className="h-3.5 w-3.5" />По периодам</Button>
+                  </div>
+                  {view === 'periods' ? <div className="flex flex-wrap items-center gap-2">
+                    {focusMode ? <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setExpandedEpics(allEpicsExpanded ? new Set() : new Set(epics.map((epic) => epic.id)))}>{allEpicsExpanded ? 'Свернуть всё' : 'Развернуть всё'}</Button> : null}
+                    <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Предыдущий квартал" onClick={() => shiftQuarter(-1)}><ChevronLeft className="h-4 w-4" /></Button>
+                    <span className="min-w-20 text-center text-xs font-semibold tabular-nums">Q{quarterSelection.quarter} {quarterSelection.year}</span>
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Следующий квартал" onClick={() => shiftQuarter(1)}><ChevronRight className="h-4 w-4" /></Button>
+                    </div>
+                  </div> : null}
                 </div>
 
                 {roles.length && !people.length && configured ? <div className="border-b border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">Чтобы назначать людей на роли, сначала синхронизируйте пользователей Azure DevOps в администрировании Roadmap.</div> : null}
@@ -493,7 +694,7 @@ export function RoadmapPage() {
                 {!plan.workItems.length ? (
                   <div className="px-6 py-12 text-center text-sm text-muted-foreground">В проекте пока нет эпиков или фич. Синхронизируйте его с Azure DevOps.</div>
                 ) : (
-                  <div className="overflow-auto">
+                  <div className={focusMode ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'overflow-auto'}>
                     {!roles.length ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/20 px-4 py-3">
                         <div>
@@ -503,7 +704,21 @@ export function RoadmapPage() {
                         {canConfigure ? <Link href={routes.roadmapAdminRoles} className="inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground hover:bg-muted"><Users className="h-4 w-4" />Настроить роли</Link> : null}
                       </div>
                     ) : null}
-                    <table className="w-full min-w-max border-collapse text-left">
+                    {view === 'periods' ? <QuarterPlanningGrid
+                      epics={epics}
+                      features={features}
+                      months={currentQuarterMonths}
+                      saving={saveQuarterMutation.isPending}
+                      focusMode={focusMode}
+                      expandedEpics={expandedEpics}
+                      onToggleEpic={(epicId) => setExpandedEpics((current) => {
+                        const next = new Set(current);
+                        if (next.has(epicId)) next.delete(epicId);
+                        else next.add(epicId);
+                        return next;
+                      })}
+                      onSaveQuarter={saveQuarter}
+                    /> : <div className={focusMode ? 'min-h-0 flex-1 overflow-auto' : undefined}><table className="w-full min-w-max border-collapse text-left">
                       <thead className="sticky top-0 z-[1] bg-muted/80">
                         <tr className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                           <th className="min-w-72 px-4 py-2.5"><div className="flex items-center justify-between gap-3"><span>Эпик / фича</span>{canConfigure ? <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
@@ -563,7 +778,7 @@ export function RoadmapPage() {
                             .reduce((sum, allocation) => sum + allocation.periods.reduce((periodSum, period) => periodSum + Number(period.hours), 0), 0)} ч</td>
                         </tr>
                       </tfoot>
-                    </table>
+                    </table></div>}
                   </div>
                 )}
               </section>

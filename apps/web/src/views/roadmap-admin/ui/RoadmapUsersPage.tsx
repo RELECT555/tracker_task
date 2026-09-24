@@ -1,11 +1,9 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, ArrowLeft, Eye, EyeOff, RefreshCw, Users } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, RefreshCw, Users } from 'lucide-react';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
-import { routes } from '@/shared/config/routes';
 import { Button } from '@/shared/ui/button';
 
 export function RoadmapUsersPage() {
@@ -31,9 +29,8 @@ export function RoadmapUsersPage() {
   return (
     <main className="min-h-0 flex-1 overflow-auto px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl space-y-6">
-        <Link href={routes.roadmapAdminHome} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" />Администрирование</Link>
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Администрирование Roadmap</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Пользователи</h1><p className="mt-2 text-sm text-muted-foreground">Участники Azure DevOps, которых можно назначать на роли.</p></div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Пользователи</h1>
           <Button onClick={() => sync.mutate()} disabled={sync.isPending} className="gap-2"><RefreshCw className={`h-4 w-4 ${sync.isPending ? 'animate-spin' : ''}`} />{sync.isPending ? 'Синхронизация…' : 'Синхронизировать'}</Button>
         </div>
         {error ? <div role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive"><AlertCircle className="mt-0.5 h-4 w-4" />{error instanceof Error ? error.message : 'Не удалось загрузить пользователей'}</div> : null}

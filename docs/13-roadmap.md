@@ -22,8 +22,10 @@ Set `ROADMAP_ENCRYPTION_KEY` to a stable server secret for encrypting saved cred
 - Choose a default person for a project role in its table heading. This person appears on work items until a work item has its own assignment; work item changes stay local to that Feature or Epic.
 - Feature cells offer only active people assigned to that project's role. Synchronize the people directory from the **Users** card after connecting Azure DevOps.
 - User synchronization ignores deleted identities, profiles without an email/principal name, and known Azure DevOps service identities; excluded accounts are deactivated and hidden unless an administrator chooses to show inactive users.
-- Every person assignment has an overall hour estimate and can have one or more dated period estimates.
-- The overall estimate and period estimates are shown separately; editing period values does not change the overall estimate.
+- Every person assignment has an overall hour estimate and monthly plan values keyed by calendar month.
+- The period view selects a quarter and shows its three months as shared project-wide buckets. Quarter navigation only filters the plan; it does not delete values in other months.
+- Monthly values are non-negative half-hour increments. Their sum, including preserved legacy period estimates, cannot exceed the assignment's overall estimate. The remaining estimate is shown separately.
+- Older custom date ranges are preserved and shown separately; the system does not automatically split their hours between months.
 
 Use **Synchronize** on an imported project to refresh work item names, types, states, and parent links. Existing planning assignments remain attached to the matching Azure DevOps work item IDs.
 

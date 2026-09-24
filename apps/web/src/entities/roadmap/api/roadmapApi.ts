@@ -32,6 +32,7 @@ export interface RoadmapPerson {
 
 export interface RoadmapPeriod {
   id?: string;
+  monthKey?: string | null;
   label: string;
   startsAt: string;
   endsAt: string;
@@ -148,5 +149,10 @@ export const roadmapApi = {
     apiFetch<RoadmapAllocation>('/roadmap/allocations', {
       method: 'PUT',
       body: JSON.stringify(input),
+    }),
+  saveAllocationQuarter: (allocationId: string, quarterKey: string, months: { monthKey: string; hours: number }[]) =>
+    apiFetch<RoadmapPeriod[]>(`/roadmap/allocations/${encodeURIComponent(allocationId)}/quarters/${encodeURIComponent(quarterKey)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ months }),
     }),
 };

@@ -394,8 +394,26 @@ export class RoadmapService {
     personName: string;
     personEmail?: string;
     estimatedHours: number;
-    periods: { label: string; startsAt: string; endsAt: string; hours: number }[];
+    periods: { monthKey?: string; label: string; startsAt: string; endsAt: string; hours: number }[];
   }) {
+    const monthKeys = dto.periods.flatMap((period) => period.monthKey ? [period.monthKey] : []);
+    if (new Set(monthKeys).size !== monthKeys.length) throw new BadRequestException('Only one plan value is allowed per allocation and month');
+    for (const period of dto.periods) {
+      if (period.monthKey) {
+        const [year, month] = period.monthKey.split('-').map(Number);
+        const monthStart = `${period.monthKey}-01`;
+        const monthEnd = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+        if (period.startsAt.slice(0, 10) !== monthStart || period.endsAt.slice(0, 10) !== monthEnd) {
+          throw new BadRequestException('A monthly plan must cover exactly one calendar month');
+        }
+        if (Math.abs(period.hours * 2 - Math.round(period.hours * 2)) > 1e-8) {
+          throw new BadRequestException('Monthly plan values must use half-hour increments');
+        }
+      }
+    }
+    if (dto.periods.reduce((sum, period) => sum + period.hours, 0) > dto.estimatedHours + 1e-8) {
+      throw new BadRequestException('Planned hours cannot exceed the allocation estimate');
+    }
     const workItem = await this.prisma.roadmapWorkItem.findUnique({
       where: { id: dto.workItemId },
       select: { id: true, projectId: true },
@@ -449,6 +467,7 @@ export class RoadmapService {
         this.prisma.roadmapPeriodAllocation.create({
           data: {
             allocationId: allocation.id,
+            monthKey: period.monthKey ?? null,
             label: period.label,
             startsAt: new Date(period.startsAt),
             endsAt: new Date(period.endsAt),
@@ -458,6 +477,67 @@ export class RoadmapService {
       ),
     ]);
     return { ...allocation, periods: dto.periods };
+  }
+
+  async saveAllocationQuarter(allocationId: string, quarterKey: string, months: { monthKey: string; hours: number }[]) {
+    const match = /^(\d{4})-Q([1-4])$/.exec(quarterKey);
+    if (!match) throw new BadRequestException('Quarter must use YYYY-Qn format');
+    const year = Number(match[1]);
+    const quarter = Number(match[2]);
+    const expectedMonths = Array.from({ length: 3 }, (_, index) => `${year}-${String((quarter - 1) * 3 + index + 1).padStart(2, '0')}`);
+    if (months.length !== 3 || new Set(months.map((month) => month.monthKey)).size !== 3 || expectedMonths.some((key) => !months.some((month) => month.monthKey === key))) {
+      throw new BadRequestException('A quarterly plan must include each of its three calendar months exactly once');
+    }
+    if (months.some((month) => !Number.isFinite(month.hours) || month.hours < 0 || Math.abs(month.hours * 2 - Math.round(month.hours * 2)) > 1e-8)) {
+      throw new BadRequestException('Monthly plan values must be non-negative half-hour increments');
+    }
+
+    const normalized = months.map(({ monthKey, hours }) => {
+      const [, monthNumber] = monthKey.split('-').map(Number);
+      const startsAt = new Date(Date.UTC(year, monthNumber - 1, 1));
+      const endsAt = new Date(Date.UTC(year, monthNumber, 0));
+      return {
+        monthKey,
+        hours,
+        startsAt,
+        endsAt,
+        label: new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(startsAt),
+      };
+    });
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const allocation = await tx.roadmapAllocation.findUnique({
+          where: { id: allocationId },
+          select: { id: true, estimatedHours: true, periods: { select: { monthKey: true, hours: true } } },
+        });
+        if (!allocation) throw new NotFoundException('Roadmap allocation was not found');
+
+        const monthKeys = normalized.map((month) => month.monthKey);
+        const alreadyPlannedThisQuarter = allocation.periods
+          .filter((period) => period.monthKey && monthKeys.includes(period.monthKey))
+          .reduce((sum, period) => sum + Number(period.hours), 0);
+        const totalPlanned = allocation.periods.reduce((sum, period) => sum + Number(period.hours), 0);
+        const nextTotal = totalPlanned - alreadyPlannedThisQuarter + normalized.reduce((sum, month) => sum + month.hours, 0);
+        if (nextTotal > Number(allocation.estimatedHours) + 1e-8) {
+          throw new BadRequestException(`План превышает оценку на ${Math.ceil((nextTotal - Number(allocation.estimatedHours)) * 2) / 2} ч`);
+        }
+
+        await tx.roadmapPeriodAllocation.deleteMany({ where: { allocationId, monthKey: { in: monthKeys } } });
+        const plannedMonths = normalized.filter((month) => month.hours > 0);
+        if (plannedMonths.length) {
+          await tx.roadmapPeriodAllocation.createMany({
+            data: plannedMonths.map((month) => ({ allocationId, ...month })),
+          });
+        }
+        return plannedMonths;
+      }, { isolationLevel: 'Serializable' });
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'P2034') {
+        throw new ConflictException('План изменился одновременно. Обновите страницу и повторите ввод.');
+      }
+      throw error;
+    }
   }
 
   private async azureJson<T>(
