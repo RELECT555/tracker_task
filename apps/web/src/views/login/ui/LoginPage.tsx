@@ -2,7 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { CalendarDays, Eye, EyeOff, GitBranch, Monitor, Moon, Sun, Users } from 'lucide-react';
+import { Eye, EyeOff, Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { loginWithMicrosoft } from '@/features/auth/lib/microsoft-auth';
@@ -65,41 +65,25 @@ function LoginThemeToggle() {
   );
 }
 
-const HIGHLIGHTS = [
-  { icon: GitBranch, text: 'Wayo · запросы' },
-  { icon: CalendarDays, text: 'Roadmap' },
-  { icon: Users, text: 'Загрузка команды' },
-] as const;
-
-/**
- * Quiet pitch laid directly on the shader — a card here reads as a sticker on
- * top of the artwork. Contrast comes from the scrim behind it, not a surface.
- */
 function HeroCaption() {
   return (
-    <div className="relative max-w-sm [text-shadow:0_1px_16px_rgb(0_0_0/0.45)]">
-      {/* Local scrim — darkens only behind the text, the silk stays vivid */}
+    <div className="relative max-w-lg [text-shadow:0_1px_16px_rgb(0_0_0/0.45)]">
       <div
         aria-hidden
-        className="absolute -inset-x-10 -inset-y-12 rounded-[50%] bg-black/30 blur-3xl"
+        className="absolute -inset-x-12 -inset-y-10 rounded-[50%] bg-black/25 blur-3xl"
       />
-      <p className="animate-element animate-delay-800 relative text-2xl font-medium leading-snug tracking-tight text-white">
-        Запросы в движении. Команда — с понятным планом.
-      </p>
-      <p className="animate-element animate-delay-900 relative mt-3 text-sm leading-relaxed text-white/75">
-        Wayo помогает вести запросы и эскалации. В Roadmap вы планируете эпики и фичи из Azure DevOps, назначаете роли и распределяете часы команды.
-      </p>
-      <div className="animate-element animate-delay-1000 relative mt-6 flex flex-wrap items-center gap-x-6 gap-y-2">
-        {HIGHLIGHTS.map(({ icon: Icon, text }) => (
-          <span
-            key={text}
-            className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-white/60"
-          >
-            <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
-            {text}
+      <p className="animate-element animate-delay-800 relative text-4xl font-medium leading-[1.12] tracking-[-0.035em] text-white sm:text-5xl">
+        Здесь могла бы быть
+        <span className="mt-1.5 block font-semibold">
+          <span className="relative inline-block pb-2">
+            ваша реклама
+            <span
+              aria-hidden
+              className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-gradient-to-r from-white/90 via-violet-200 to-pink-200 shadow-[0_0_16px_rgb(255_255_255/0.55)]"
+            />
           </span>
-        ))}
-      </div>
+        </span>
+      </p>
     </div>
   );
 }

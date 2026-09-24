@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { AuthUser } from '@/entities/user/api/authApi';
 import { usersApi } from '@/entities/user/api/usersApi';
 import { queryKeys } from '@/shared/api/queryKeys';
+import { SearchableSelect } from '@/shared/ui/searchable-select';
 
 interface UserRefFieldProps {
   id: string;
@@ -37,19 +38,13 @@ export function UserRefField({ id, value, onChange, user }: UserRefFieldProps) {
 
   const stringValue = value === undefined || value === null ? '' : String(value);
 
-  return (
-    <select
-      id={id}
-      value={stringValue}
-      onChange={(event) => onChange(event.target.value)}
-      className="flex h-10 w-full rounded-md border border-input bg-field px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-    >
-      <option value="">— Выберите сотрудника —</option>
-      {options.map((option) => (
-        <option key={option.id} value={option.id}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  );
+  return <SearchableSelect
+    id={id}
+    value={stringValue}
+    onChange={onChange}
+    options={options.map((option) => ({ value: option.id, label: option.label }))}
+    placeholder="— Выберите сотрудника —"
+    searchPlaceholder="Найти сотрудника…"
+    emptyLabel="Сотрудник не найден"
+  />;
 }

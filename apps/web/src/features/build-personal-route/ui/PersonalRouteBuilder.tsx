@@ -8,6 +8,7 @@ import { queryKeys } from '@/shared/api/queryKeys';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
+import { SearchableSelect } from '@/shared/ui/searchable-select';
 
 export interface PersonalRouteStepForm {
   name: string;
@@ -142,28 +143,20 @@ export function PersonalRouteBuilder({
 
             <div className="space-y-2">
               <Label htmlFor={`personal-step-user-${index}`}>Согласующий</Label>
-              <select
+              <SearchableSelect
                 id={`personal-step-user-${index}`}
                 value={step.assigneeUserId}
-                onChange={(event) =>
-                  updateStep(index, { assigneeUserId: event.target.value })
-                }
-                className="flex h-10 w-full rounded-md border border-input bg-field px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-              >
-                <option value="">— Выберите сотрудника —</option>
-                {currentUser?.manager ? (
-                  <option value={currentUser.manager.id}>
-                    {currentUser.manager.fullName} (мой руководитель)
-                  </option>
-                ) : null}
-                {users
-                  .filter((user) => user.id !== currentUser?.manager?.id)
-                  .map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.fullName}
-                    </option>
-                  ))}
-              </select>
+                onChange={(assigneeUserId) => updateStep(index, { assigneeUserId })}
+                options={[
+                  ...(currentUser?.manager ? [{ value: currentUser.manager.id, label: currentUser.manager.fullName, description: 'Мой руководитель' }] : []),
+                  ...users
+                    .filter((user) => user.id !== currentUser?.manager?.id)
+                    .map((user) => ({ value: user.id, label: user.fullName })),
+                ]}
+                placeholder="— Выберите сотрудника —"
+                searchPlaceholder="Найти сотрудника…"
+                emptyLabel="Сотрудник не найден"
+              />
             </div>
           </li>
         ))}

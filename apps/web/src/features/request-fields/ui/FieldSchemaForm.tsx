@@ -10,6 +10,7 @@ import {
 import { UserRefField } from '@/features/request-fields/ui/UserRefField';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
+import { SearchableSelect } from '@/shared/ui/searchable-select';
 
 const DatePicker = dynamic(
   () => import('@/shared/ui/date-picker').then((m) => m.DatePicker),
@@ -94,19 +95,15 @@ export function FieldSchemaForm({
                 <span className="text-muted-foreground">Да</span>
               </label>
             ) : field.type === 'select' ? (
-              <select
+              <SearchableSelect
                 id={fieldId}
                 value={rawValue === undefined || rawValue === null ? '' : String(rawValue)}
-                onChange={(event) => updateField(field.key, event.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-field px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-              >
-                <option value="">—</option>
-                {(field.options ?? []).map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(next) => updateField(field.key, next)}
+                options={(field.options ?? []).map((option) => ({ value: option.value, label: option.label }))}
+                placeholder="—"
+                searchPlaceholder="Найти вариант…"
+                emptyLabel="Варианты не найдены"
+              />
             ) : field.type === 'textarea' ? (
               <textarea
                 id={fieldId}

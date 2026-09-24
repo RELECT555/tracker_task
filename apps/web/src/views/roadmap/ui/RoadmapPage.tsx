@@ -9,6 +9,7 @@ import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
 import { Button } from '@/shared/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
+import { SearchableSelect } from '@/shared/ui/searchable-select';
 import {
   roadmapApi,
   type AzureProject,
@@ -46,10 +47,13 @@ function quarterMonths(year: number, quarter: number): QuarterMonth[] {
   });
 }
 
-function QuarterHoursCell({ hours, label, disabled, onSave }: {
+function QuarterHoursCell({ hours, label, disabled, allocationId, rowIndex, monthIndex, onSave }: {
   hours: number;
   label: string;
   disabled: boolean;
+  allocationId: string;
+  rowIndex: number;
+  monthIndex: number;
   onSave: (hours: number) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState(hours ? String(hours) : '');
@@ -73,34 +77,136 @@ function QuarterHoursCell({ hours, label, disabled, onSave }: {
     aria-label={label}
     title={label}
     placeholder="—"
+    data-quarter-cell="true"
+    data-quarter-allocation={allocationId}
+    data-quarter-row={rowIndex}
+    data-quarter-month={monthIndex}
     onChange={(event) => setDraft(event.target.value)}
     onBlur={() => void save()}
     onKeyDown={(event) => {
       if (event.key === 'Enter') event.currentTarget.blur();
       if (event.key === 'Escape') { setDraft(hours ? String(hours) : ''); event.currentTarget.blur(); }
+      if (event.key === 'Tab') {
+        const cells = Array.from(event.currentTarget.closest('table')?.querySelectorAll<HTMLInputElement>('[data-quarter-cell="true"]') ?? []);
+        const next = cells[cells.indexOf(event.currentTarget) + (event.shiftKey ? -1 : 1)];
+        if (next) { event.preventDefault(); next.focus(); }
+      }
     }}
-    className="h-9 w-20 rounded-md border border-border/60 bg-background px-2 text-right text-sm tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 hover:border-border focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+    className="h-9 w-20 rounded-md border border-border/70 bg-background px-2 text-right text-sm font-medium tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 hover:border-primary/40 hover:bg-primary/[0.025] focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
   />;
+}
+
+function QuarterAssignmentButton({ item, roles, saving, canConfigure, onSave }: {
+  item: RoadmapWorkItem;
+  roles: RoadmapRole[];
+  saving: boolean;
+  canConfigure: boolean;
+  onSave: (data: Parameters<typeof roadmapApi.saveAllocation>[0]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [roleId, setRoleId] = useState('');
+  const [personId, setPersonId] = useState('');
+  const [hours, setHours] = useState('');
+  const availableRoles = roles.filter((role) => role.members?.some((member) => member.personIsActive));
+  const selectedRole = availableRoles.find((role) => role.id === roleId);
+  const members = (selectedRole?.members ?? []).filter((member) => member.personIsActive && !item.allocations.some((allocation) => allocation.roleId === roleId && allocation.personExternalId === member.personExternalId));
+
+  const openEditor = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) return;
+    const firstRole = availableRoles[0];
+    setRoleId(firstRole?.id ?? '');
+    const defaultMember = firstRole?.members?.find((member) => member.personIsActive && member.personExternalId === firstRole.defaultPersonExternalId && !item.allocations.some((allocation) => allocation.roleId === firstRole.id && allocation.personExternalId === member.personExternalId));
+    setPersonId(defaultMember?.personExternalId ?? '');
+    setHours('');
+  };
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const member = members.find((entry) => entry.personExternalId === personId);
+    if (!selectedRole || !member) return;
+    onSave({
+      workItemId: item.id,
+      roleId: selectedRole.id,
+      personExternalId: member.personExternalId,
+      personName: member.personName,
+      personEmail: member.personEmail,
+      estimatedHours: Number(hours) || 0,
+      periods: [],
+    });
+    setOpen(false);
+  };
+
+  return <Popover open={open} onOpenChange={openEditor}>
+    <PopoverTrigger asChild><Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs"><Plus className="h-3.5 w-3.5" />Назначить</Button></PopoverTrigger>
+    <PopoverContent align="start" side="bottom" sideOffset={6} collisionPadding={12} className="w-[min(340px,calc(100vw-2rem))] rounded-xl p-0">
+      {availableRoles.length ? <form onSubmit={submit}>
+        <div className="border-b border-border px-3 py-2.5"><p className="text-sm font-medium">Назначить участника</p><p className="truncate text-xs text-muted-foreground" title={item.title}>{item.title}</p></div>
+        <div className="space-y-3 p-3">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-muted-foreground">Роль</label>
+            <SearchableSelect
+              value={roleId}
+              placeholder="Выберите роль"
+              searchPlaceholder="Найти роль…"
+              options={availableRoles.map((role) => ({ value: role.id, label: role.name, color: role.color, badge: role.isMock ? 'демо' : undefined }))}
+              emptyLabel="Роли не найдены"
+              onChange={(nextRoleId) => {
+                const nextRole = availableRoles.find((role) => role.id === nextRoleId);
+                setRoleId(nextRoleId);
+                const nextDefault = nextRole?.members?.find((member) => member.personIsActive && member.personExternalId === nextRole.defaultPersonExternalId && !item.allocations.some((allocation) => allocation.roleId === nextRole.id && allocation.personExternalId === member.personExternalId));
+                setPersonId(nextDefault?.personExternalId ?? '');
+              }}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-muted-foreground">Участник</label>
+            <SearchableSelect
+              value={personId}
+              placeholder="Выберите участника"
+              searchPlaceholder="Найти участника…"
+              options={members.map((member) => ({ value: member.personExternalId, label: member.personName, description: member.personEmail, badge: member.personIsMock ? 'демо' : undefined }))}
+              emptyLabel="Нет свободных участников"
+              onChange={setPersonId}
+            />
+          </div>
+          <label className="block space-y-1 text-xs font-medium text-muted-foreground">Общая оценка, ч
+            <input type="number" min="0" step="0.5" value={hours} onChange={(event) => setHours(event.target.value)} className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm text-foreground" placeholder="0" />
+          </label>
+          {!members.length ? <p className="text-xs text-muted-foreground">Все участники этой роли уже назначены.</p> : null}
+        </div>
+        <div className="flex justify-end border-t border-border bg-muted/20 p-2.5"><Button type="submit" size="sm" disabled={!personId || saving}>{saving ? 'Сохраняем…' : 'Добавить назначение'}</Button></div>
+      </form> : <div className="space-y-2 p-3 text-sm"><p className="font-medium">Нет доступных участников</p><p className="text-xs text-muted-foreground">Добавьте участников в роли проекта, чтобы назначить их на работу.</p>{canConfigure ? <Link href={routes.roadmapAdminRoles} className="inline-flex text-xs font-medium text-primary hover:underline">Настроить роли и участников</Link> : <p className="text-xs text-muted-foreground">Попросите администратора добавить участников в роли.</p>}</div>}
+    </PopoverContent>
+  </Popover>;
 }
 
 function QuarterPlanningGrid({
   epics,
   features,
   months,
+  roles,
+  canConfigure,
   saving,
   focusMode,
+  showUnassigned,
   expandedEpics,
   onToggleEpic,
   onSaveQuarter,
+  onAddAssignment,
 }: {
   epics: RoadmapWorkItem[];
   features: RoadmapWorkItem[];
   months: QuarterMonth[];
+  roles: RoadmapRole[];
+  canConfigure: boolean;
   saving: boolean;
   focusMode: boolean;
+  showUnassigned: boolean;
   expandedEpics: Set<string>;
   onToggleEpic: (epicId: string) => void;
   onSaveQuarter: (allocation: RoadmapAllocation, values: { monthKey: string; hours: number }[]) => Promise<boolean>;
+  onAddAssignment: (data: Parameters<typeof roadmapApi.saveAllocation>[0]) => void;
 }) {
   const monthHours = (allocations: RoadmapAllocation[], monthKey: string) => allocations.reduce((sum, allocation) =>
     sum + allocation.periods.reduce((inner, period) => inner + (period.monthKey === monthKey ? Number(period.hours) : 0), 0), 0);
@@ -111,18 +217,24 @@ function QuarterPlanningGrid({
   const legacyHours = legacyPeriods.reduce((sum, period) => sum + Number(period.hours), 0);
 
   const renderSummary = (item: RoadmapWorkItem, itemAllocations: RoadmapAllocation[], epic = false) => (
-    <tr key={`summary-${item.id}`} className={`border-t border-border ${epic ? 'bg-muted/50' : 'bg-muted/20'}`}>
-      <th scope="row" className={`px-4 py-2.5 text-left text-sm font-semibold text-foreground ${epic ? '' : 'pl-9'}`}>
-        {epic ? <button type="button" aria-expanded={expandedEpics.has(item.id)} aria-label={`${expandedEpics.has(item.id) ? 'Свернуть' : 'Развернуть'} эпик ${item.title}`} onClick={() => onToggleEpic(item.id)} className="mr-1 inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted"><ChevronRight className={`h-4 w-4 transition-transform ${expandedEpics.has(item.id) ? 'rotate-90' : ''}`} /></button> : null}{item.title}
-        <span className="ml-2 text-[10px] font-normal text-muted-foreground">{epic ? 'Эпик' : 'Фича'} · {itemAllocations.length} назнач.</span>
+    <tr key={`summary-${item.id}`} className={`group border-b border-border/70 ${epic ? 'bg-muted/35' : 'bg-muted/10'}`}>
+      <th scope="row" className={`sticky left-0 z-[2] border-r border-border/80 px-4 py-2.5 text-left text-sm text-foreground ${epic ? 'bg-muted/65 font-semibold' : 'bg-muted/35 font-medium'}`}>
+        <div className="flex min-w-0 items-center gap-2">
+          {epic ? <button type="button" aria-expanded={expandedEpics.has(item.id)} aria-label={`${expandedEpics.has(item.id) ? 'Свернуть' : 'Развернуть'} эпик ${item.title}`} onClick={() => onToggleEpic(item.id)} className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted"><ChevronRight className={`h-4 w-4 transition-transform ${expandedEpics.has(item.id) ? 'rotate-90' : ''}`} /></button> : null}
+          {!epic ? <span className="ml-7 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/45" /> : null}
+          <span className="min-w-0 flex-1 truncate" title={item.title}>{item.title}</span>
+          <span className="shrink-0 rounded-full bg-background/70 px-2 py-0.5 text-[10px] font-normal text-muted-foreground">{itemAllocations.length} назн.</span>
+          <QuarterAssignmentButton item={item} roles={roles} saving={saving} canConfigure={canConfigure} onSave={onAddAssignment} />
+        </div>
       </th>
-      {months.map((month) => <td key={month.monthKey} className="px-2 py-2.5 text-right text-sm tabular-nums text-muted-foreground">{monthHours(itemAllocations, month.monthKey) || '—'}</td>)}
-      <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm font-semibold tabular-nums text-foreground">{quarterHours(itemAllocations) || '—'}</td>
-      <td className="px-3 py-2.5 text-right text-sm tabular-nums text-muted-foreground">{itemAllocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours) - plannedHours(allocation), 0) || '—'}</td>
+      {months.map((month) => <td key={month.monthKey} className="border-b border-border/50 px-3 py-2.5 text-right text-sm tabular-nums text-muted-foreground">{monthHours(itemAllocations, month.monthKey) || '—'}</td>)}
+      <td className="border-b border-l border-primary/10 bg-primary/[0.025] px-3 py-2.5 text-right text-sm font-semibold tabular-nums text-foreground">{quarterHours(itemAllocations) || '—'}</td>
+      <td className="border-b border-border/50 px-4 py-2.5 text-right text-sm tabular-nums text-muted-foreground">{itemAllocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours) - plannedHours(allocation), 0) || '—'}</td>
     </tr>
   );
 
   const renderAssignment = (item: RoadmapWorkItem, allocation: RoadmapAllocation, directEpic = false) => {
+    const rowIndex = nextAssignmentRow++;
     const allPlanned = plannedHours(allocation);
     const remaining = Number(allocation.estimatedHours) - allPlanned;
     const monthsPlanned = quarterHours([allocation]);
@@ -135,20 +247,23 @@ function QuarterPlanningGrid({
       void onSaveQuarter(allocation, values);
     };
 
-    return <tr key={`allocation-${allocation.id}`} className="border-t border-border/60 hover:bg-muted/10">
-      <th scope="row" className="min-w-72 px-4 py-2 text-left font-normal">
-        <div className="flex min-w-0 items-center gap-2 pl-8">
+    return <tr key={`allocation-${allocation.id}`} className="group border-b border-border/50 transition-colors hover:bg-primary/[0.025]">
+      <th scope="row" className="sticky left-0 z-[2] min-w-72 border-r border-border/80 bg-background px-4 py-2 text-left font-normal group-hover:bg-muted/20">
+        <div className="flex min-w-0 items-center gap-2 pl-10">
           <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: allocation.role.color }} />
-          <span className="min-w-0 flex-1 truncate text-xs text-foreground">{directEpic ? 'На эпике · ' : ''}{allocation.role.name} · {allocation.personName}</span>
+          <span className="min-w-0 flex-1 truncate text-[13px] text-foreground" title={`${allocation.role.name} · ${allocation.personName}`}>{directEpic ? 'На эпике · ' : ''}<span className="font-medium">{allocation.role.name}</span><span className="text-muted-foreground"> · {allocation.personName}</span></span>
           {monthsPlanned > 0 ? <button type="button" disabled={saving} onClick={distributeEvenly} className="shrink-0 rounded px-1.5 py-1 text-[10px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50">Ровно</button> : null}
         </div>
         {allocation.periods.some((period) => !period.monthKey) ? <p className="pl-10 pt-1 text-[10px] text-amber-700 dark:text-amber-300" title={allocation.periods.filter((period) => !period.monthKey).map((period) => `${period.label}: ${period.startsAt.slice(0, 10)}–${period.endsAt.slice(0, 10)}, ${Number(period.hours)} ч`).join('\n')}>Старые периоды: {allocation.periods.filter((period) => !period.monthKey).reduce((sum, period) => sum + Number(period.hours), 0)} ч</p> : null}
       </th>
-      {months.map((month) => <td key={month.monthKey} className="px-2 py-1.5 text-right">
+      {months.map((month, monthIndex) => <td key={month.monthKey} className="border-b border-border/50 px-3 py-1.5 text-right">
         <QuarterHoursCell
           hours={Number(allocation.periods.find((period) => period.monthKey === month.monthKey)?.hours ?? 0)}
           label={`${item.title} · ${allocation.role.name} · ${allocation.personName} · ${month.label}`}
           disabled={saving}
+          allocationId={allocation.id}
+          rowIndex={rowIndex}
+          monthIndex={monthIndex}
           onSave={async (hours) => {
             const values = months.map((entry) => ({
               monthKey: entry.monthKey,
@@ -160,8 +275,8 @@ function QuarterPlanningGrid({
           }}
         />
       </td>)}
-      <td className="whitespace-nowrap px-3 py-2 text-right text-sm font-medium tabular-nums text-foreground">{monthsPlanned || '—'} ч</td>
-      <td className={`whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums ${remaining < 0 ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>{remaining < 0 ? `Перепланировано ${Math.abs(remaining)} ч` : `${remaining} ч`}</td>
+      <td className="whitespace-nowrap border-b border-l border-primary/10 bg-primary/[0.025] px-3 py-2 text-right text-sm font-semibold tabular-nums text-foreground">{monthsPlanned || '—'} ч</td>
+      <td className={`whitespace-nowrap border-b border-border/50 px-4 py-2 text-right text-xs tabular-nums ${remaining < 0 ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>{remaining < 0 ? `Перепланировано ${Math.abs(remaining)} ч` : `${remaining} ч`}</td>
     </tr>;
   };
 
@@ -174,40 +289,92 @@ function QuarterPlanningGrid({
   const totalEstimate = totalAllocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0);
   const totalPlanned = totalAllocations.reduce((sum, allocation) => sum + plannedHours(allocation), 0);
   const totalQuarter = quarterHours(totalAllocations);
+  let nextAssignmentRow = 0;
+
+  const handlePaste = (event: React.ClipboardEvent<HTMLTableElement>) => {
+    const target = event.target as HTMLInputElement;
+    if (target.dataset.quarterCell !== 'true') return;
+    const text = event.clipboardData.getData('text/plain');
+    if (!text.includes('\t') && !text.includes('\n')) return;
+    event.preventDefault();
+    const matrix = text.replace(/\r/g, '').split('\n');
+    if (matrix[matrix.length - 1] === '') matrix.pop();
+    const startRow = Number(target.dataset.quarterRow);
+    const startMonth = Number(target.dataset.quarterMonth);
+    const table = target.closest('table');
+    const cells = Array.from(table?.querySelectorAll<HTMLInputElement>('[data-quarter-cell="true"]') ?? []);
+    const rows = new Map<number, string>();
+    cells.forEach((cell) => rows.set(Number(cell.dataset.quarterRow), cell.dataset.quarterAllocation ?? ''));
+    const allocationById = new Map(assignments.map((allocation) => [allocation.id, allocation]));
+    const updates = new Map<string, Map<number, number>>();
+    for (const [rowOffset, line] of matrix.entries()) {
+      const allocationId = rows.get(startRow + rowOffset);
+      if (!allocationId || !allocationById.has(allocationId)) return;
+      for (const [columnOffset, raw] of line.split('\t').entries()) {
+        const monthIndex = startMonth + columnOffset;
+        const value = raw.trim() === '' ? 0 : Number(raw.trim().replace(',', '.'));
+        if (monthIndex >= months.length || !Number.isFinite(value) || value < 0 || Math.abs(value * 2 - Math.round(value * 2)) > 1e-8) return;
+        const values = updates.get(allocationId) ?? new Map<number, number>();
+        values.set(monthIndex, value);
+        updates.set(allocationId, values);
+      }
+    }
+    void (async () => {
+      for (const [allocationId, changed] of updates) {
+        const allocation = allocationById.get(allocationId);
+        if (!allocation) continue;
+        const values = months.map((month, monthIndex) => ({
+          monthKey: month.monthKey,
+          hours: changed.get(monthIndex) ?? Number(allocation.periods.find((period) => period.monthKey === month.monthKey)?.hours ?? 0),
+        }));
+        if (!(await onSaveQuarter(allocation, values))) break;
+      }
+    })();
+  };
 
   return <div className={focusMode ? 'flex min-h-0 flex-1 flex-col gap-3' : 'space-y-3'}>
     {legacyPeriods.length ? <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-800 dark:text-amber-200">Сохранены старые периоды без месячной детализации: {legacyHours} ч. Они не распределены по месяцам, но учитываются в проверке общей оценки.</div> : null}
     {saving ? <p role="status" className="text-xs text-muted-foreground">Сохраняем план…</p> : null}
     <div className={focusMode ? 'min-h-0 flex-1 overflow-auto' : 'overflow-auto'}>
-      <table className="w-full min-w-[780px] border-collapse text-left">
-        <thead className="sticky top-0 z-[1] bg-muted/90 backdrop-blur">
-          <tr className="border-b border-border text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            <th scope="col" className="min-w-72 px-4 py-3">Эпик / фича · роль · участник</th>
-            {months.map((month) => <th key={month.monthKey} scope="col" className="min-w-28 px-3 py-3 text-right">{month.label} · ч</th>)}
-            <th scope="col" className="min-w-24 px-3 py-3 text-right">Квартал · ч</th>
-            <th scope="col" className="min-w-36 px-3 py-3 text-right">Не распределено · ч</th>
+      <table onPaste={handlePaste} className="w-full min-w-[1040px] table-fixed border-collapse text-left">
+        <colgroup>
+          <col style={{ width: '42%' }} />
+          <col style={{ width: '10.5%' }} />
+          <col style={{ width: '10.5%' }} />
+          <col style={{ width: '10.5%' }} />
+          <col style={{ width: '12%' }} />
+          <col style={{ width: '14.5%' }} />
+        </colgroup>
+        <thead className="sticky top-0 z-[3] bg-muted/90 backdrop-blur">
+          <tr className="border-b border-border text-xs font-semibold text-muted-foreground">
+            <th scope="col" className="sticky left-0 top-0 z-20 min-w-72 border-r border-border/80 bg-muted/90 px-4 py-3">Задача / назначение</th>
+            {months.map((month) => <th key={month.monthKey} scope="col" className="min-w-28 px-3 py-3 text-right"><span className="block capitalize text-foreground">{month.label}</span><span className="text-[10px] font-normal">план, ч</span></th>)}
+            <th scope="col" className="min-w-24 border-l border-primary/10 bg-primary/[0.025] px-3 py-3 text-right"><span className="block text-foreground">Квартал</span><span className="text-[10px] font-normal">итого, ч</span></th>
+            <th scope="col" className="min-w-36 px-4 py-3 text-right"><span className="block text-foreground">Не распределено</span><span className="text-[10px] font-normal">от оценки, ч</span></th>
           </tr>
         </thead>
         <tbody>
           {epics.map((epic) => {
             const children = features.filter((feature) => feature.parentExternalId === epic.externalId);
-            const epicAllocations = [...epic.allocations, ...children.flatMap((feature) => feature.allocations)];
+            const visibleChildren = showUnassigned ? children : children.filter((feature) => feature.allocations.length > 0);
+            const epicAllocations = [...epic.allocations, ...visibleChildren.flatMap((feature) => feature.allocations)];
+            if (!showUnassigned && epicAllocations.length === 0) return null;
             return <Fragment key={`epic-${epic.id}`}>
               {renderSummary(epic, epicAllocations, true)}
               {expandedEpics.has(epic.id) ? <>
                 {epic.allocations.map((allocation) => renderAssignment(epic, allocation, true))}
-                {children.map(renderFeature)}
+                {visibleChildren.map(renderFeature)}
               </> : null}
             </Fragment>;
           })}
-          {features.filter((feature) => !feature.parentExternalId || !epics.some((epic) => epic.externalId === feature.parentExternalId)).map(renderFeature)}
+          {features.filter((feature) => (!feature.parentExternalId || !epics.some((epic) => epic.externalId === feature.parentExternalId)) && (showUnassigned || feature.allocations.length > 0)).map(renderFeature)}
         </tbody>
-        <tfoot className="border-t-2 border-border bg-muted/60">
+        <tfoot className="sticky bottom-0 z-[3] border-t-2 border-border bg-muted/90 shadow-[0_-4px_12px_rgba(0,0,0,0.04)] backdrop-blur">
           <tr className="text-sm font-semibold text-foreground">
-            <th scope="row" className="px-4 py-3">Итого по проекту</th>
+            <th scope="row" className="sticky left-0 z-20 border-r border-border/80 bg-muted/90 px-4 py-3">Итого по проекту</th>
             {months.map((month) => <td key={month.monthKey} className="px-3 py-3 text-right tabular-nums">{monthHours(totalAllocations, month.monthKey)} ч</td>)}
-            <td className="px-3 py-3 text-right tabular-nums">{totalQuarter} ч</td>
-            <td className="px-3 py-3 text-right text-xs tabular-nums text-muted-foreground">{totalEstimate - totalPlanned} ч</td>
+            <td className="border-l border-primary/10 bg-primary/[0.04] px-3 py-3 text-right tabular-nums">{totalQuarter} ч</td>
+            <td className="px-4 py-3 text-right text-xs tabular-nums text-muted-foreground">{totalEstimate - totalPlanned} ч</td>
           </tr>
         </tfoot>
       </table>
@@ -309,10 +476,15 @@ function AllocationEditor({
             ) : null}
             <label className="block space-y-1.5 text-xs font-medium text-muted-foreground">
               {initial ? 'Изменить участника' : 'Участник'}
-              <select aria-label="Человек из Azure DevOps" value={personId} onChange={(event) => setPersonId(event.target.value)} required className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground">
-                <option value="">Выберите участника</option>
-                {people.map((person) => <option key={person.id} value={person.id}>{person.name}{person.isMock ? ' · ДЕМО' : ''}{person.email ? ` · ${person.email}` : ''}</option>)}
-              </select>
+              <SearchableSelect
+                ariaLabel="Человек из Azure DevOps"
+                value={personId}
+                onChange={setPersonId}
+                placeholder="Выберите участника"
+                searchPlaceholder="Найти участника…"
+                emptyLabel="Участник не найден"
+                options={people.map((person) => ({ value: person.id, label: person.name, description: person.email, badge: person.isMock ? 'демо' : undefined }))}
+              />
             </label>
             <label className="block space-y-1.5 text-xs font-medium text-muted-foreground">
               Общая оценка
@@ -340,6 +512,7 @@ export function RoadmapPage() {
   const [roadmapProjectId, setRoadmapProjectId] = useState('');
   const [view, setView] = useState<'roles' | 'periods'>('roles');
   const [focusMode, setFocusMode] = useState(false);
+  const [showUnassignedPeriods, setShowUnassignedPeriods] = useState(false);
   const [quarterSelection, setQuarterSelection] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), quarter: Math.floor(now.getMonth() / 3) + 1 };
@@ -681,6 +854,7 @@ export function RoadmapPage() {
                   </div>
                   {view === 'periods' ? <div className="flex flex-wrap items-center gap-2">
                     {focusMode ? <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setExpandedEpics(allEpicsExpanded ? new Set() : new Set(epics.map((epic) => epic.id)))}>{allEpicsExpanded ? 'Свернуть всё' : 'Развернуть всё'}</Button> : null}
+                    <Button type="button" variant={showUnassignedPeriods ? 'secondary' : 'outline'} size="sm" className="h-8" onClick={() => setShowUnassignedPeriods((value) => !value)}>{showUnassignedPeriods ? 'Скрыть без назначений' : 'Показать без назначений'}</Button>
                     <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
                     <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Предыдущий квартал" onClick={() => shiftQuarter(-1)}><ChevronLeft className="h-4 w-4" /></Button>
                     <span className="min-w-20 text-center text-xs font-semibold tabular-nums">Q{quarterSelection.quarter} {quarterSelection.year}</span>
@@ -708,8 +882,11 @@ export function RoadmapPage() {
                       epics={epics}
                       features={features}
                       months={currentQuarterMonths}
-                      saving={saveQuarterMutation.isPending}
+                      roles={roles}
+                      canConfigure={canConfigure}
+                      saving={saveQuarterMutation.isPending || saveMutation.isPending}
                       focusMode={focusMode}
+                      showUnassigned={showUnassignedPeriods}
                       expandedEpics={expandedEpics}
                       onToggleEpic={(epicId) => setExpandedEpics((current) => {
                         const next = new Set(current);
@@ -718,6 +895,7 @@ export function RoadmapPage() {
                         return next;
                       })}
                       onSaveQuarter={saveQuarter}
+                      onAddAssignment={(data) => saveMutation.mutate(data)}
                     /> : <div className={focusMode ? 'min-h-0 flex-1 overflow-auto' : undefined}><table className="w-full min-w-max border-collapse text-left">
                       <thead className="sticky top-0 z-[1] bg-muted/80">
                         <tr className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
