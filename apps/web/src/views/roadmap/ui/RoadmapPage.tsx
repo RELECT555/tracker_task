@@ -1,15 +1,17 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { AlertCircle, ArrowDownToLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, Maximize2, Minimize2, Pencil, Plus, RefreshCw, Users, X } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
+import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
 import { Button } from '@/shared/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 import { SearchableSelect } from '@/shared/ui/searchable-select';
+import { ColorMark } from '@/shared/ui/color-mark';
 import {
   roadmapApi,
   type AzureProject,
@@ -18,8 +20,46 @@ import {
   type RoadmapRole,
   type RoadmapWorkItem,
 } from '@/entities/roadmap/api/roadmapApi';
-import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
 
+const NAME_COLUMN_STORAGE_KEY = 'roadmap-name-column-width';
+const NAME_COLUMN_MIN_WIDTH = 280;
+const NAME_COLUMN_MAX_WIDTH = 900;
+const DEFAULT_NAME_COLUMN_WIDTH = 440;
+
+function NameColumnResizeHandle({ width, onChange }: { width: number; onChange: (width: number) => void }) {
+  const dragStart = useRef<{ x: number; width: number } | null>(null);
+  const resize = (value: number) => onChange(Math.min(NAME_COLUMN_MAX_WIDTH, Math.max(NAME_COLUMN_MIN_WIDTH, value)));
+
+  return <div
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Изменить ширину столбца с названиями"
+    aria-valuemin={NAME_COLUMN_MIN_WIDTH}
+    aria-valuemax={NAME_COLUMN_MAX_WIDTH}
+    aria-valuenow={width}
+    aria-valuetext={`${width} пикселей`}
+    tabIndex={0}
+    title="Перетащите, чтобы изменить ширину"
+    onPointerDown={(event) => {
+      event.preventDefault();
+      dragStart.current = { x: event.clientX, width };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }}
+    onPointerMove={(event) => {
+      if (dragStart.current) resize(dragStart.current.width + event.clientX - dragStart.current.x);
+    }}
+    onPointerUp={() => { dragStart.current = null; }}
+    onPointerCancel={() => { dragStart.current = null; }}
+    onKeyDown={(event) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      resize(width + (event.key === 'ArrowRight' ? 16 : -16));
+    }}
+    className="group absolute inset-y-0 right-0 z-30 flex w-3 -translate-x-1/2 cursor-col-resize touch-none items-center justify-center outline-none after:absolute after:inset-y-0 after:left-1/2 after:w-px after:bg-border after:content-[''] hover:after:w-0.5 hover:after:bg-primary focus-visible:after:w-0.5 focus-visible:after:bg-primary"
+  >
+    <span className="relative z-10 h-8 w-1 rounded-full bg-border transition-colors group-hover:bg-primary group-focus-visible:bg-primary" />
+  </div>;
+}
 function ErrorMessage({ error }: { error: unknown }) {
   if (!error) return null;
   return (
@@ -189,6 +229,8 @@ function QuarterPlanningGrid({
   canConfigure,
   saving,
   focusMode,
+  nameColumnWidth,
+  onNameColumnWidthChange,
   showUnassigned,
   expandedEpics,
   onToggleEpic,
@@ -202,6 +244,8 @@ function QuarterPlanningGrid({
   canConfigure: boolean;
   saving: boolean;
   focusMode: boolean;
+  nameColumnWidth: number;
+  onNameColumnWidthChange: (width: number) => void;
   showUnassigned: boolean;
   expandedEpics: Set<string>;
   onToggleEpic: (epicId: string) => void;
@@ -250,7 +294,7 @@ function QuarterPlanningGrid({
     return <tr key={`allocation-${allocation.id}`} className="group border-b border-border/50 transition-colors hover:bg-primary/[0.025]">
       <th scope="row" className="sticky left-0 z-[2] min-w-72 border-r border-border/80 bg-background px-4 py-2 text-left font-normal group-hover:bg-muted/20">
         <div className="flex min-w-0 items-center gap-2 pl-10">
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: allocation.role.color }} />
+          <ColorMark color={allocation.role.color} size="sm" />
           <span className="min-w-0 flex-1 truncate text-[13px] text-foreground" title={`${allocation.role.name} · ${allocation.personName}`}>{directEpic ? 'На эпике · ' : ''}<span className="font-medium">{allocation.role.name}</span><span className="text-muted-foreground"> · {allocation.personName}</span></span>
           {monthsPlanned > 0 ? <button type="button" disabled={saving} onClick={distributeEvenly} className="shrink-0 rounded px-1.5 py-1 text-[10px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50">Ровно</button> : null}
         </div>
@@ -338,16 +382,16 @@ function QuarterPlanningGrid({
     <div className={focusMode ? 'min-h-0 flex-1 overflow-auto' : 'overflow-auto'}>
       <table onPaste={handlePaste} className="w-full min-w-[1040px] table-fixed border-collapse text-left">
         <colgroup>
-          <col style={{ width: '42%' }} />
-          <col style={{ width: '10.5%' }} />
-          <col style={{ width: '10.5%' }} />
-          <col style={{ width: '10.5%' }} />
-          <col style={{ width: '12%' }} />
-          <col style={{ width: '14.5%' }} />
+          <col style={{ width: `${nameColumnWidth}px` }} />
+          <col style={{ width: '140px' }} />
+          <col style={{ width: '140px' }} />
+          <col style={{ width: '140px' }} />
+          <col style={{ width: '150px' }} />
+          <col style={{ width: '170px' }} />
         </colgroup>
         <thead className="sticky top-0 z-[3] bg-muted/90 backdrop-blur">
           <tr className="border-b border-border text-xs font-semibold text-muted-foreground">
-            <th scope="col" className="sticky left-0 top-0 z-20 min-w-72 border-r border-border/80 bg-muted/90 px-4 py-3">Задача / назначение</th>
+            <th scope="col" className="sticky left-0 top-0 z-20 min-w-72 border-r border-border/80 bg-muted/90 px-4 py-3 pr-5"><span>Задача / назначение</span><NameColumnResizeHandle width={nameColumnWidth} onChange={onNameColumnWidthChange} /></th>
             {months.map((month) => <th key={month.monthKey} scope="col" className="min-w-28 px-3 py-3 text-right"><span className="block capitalize text-foreground">{month.label}</span><span className="text-[10px] font-normal">план, ч</span></th>)}
             <th scope="col" className="min-w-24 border-l border-primary/10 bg-primary/[0.025] px-3 py-3 text-right"><span className="block text-foreground">Квартал</span><span className="text-[10px] font-normal">итого, ч</span></th>
             <th scope="col" className="min-w-36 px-4 py-3 text-right"><span className="block text-foreground">Не распределено</span><span className="text-[10px] font-normal">от оценки, ч</span></th>
@@ -512,6 +556,8 @@ export function RoadmapPage() {
   const [roadmapProjectId, setRoadmapProjectId] = useState('');
   const [view, setView] = useState<'roles' | 'periods'>('roles');
   const [focusMode, setFocusMode] = useState(false);
+  const [nameColumnWidth, setNameColumnWidth] = useState(DEFAULT_NAME_COLUMN_WIDTH);
+  const [nameColumnWidthReady, setNameColumnWidthReady] = useState(false);
   const [showUnassignedPeriods, setShowUnassignedPeriods] = useState(false);
   const [quarterSelection, setQuarterSelection] = useState(() => {
     const now = new Date();
@@ -520,6 +566,18 @@ export function RoadmapPage() {
   const [expandedEpics, setExpandedEpics] = useState<Set<string>>(() => new Set());
   const [rolePickerOpen, setRolePickerOpen] = useState(false);
   const [defaultRolePickerId, setDefaultRolePickerId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const savedWidth = Number(window.localStorage.getItem(NAME_COLUMN_STORAGE_KEY));
+    if (Number.isFinite(savedWidth) && savedWidth >= NAME_COLUMN_MIN_WIDTH && savedWidth <= NAME_COLUMN_MAX_WIDTH) {
+      setNameColumnWidth(savedWidth);
+    }
+    setNameColumnWidthReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (nameColumnWidthReady) window.localStorage.setItem(NAME_COLUMN_STORAGE_KEY, String(nameColumnWidth));
+  }, [nameColumnWidth, nameColumnWidthReady]);
 
   useEffect(() => {
     if (!focusMode) return;
@@ -540,7 +598,7 @@ export function RoadmapPage() {
   const projectsQuery = useQuery({ queryKey: ['roadmap', 'azure-projects'], queryFn: roadmapApi.projects });
   const peopleQuery = useQuery({ queryKey: ['roadmap', 'people'], queryFn: roadmapApi.people });
   const roleCatalogQuery = useQuery({ queryKey: ['roadmap', 'admin', 'role-catalog'], queryFn: roadmapApi.roleCatalog, enabled: canConfigure });
-  const projects = projectsQuery.data?.data ?? [];
+  const projects = useMemo(() => projectsQuery.data?.data ?? [], [projectsQuery.data?.data]);
   const people = peopleQuery.data?.data ?? [];
   const usingCachedProjects = projectsQuery.data?.source === 'cache';
   const selectedProject = projects.find((project) => project.id === selectedAzureProjectId);
@@ -676,7 +734,7 @@ export function RoadmapPage() {
           <div className={isEpic ? 'font-medium text-foreground' : 'pl-4'}>
             <div className="flex items-center gap-2">
               {isEpic ? <button type="button" aria-expanded={!collapsed} aria-label={`${collapsed ? 'Развернуть' : 'Свернуть'} эпик ${item.title}`} disabled={!childCount} onClick={onToggle} className="-ml-1 inline-flex min-h-7 min-w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-default disabled:opacity-50">{collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button> : <span className="h-1.5 w-1.5 rounded-full bg-primary/60" />}
-              <span className="text-sm leading-snug">{item.title}</span>
+              <span className="min-w-0 flex-1 break-words text-sm leading-snug">{item.title}</span>
               {isEpic ? <span className="rounded-full bg-background/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{childCount} фич</span> : null}
             </div>
             <p className="mt-1 pl-6 text-[11px] text-muted-foreground">{item.type} · #{item.externalId}{item.state ? ` · ${item.state}` : ''}</p>
@@ -886,6 +944,8 @@ export function RoadmapPage() {
                       canConfigure={canConfigure}
                       saving={saveQuarterMutation.isPending || saveMutation.isPending}
                       focusMode={focusMode}
+                      nameColumnWidth={nameColumnWidth}
+                      onNameColumnWidthChange={setNameColumnWidth}
                       showUnassigned={showUnassignedPeriods}
                       expandedEpics={expandedEpics}
                       onToggleEpic={(epicId) => setExpandedEpics((current) => {
@@ -896,19 +956,25 @@ export function RoadmapPage() {
                       })}
                       onSaveQuarter={saveQuarter}
                       onAddAssignment={(data) => saveMutation.mutate(data)}
-                    /> : <div className={focusMode ? 'min-h-0 flex-1 overflow-auto' : undefined}><table className="w-full min-w-max border-collapse text-left">
+                    /> : <div className={focusMode ? 'min-h-0 flex-1 overflow-auto' : 'overflow-auto'}><table className="w-full min-w-max table-fixed border-collapse text-left">
+                      <colgroup>
+                        <col style={{ width: `${nameColumnWidth}px` }} />
+                        {roles.map((role) => <col key={role.id} style={{ width: '260px' }} />)}
+                        {!roles.length ? <col style={{ width: '240px' }} /> : null}
+                        <col style={{ width: '120px' }} />
+                      </colgroup>
                       <thead className="sticky top-0 z-[1] bg-muted/80">
                         <tr className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          <th className="min-w-72 px-4 py-2.5"><div className="flex items-center justify-between gap-3"><span>Эпик / фича</span>{canConfigure ? <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
+                          <th className="relative min-w-72 px-4 py-2.5 pr-5"><div className="flex items-center justify-between gap-3"><span>Эпик / фича</span>{canConfigure ? <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
                             <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-8 shrink-0 gap-1 px-2.5 text-xs" disabled={!roadmapProjectId || addRoleMutation.isPending}><Plus className="h-3.5 w-3.5" />Добавить роль</Button></PopoverTrigger>
                             <PopoverContent align="start" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(320px,calc(100vw-2rem))] rounded-xl p-2">
                               <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Роли из каталога</p>
-                              {roleCatalogQuery.isLoading ? <p className="px-2 py-4 text-center text-sm text-muted-foreground">Загружаем каталог…</p> : (roleCatalogQuery.data ?? []).filter((template) => !roles.some((role) => role.name === template.name)).length ? (roleCatalogQuery.data ?? []).filter((template) => !roles.some((role) => role.name === template.name)).map((template) => <button key={template.id} type="button" disabled={addRoleMutation.isPending} onClick={() => addRoleMutation.mutate(template.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-foreground hover:bg-muted disabled:opacity-50"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: template.color }} /><span className="min-w-0 flex-1 truncate">{template.name}</span>{template.isMock ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-amber-700 dark:text-amber-300">демо</span> : null}<Plus className="h-3.5 w-3.5 text-muted-foreground" /></button>) : <div className="px-2 py-3 text-sm text-muted-foreground">{(roleCatalogQuery.data ?? []).length ? 'Все роли из каталога уже добавлены.' : 'Каталог ролей пуст.'}{!(roleCatalogQuery.data ?? []).length ? <Link href={routes.roadmapAdminRoles} className="mt-1 block text-primary hover:underline">Создать роли в администрировании</Link> : null}</div>}
+                              {roleCatalogQuery.isLoading ? <p className="px-2 py-4 text-center text-sm text-muted-foreground">Загружаем каталог…</p> : (roleCatalogQuery.data ?? []).filter((template) => !roles.some((role) => role.name === template.name)).length ? (roleCatalogQuery.data ?? []).filter((template) => !roles.some((role) => role.name === template.name)).map((template) => <button key={template.id} type="button" disabled={addRoleMutation.isPending} onClick={() => addRoleMutation.mutate(template.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-foreground hover:bg-muted disabled:opacity-50"><ColorMark color={template.color} size="md" /><span className="min-w-0 flex-1 truncate">{template.name}</span>{template.isMock ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-amber-700 dark:text-amber-300">демо</span> : null}<Plus className="h-3.5 w-3.5 text-muted-foreground" /></button>) : <div className="px-2 py-3 text-sm text-muted-foreground">{(roleCatalogQuery.data ?? []).length ? 'Все роли из каталога уже добавлены.' : 'Каталог ролей пуст.'}{!(roleCatalogQuery.data ?? []).length ? <Link href={routes.roadmapAdminRoles} className="mt-1 block text-primary hover:underline">Создать роли в администрировании</Link> : null}</div>}
                             </PopoverContent>
-                          </Popover> : null}</div></th>
+                          </Popover> : null}</div><NameColumnResizeHandle width={nameColumnWidth} onChange={setNameColumnWidth} /></th>
                           {roles.map((role) => <th key={role.id} className="min-w-52 px-3 py-2.5">
                             <div className="space-y-1.5">
-                              <div className="flex items-center gap-2"><span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: role.color }} /><span>{role.name}</span>{role.isMock ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium normal-case text-amber-700 dark:text-amber-300">демо</span> : null}</div>
+                              <div className="flex items-center gap-2"><ColorMark color={role.color} size="md" /><span>{role.name}</span>{role.isMock ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium normal-case text-amber-700 dark:text-amber-300">демо</span> : null}</div>
                               {canConfigure ? <Popover open={defaultRolePickerId === role.id} onOpenChange={(open) => setDefaultRolePickerId(open ? role.id : null)}>
                                 <PopoverTrigger asChild><button type="button" className="flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[10px] font-medium normal-case text-muted-foreground transition-colors hover:bg-background hover:text-foreground"><Users className="h-3 w-3 shrink-0" /><span className="truncate">{role.defaultPersonName ? `По умолчанию: ${role.defaultPersonName}` : 'Закрепить человека по умолчанию'}</span></button></PopoverTrigger>
                                 <PopoverContent align="start" side="bottom" sideOffset={6} collisionPadding={16} className="w-[min(300px,calc(100vw-2rem))] rounded-xl p-2">

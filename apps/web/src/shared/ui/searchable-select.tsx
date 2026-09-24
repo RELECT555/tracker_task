@@ -4,6 +4,7 @@ import { useId, useMemo, useState } from 'react';
 import { Fragment, type ReactNode } from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { ColorMark } from '@/shared/ui/color-mark';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 
 export interface SearchableSelectOption {
@@ -76,7 +77,7 @@ export function SearchableSelect({
         className={cn('flex min-h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-field px-3 py-1.5 text-left text-sm text-foreground shadow-sm outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50', className)}
       >
         <span className="flex min-w-0 items-center gap-2">
-          {selected?.color ? <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: selected.color }} /> : null}
+          {selected?.color ? <ColorMark color={selected.color} size="md" /> : null}
           {selected?.leading ? <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">{selected.leading}</span> : null}
           {!selected?.leading && !selected?.color && selected ? <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{selected.label.slice(0, 1)}</span> : null}
           <span className="min-w-0"><span className={cn('block truncate', selected ? 'font-medium' : 'text-muted-foreground')}>{selected?.label ?? placeholder}</span>{selected?.description ? <span className="block truncate text-[10px] text-muted-foreground">{selected.description}</span> : null}</span>
@@ -119,7 +120,7 @@ export function SearchableSelect({
             onClick={() => choose(option.value)}
             className={cn('flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors', index === activeIndex ? 'bg-muted' : 'hover:bg-muted/70')}
           >
-            {option.leading ? <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">{option.leading}</span> : option.color ? <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: option.color }} /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{option.label.slice(0, 1)}</span>}
+            {option.leading ? <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">{option.leading}</span> : option.color ? <ColorMark color={option.color} size="md" /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{option.label.slice(0, 1)}</span>}
             <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-foreground">{option.label}</span>{option.description ? <span className="block truncate text-[10px] text-muted-foreground">{option.description}</span> : null}</span>
             {option.badge ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-amber-700 dark:text-amber-300">{option.badge}</span> : null}
             {option.value === value ? <Check className="h-4 w-4 shrink-0 text-primary" /> : null}

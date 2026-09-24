@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
-import { Check, ChevronUp, GitBranch, LogIn, LogOut, Monitor, Moon, PanelsTopLeft, Rows3, Settings2, Sun, Users } from 'lucide-react';
+import { ChartNoAxesCombined, Check, ChevronUp, GitBranch, LogIn, LogOut, Monitor, Moon, PanelsTopLeft, Rows3, Settings2, Sun, Users } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { DEV_ACCOUNTS } from '@/features/auth/lib/dev-accounts';
@@ -72,6 +72,7 @@ export function RoadmapFrame({ children }: { children: React.ReactNode }) {
   const breadcrumbs = [
     { label: 'Roadmap', href: routes.roadmap },
     ...(pathname.startsWith(routes.roadmapAdminHome) ? [{ label: 'Администрирование', href: routes.roadmapAdminHome }] : []),
+    ...(pathname === routes.roadmapAnalytics ? [{ label: 'Аналитика' }] : []),
     ...(pathname === routes.roadmapAdminUsers ? [{ label: 'Пользователи' }] : []),
     ...(pathname === routes.roadmapAdminRoles ? [{ label: 'Роли' }] : []),
     ...(pathname === routes.roadmapAdmin ? [{ label: 'Интеграции' }] : []),
@@ -99,6 +100,14 @@ export function RoadmapFrame({ children }: { children: React.ReactNode }) {
           >
             <Rows3 className="h-[18px] w-[18px]" strokeWidth={1.5} />
             План проекта
+          </Link>
+          <Link
+            href={routes.roadmapAnalytics}
+            aria-current={pathname === routes.roadmapAnalytics ? 'page' : undefined}
+            className={`mt-1 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${pathname === routes.roadmapAnalytics ? 'bg-sidebar-accent font-medium text-sidebar-primary' : 'text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
+          >
+            <ChartNoAxesCombined className="h-[18px] w-[18px]" strokeWidth={1.5} />
+            Аналитика
           </Link>
 
           {isAdmin ? (
@@ -129,7 +138,7 @@ export function RoadmapFrame({ children }: { children: React.ReactNode }) {
               <ol className="flex items-center gap-2 whitespace-nowrap text-sm">
                 {breadcrumbs.map((crumb, index) => <li key={crumb.label} className="flex items-center gap-2">
                   {index ? <span aria-hidden="true" className="text-muted-foreground/50">/</span> : null}
-                  {'href' in crumb ? <Link href={crumb.href} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined} className={index === breadcrumbs.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground transition-colors hover:text-foreground'}>{crumb.label}</Link> : <span aria-current="page" className="font-semibold text-foreground">{crumb.label}</span>}
+                  {'href' in crumb && crumb.href ? <Link href={crumb.href} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined} className={index === breadcrumbs.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground transition-colors hover:text-foreground'}>{crumb.label}</Link> : <span aria-current="page" className="font-semibold text-foreground">{crumb.label}</span>}
                 </li>)}
               </ol>
             </nav>

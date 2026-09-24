@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Eye, EyeOff, RefreshCw, Users } from 'lucide-react';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { Button } from '@/shared/ui/button';
+import { ColorMark } from '@/shared/ui/color-mark';
 
 export function RoadmapUsersPage() {
   const client = useQueryClient();
@@ -41,7 +42,7 @@ export function RoadmapUsersPage() {
             <div className="divide-y divide-border">
               {visibleUsers.map((person) => <div key={person.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                 <div className="flex min-w-0 items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"><Users className="h-4 w-4" /></span><div className="min-w-0"><p className="truncate text-sm font-medium text-foreground">{person.name}</p><p className="truncate text-xs text-muted-foreground">{person.email ?? 'Email не указан'}</p></div></div>
-                <div className="flex flex-wrap items-center justify-end gap-2">{person.roles?.map((role) => <span key={role.id} className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: `${role.color}66`, color: role.color }}>{role.projectName ? `${role.projectName} · ` : ''}{role.name}</span>)}{person.isMock ? <span className="rounded-full bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">Демо</span> : null}<span className={`rounded-full px-2 py-1 text-xs ${person.isActive ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-muted text-muted-foreground'}`}>{person.isActive ? 'Активен' : 'Неактивен'}</span></div>
+                <div className="flex flex-wrap items-center justify-end gap-2">{person.roles?.map((role) => <span key={role.id} className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs" style={{ borderColor: `${role.color}66`, color: role.color }}><ColorMark color={role.color} size="xs" />{role.projectName ? `${role.projectName} · ` : ''}{role.name}</span>)}{person.isMock ? <span className="rounded-full bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">Демо</span> : null}<span className={`rounded-full px-2 py-1 text-xs ${person.isActive ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-muted text-muted-foreground'}`}>{person.isActive ? 'Активен' : 'Неактивен'}</span></div>
               </div>)}
             </div>
           ) : <div className="px-6 py-12 text-center"><Users className="mx-auto h-8 w-8 text-muted-foreground/70" /><p className="mt-3 text-sm text-muted-foreground">{showInactive ? 'Список пользователей пока пуст.' : 'Активных участников нет. Синхронизируйте людей из Azure DevOps.'}</p></div>}

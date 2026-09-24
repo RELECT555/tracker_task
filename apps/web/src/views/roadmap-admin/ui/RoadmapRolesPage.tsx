@@ -8,6 +8,7 @@ import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
 import { routes } from '@/shared/config/routes';
 import { Button } from '@/shared/ui/button';
+import { ColorMark } from '@/shared/ui/color-mark';
 
 export function RoadmapRolesPage() {
   const client = useQueryClient();
@@ -26,9 +27,9 @@ export function RoadmapRolesPage() {
   const peopleQuery = useQuery({ queryKey: ['roadmap', 'admin', 'users'], queryFn: roadmapApi.adminPeople });
   const roles = rolesQuery.data ?? [];
   const people = (peopleQuery.data ?? []).filter((person) => person.isActive);
+  const [section, setSection] = useState<'catalog' | 'project'>('catalog');
   const [selectedId, setSelectedId] = useState('');
-  const [showCreate, setShowCreate] = useState(false);
-  const [newRoleName, setNewRoleName] = useState('');
+  const [showAddCatalog, setShowAddCatalog] = useState(false);
   const [showTemplateCreate, setShowTemplateCreate] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState('');
   const [name, setName] = useState('');
@@ -78,15 +79,6 @@ export function RoadmapRolesPage() {
       client.invalidateQueries({ queryKey: ['roadmap', 'plan'] }),
     ]);
   };
-  const create = useMutation({
-    mutationFn: () => roadmapApi.createRole(roadmapProjectId, newRoleName.trim()),
-    onSuccess: async (role) => {
-      setNewRoleName('');
-      setShowCreate(false);
-      await refresh();
-      setSelectedId(role.id);
-    },
-  });
   const createTemplate = useMutation({
     mutationFn: () => roadmapApi.createRoleTemplate(newTemplateName.trim()),
     onSuccess: async () => {
@@ -111,7 +103,7 @@ export function RoadmapRolesPage() {
     onSuccess: refresh,
   });
 
-  const error = projectsQuery.error ?? catalogQuery.error ?? rolesQuery.error ?? peopleQuery.error ?? create.error ?? createTemplate.error ?? addFromCatalog.error ?? save.error;
+  const error = (section === 'catalog' ? catalogQuery.error : projectsQuery.error ?? catalogQuery.error ?? rolesQuery.error ?? peopleQuery.error) ?? createTemplate.error ?? addFromCatalog.error ?? save.error;
   const togglePerson = (id: string) => setMemberIds((current) => current.includes(id) ? current.filter((personId) => personId !== id) : [...current, id]);
   const selectVisible = () => setMemberIds((current) => [...new Set([...current, ...visiblePeople.map((person) => person.id)])]);
   const clearVisible = () => setMemberIds((current) => current.filter((id) => !visiblePeople.some((person) => person.id === id)));
@@ -120,83 +112,64 @@ export function RoadmapRolesPage() {
     <main className="min-h-0 flex-1 overflow-auto px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Роли и участники</h1>
-          </div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Роли</h1>
           <div className="flex flex-wrap items-center gap-2">
-            <AzureProjectPicker projects={projects} value={selectedProjectId} onChange={setSelectedProjectId} disabled={projectsQuery.isLoading} placeholder="Выбрать проект" />
+            {section === 'project' ? <AzureProjectPicker projects={projects} value={selectedProjectId} onChange={setSelectedProjectId} disabled={projectsQuery.isLoading} placeholder="Выбрать проект" /> : null}
             <Link href={routes.roadmapAdminUsers} className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"><Users className="h-4 w-4" />Пользователи</Link>
-            <Button disabled={!roadmapProjectId} onClick={() => { setShowCreate((open) => !open); create.reset(); }} className="gap-2"><Plus className="h-4 w-4" />Создать роль</Button>
           </div>
         </div>
 
+        <nav className="flex w-fit gap-1 rounded-xl border border-border bg-card p-1" aria-label="Разделы ролей">
+          <button type="button" onClick={() => setSection('catalog')} aria-current={section === 'catalog' ? 'page' : undefined} className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${section === 'catalog' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>Создание ролей <span className="ml-1 opacity-75">{catalog.length}</span></button>
+          <button type="button" onClick={() => setSection('project')} aria-current={section === 'project' ? 'page' : undefined} className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${section === 'project' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>Наполнение проектов</button>
+        </nav>
+
         {error ? <div role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error instanceof Error ? error.message : 'Не удалось сохранить изменения'}</div> : null}
 
-        {selectedProject && !selectedProject.imported ? <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-4 text-sm text-foreground"><p className="font-medium">Сначала импортируйте проект в Roadmap</p><p className="mt-1 text-muted-foreground">Роли будут сохранены отдельно для проекта «{selectedProject.name}».</p><Link href={routes.roadmap} className="mt-3 inline-flex text-sm font-medium text-primary hover:underline">Открыть план проекта</Link></div> : null}
-        {!selectedProject && !projectsQuery.isLoading ? <div className="rounded-xl border border-dashed border-border bg-card px-5 py-10 text-center"><p className="text-sm font-medium text-foreground">Нет импортированных проектов</p><p className="mt-1 text-sm text-muted-foreground">Импортируйте проект из Azure DevOps, после этого здесь можно будет настроить его роли.</p><Link href={routes.roadmap} className="mt-3 inline-flex text-sm font-medium text-primary hover:underline">Перейти к планированию</Link></div> : null}
-
-        {showCreate ? (
-          <form onSubmit={(event) => { event.preventDefault(); if (newRoleName.trim()) create.mutate(); }} className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4">
-            <label htmlFor="new-roadmap-role" className="min-w-56 flex-1 text-sm font-medium text-foreground">Название роли
-              <input id="new-roadmap-role" autoFocus value={newRoleName} onChange={(event) => setNewRoleName(event.target.value)} placeholder="Например, Backend-разработчик" className="mt-1.5 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm font-normal text-foreground outline-none focus:ring-2 focus:ring-primary/30" />
-            </label>
-            <div className="ml-auto flex gap-2"><Button type="button" variant="ghost" onClick={() => { setShowCreate(false); setNewRoleName(''); }}><X className="h-4 w-4" />Отмена</Button><Button type="submit" disabled={!newRoleName.trim() || create.isPending}><Plus className="h-4 w-4" />{create.isPending ? 'Создание…' : 'Добавить роль'}</Button></div>
-          </form>
-        ) : null}
-
-        <details className="group overflow-hidden rounded-xl border border-border bg-card">
-          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 [&::-webkit-details-marker]:hidden">
-            <span className="text-sm font-medium text-muted-foreground">Шаблоны ролей <span className="ml-1 text-xs">{catalog.length}</span></span>
-            <span className="text-xs text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
-          </summary>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-            <p className="text-xs text-muted-foreground">Готовые роли для повторного использования в проектах.</p>
-            <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => { setShowTemplateCreate((open) => !open); createTemplate.reset(); }}>Создать шаблон</Button>
+        {section === 'catalog' ? <section className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
+            <div><h2 className="text-base font-semibold text-foreground">Каталог ролей</h2><p className="mt-1 text-sm text-muted-foreground">Создайте роль один раз, затем добавляйте её в нужные проекты.</p></div>
+            <Button type="button" onClick={() => { setShowTemplateCreate((open) => !open); createTemplate.reset(); }} className="gap-2"><Plus className="h-4 w-4" />Создать роль</Button>
           </div>
-          {showTemplateCreate ? <form onSubmit={(event) => { event.preventDefault(); if (newTemplateName.trim()) createTemplate.mutate(); }} className="flex flex-wrap items-end gap-2 border-b border-border p-3">
-            <label htmlFor="new-role-template" className="min-w-52 flex-1 text-xs font-medium text-foreground">Название шаблона
-              <input id="new-role-template" autoFocus value={newTemplateName} onChange={(event) => setNewTemplateName(event.target.value)} placeholder="Например, Аналитик" className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-3 text-sm font-normal text-foreground outline-none focus:ring-2 focus:ring-primary/30" />
+          {showTemplateCreate ? <form onSubmit={(event) => { event.preventDefault(); if (newTemplateName.trim()) createTemplate.mutate(); }} className="flex flex-wrap items-end gap-2 border-b border-border p-4">
+            <label htmlFor="new-role-template" className="min-w-52 flex-1 text-sm font-medium text-foreground">Название роли
+              <input id="new-role-template" autoFocus value={newTemplateName} onChange={(event) => setNewTemplateName(event.target.value)} placeholder="Например, Аналитик" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm font-normal text-foreground outline-none focus:ring-2 focus:ring-primary/30" />
             </label>
-            <Button type="button" size="sm" variant="ghost" onClick={() => { setShowTemplateCreate(false); setNewTemplateName(''); }}><X className="h-4 w-4" />Отмена</Button>
-            <Button type="submit" size="sm" disabled={!newTemplateName.trim() || createTemplate.isPending}><Plus className="h-4 w-4" />{createTemplate.isPending ? 'Создание…' : 'Создать'}</Button>
+            <Button type="button" variant="ghost" onClick={() => { setShowTemplateCreate(false); setNewTemplateName(''); }}><X className="h-4 w-4" />Отмена</Button>
+            <Button type="submit" disabled={!newTemplateName.trim() || createTemplate.isPending}><Plus className="h-4 w-4" />{createTemplate.isPending ? 'Создание…' : 'Создать роль'}</Button>
           </form> : null}
-          {catalogQuery.isLoading ? <p className="px-4 py-6 text-sm text-muted-foreground">Загружаем каталог…</p> : catalog.length ? (
-            <div className="grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
-              {catalog.map((template) => {
-                const added = roles.some((role) => role.name === template.name);
-                return <div key={template.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-border/70 bg-background px-3 py-2.5">
-                  <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: template.color }} />
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{template.name}</span>
-                  {template.isMock ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-amber-700 dark:text-amber-300">демо</span> : null}
-                  {added ? <span className="shrink-0 text-xs text-muted-foreground">В проекте</span> : <Button type="button" size="sm" variant="outline" className="h-8 shrink-0 gap-1 px-2 text-xs" disabled={!roadmapProjectId || addFromCatalog.isPending} onClick={() => addFromCatalog.mutate({ projectId: roadmapProjectId, templateId: template.id })}><Plus className="h-3.5 w-3.5" />Добавить</Button>}
-                </div>;
-              })}
-            </div>
-          ) : <div className="px-4 py-7 text-center"><p className="text-sm font-medium text-foreground">Шаблонов пока нет</p><p className="mt-1 text-xs text-muted-foreground">Можно создать шаблон здесь или добавить обычную роль напрямую в проект.</p></div>}
-          {!roadmapProjectId && catalog.length ? <p className="border-t border-border bg-muted/20 px-4 py-2.5 text-xs text-muted-foreground">Выберите импортированный проект сверху, чтобы добавить в него роли.</p> : null}
-        </details>
+          {catalogQuery.isLoading ? <p className="px-4 py-8 text-sm text-muted-foreground">Загружаем каталог…</p> : catalog.length ? <div className="grid gap-2 p-4 sm:grid-cols-2 xl:grid-cols-3">
+            {catalog.map((template) => <div key={template.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-border/70 bg-background px-3 py-3"><ColorMark color={template.color} size="md" /><span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{template.name}</span>{template.isMock ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-amber-700 dark:text-amber-300">демо</span> : null}</div>)}
+          </div> : <div className="px-5 py-12 text-center"><ShieldCheck className="mx-auto h-8 w-8 text-muted-foreground/60" /><p className="mt-3 text-sm font-medium text-foreground">Каталог пока пуст</p><p className="mt-1 text-sm text-muted-foreground">Создайте первую роль — потом её можно будет добавить в любой проект.</p></div>}
+        </section> : <>
+          {selectedProject && !selectedProject.imported ? <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-4 text-sm text-foreground"><p className="font-medium">Сначала импортируйте проект в Roadmap</p><p className="mt-1 text-muted-foreground">Роли будут сохранены отдельно для проекта «{selectedProject.name}».</p><Link href={routes.roadmap} className="mt-3 inline-flex text-sm font-medium text-primary hover:underline">Открыть план проекта</Link></div> : null}
+          {!selectedProject && !projectsQuery.isLoading ? <div className="rounded-xl border border-dashed border-border bg-card px-5 py-10 text-center"><p className="text-sm font-medium text-foreground">Нет проектов</p><p className="mt-1 text-sm text-muted-foreground">Импортируйте проект из Azure DevOps, чтобы добавить в него роли.</p><Link href={routes.roadmap} className="mt-3 inline-flex text-sm font-medium text-primary hover:underline">Перейти к планированию</Link></div> : null}
+          {roadmapProjectId ? <section className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-5"><div><h2 className="text-base font-semibold text-foreground">Наполнение проекта ролями</h2><p className="mt-1 text-sm text-muted-foreground">{selectedProject?.name} · выберите роли из каталога и назначьте участников.</p></div><Button type="button" variant="outline" onClick={() => setShowAddCatalog((open) => !open)} className="gap-2"><Plus className="h-4 w-4" />Добавить роли</Button></div>
+            {showAddCatalog ? <div className="grid gap-2 border-b border-border bg-muted/20 p-4 sm:grid-cols-2 xl:grid-cols-3">{catalog.length ? catalog.map((template) => { const added = roles.some((role) => role.name === template.name); return <div key={template.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-border/70 bg-card px-3 py-2.5"><ColorMark color={template.color} size="md" /><span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{template.name}</span>{added ? <span className="shrink-0 text-xs text-muted-foreground">Уже добавлена</span> : <Button type="button" size="sm" variant="outline" className="h-8 shrink-0 gap-1 px-2 text-xs" disabled={addFromCatalog.isPending} onClick={() => addFromCatalog.mutate({ projectId: roadmapProjectId, templateId: template.id })}><Plus className="h-3.5 w-3.5" />Добавить</Button>}</div>; }) : <div className="col-span-full rounded-lg border border-dashed border-border bg-card px-4 py-6 text-center"><p className="text-sm text-muted-foreground">Каталог пока пуст.</p><button type="button" onClick={() => setSection('catalog')} className="mt-2 text-sm font-medium text-primary hover:underline">Создать первую роль</button></div>}</div> : null}
+        </section> : null}
 
         {roadmapProjectId ? <section className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
           <aside className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div><h2 className="text-sm font-semibold text-foreground">Роли проекта</h2><p className="mt-0.5 max-w-48 truncate text-xs text-muted-foreground">{selectedProject?.name} · {roles.length} ролей</p></div>
-              <Button variant="ghost" size="icon" aria-label="Создать роль" className="h-8 w-8" onClick={() => setShowCreate(true)}><Plus className="h-4 w-4" /></Button>
+              <span className="text-xs text-muted-foreground">{roles.length}</span>
             </div>
             {rolesQuery.isLoading ? <div className="px-4 py-8 text-center text-sm text-muted-foreground">Загружаем роли…</div> : roles.length ? (
               <nav className="space-y-1 p-2" aria-label="Список ролей">
                 {roles.map((role) => <button key={role.id} type="button" onClick={() => setSelectedId(role.id)} aria-current={selectedId === role.id ? 'true' : undefined} className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors ${selectedId === role.id ? 'bg-primary/10 text-foreground' : 'text-foreground hover:bg-muted/70'}`}>
-                  <span className="h-3 w-3 shrink-0 rounded-full ring-4 ring-background" style={{ backgroundColor: role.color }} />
+                  <ColorMark color={role.color} size="md" />
                   <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{role.name}{role.isMock ? <span className="ml-2 rounded-full bg-amber-500/10 px-1.5 py-0.5 align-middle text-[10px] font-medium text-amber-700 dark:text-amber-300">демо</span> : null}</span><span className="mt-0.5 block text-xs text-muted-foreground">{role.members?.length ?? 0} участников</span></span>
                   {selectedId === role.id ? <span className="h-1.5 w-1.5 rounded-full bg-primary" /> : null}
                 </button>)}
               </nav>
-            ) : <div className="px-4 py-8 text-center"><ShieldCheck className="mx-auto h-7 w-7 text-muted-foreground/70" /><p className="mt-2 text-sm font-medium text-foreground">В проекте пока нет ролей</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Создайте роль или добавьте готовый шаблон.</p></div>}
+            ) : <div className="px-4 py-8 text-center"><ShieldCheck className="mx-auto h-7 w-7 text-muted-foreground/70" /><p className="mt-2 text-sm font-medium text-foreground">В проекте пока нет ролей</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Добавьте роли из каталога выше.</p></div>}
           </aside>
 
           <div className="min-w-0">
             {selectedRole ? <section className="overflow-hidden rounded-xl border border-border bg-card">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
-                <div className="flex items-center gap-3"><span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: color }} /><div><h2 className="text-base font-semibold text-foreground">Настройки роли</h2><p className="mt-0.5 text-xs text-muted-foreground">Изменения сохраняются после нажатия кнопки внизу.</p></div></div>
+                <div className="flex items-center gap-3"><ColorMark color={color} size="md" /><div><h2 className="text-base font-semibold text-foreground">Настройки роли</h2><p className="mt-0.5 text-xs text-muted-foreground">Изменения сохраняются после нажатия кнопки внизу.</p></div></div>
                 {dirty ? <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">Есть изменения</span> : null}
               </div>
 
@@ -245,6 +218,7 @@ export function RoadmapRolesPage() {
             </section> : <div className="flex min-h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 py-10 text-center"><ShieldCheck className="h-8 w-8 text-muted-foreground/60" /><h2 className="mt-3 text-sm font-semibold text-foreground">Выберите роль</h2><p className="mt-1 max-w-sm text-sm text-muted-foreground">Выберите роль слева, чтобы настроить её цвет и состав участников.</p></div>}
           </div>
         </section> : null}
+        </>}
       </div>
     </main>
   );

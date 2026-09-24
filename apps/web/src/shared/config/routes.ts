@@ -19,6 +19,7 @@ export const routes = {
   welcome: '/welcome',
   workspaces: '/workspaces',
   roadmap: '/roadmap',
+  roadmapAnalytics: '/roadmap/analytics',
   roadmapAdminHome: '/roadmap/admin',
   roadmapAdmin: '/roadmap/admin/integrations',
   roadmapAdminUsers: '/roadmap/admin/users',
