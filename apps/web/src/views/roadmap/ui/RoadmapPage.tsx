@@ -133,7 +133,7 @@ function QuarterHoursCell({ hours, label, disabled, allocationId, rowIndex, mont
         if (next) { event.preventDefault(); next.focus(); }
       }
     }}
-    className="h-9 w-20 rounded-md border border-border/70 bg-background px-2 text-right text-sm font-medium tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 hover:border-primary/40 hover:bg-primary/[0.025] focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+    className="h-9 w-20 rounded-md border border-border/70 bg-card px-2 text-right text-sm font-medium tabular-nums text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 hover:border-primary/40 hover:bg-primary/[0.025] focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
   />;
 }
 
