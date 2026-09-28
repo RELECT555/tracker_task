@@ -41,3 +41,5 @@ uploads/
 # Impeccable (local install per developer — run `npx impeccable install`)
 .cursor/skills/
 .cursor/hooks.json
+.vercel
+.env*

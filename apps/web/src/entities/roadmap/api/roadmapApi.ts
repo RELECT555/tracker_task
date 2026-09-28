@@ -1,4 +1,5 @@
 import { apiFetch } from '@/shared/api/client';
+import { isRoadmapDemoMode, roadmapDemoApi } from './roadmapDemo';
 
 export interface AzureProject {
   id: string;
@@ -80,7 +81,7 @@ export interface RoadmapIntegrationSettings {
   encryptionKeyConfigured: boolean;
 }
 
-export const roadmapApi = {
+const liveRoadmapApi = {
   connection: () =>
     apiFetch<{ provider: string; configured: boolean; organizationUrl: string }>(
       '/roadmap/connection',
@@ -156,3 +157,7 @@ export const roadmapApi = {
       body: JSON.stringify({ months }),
     }),
 };
+
+export const roadmapApi = isRoadmapDemoMode()
+  ? roadmapDemoApi as unknown as typeof liveRoadmapApi
+  : liveRoadmapApi;

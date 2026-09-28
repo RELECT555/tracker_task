@@ -1,0 +1,16 @@
+# Keep local tools and build caches out of deployment uploads.
+.cursor/
+.coder/
+.turbo/
+.impeccable/
+
+# Never upload local or example environment files.
+.env*
+apps/*/.env*
+
+# Local build output and diagnostics.
+apps/*/.turbo/
+apps/api/dist/
+apps/api/coverage/
+seed-out.txt
+tsc-web-out.txt
