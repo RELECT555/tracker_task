@@ -374,8 +374,21 @@ model RoadmapProject {
   updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz()
   workItems  RoadmapWorkItem[]
   roles      RoadmapRole[]
+  azureState RoadmapAzureProjectState?
 
   @@map("roadmap_projects")
+}
+
+model RoadmapAzureProjectState {
+  projectId        String         @id @map("project_id") @db.Uuid
+  lastCheckAt      DateTime?      @map("last_check_at") @db.Timestamptz()
+  lastCheckResult  Json?          @map("last_check_result")
+  lastWebhookAt    DateTime?      @map("last_webhook_at") @db.Timestamptz()
+  settingsOverride Json?          @map("settings_override")
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz()
+  project          RoadmapProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("roadmap_azure_project_state")
 }
 
 model RoadmapWorkItem {

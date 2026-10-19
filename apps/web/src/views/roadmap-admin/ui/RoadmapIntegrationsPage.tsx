@@ -2,22 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookOpen, Eye, EyeOff, FolderSync, KeyRound, Link2, LoaderCircle, PlugZap, Save, ShieldCheck, SlidersHorizontal, Webhook } from 'lucide-react';
+import { BookOpen, Eye, EyeOff, FolderSync, KeyRound, Link2, LoaderCircle, PlugZap, Save, ShieldCheck, SlidersHorizontal, Webhook, WandSparkles } from 'lucide-react';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { AdminAlert, AdminCard, AdminPage, AdminPageHeader, StatusPill } from './AdminLayout';
+import { AzureSyncStart } from './integrations/AzureSyncStart';
 import { AzureSyncGuide } from './integrations/AzureSyncGuide';
 import { Chip, MODE_LABEL } from './integrations/parts';
 import { SyncProjectsPanel } from './integrations/SyncProjectsPanel';
 import { WebhookPanel } from './integrations/WebhookPanel';
 import { WriteBackSettingsPanel } from './integrations/WriteBackSettingsPanel';
 
-type Tab = 'connection' | 'guide' | 'write-back' | 'projects' | 'webhook';
+type Tab = 'start' | 'connection' | 'guide' | 'write-back' | 'projects' | 'webhook';
 const TAB_STORAGE_KEY = 'roadmap-integrations-tab';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; needsConnection?: boolean }[] = [
+  { id: 'start', label: 'Начало', icon: <WandSparkles className="h-4 w-4" /> },
   { id: 'connection', label: 'Подключение', icon: <PlugZap className="h-4 w-4" /> },
   { id: 'guide', label: 'Как это работает', icon: <BookOpen className="h-4 w-4" /> },
   { id: 'write-back', label: 'Настройки записи', icon: <SlidersHorizontal className="h-4 w-4" />, needsConnection: true },
@@ -40,22 +42,34 @@ export function RoadmapIntegrationsPage() {
     refetchInterval: (query) => query.state.data?.projects.some((project) => project.counts.pending > 0) ? 4000 : false,
   });
   const overview = overviewQuery.data;
-  const [tab, setTab] = useState<Tab>('connection');
+  const [tab, setTab] = useState<Tab>('start');
+  const [tabInitialized, setTabInitialized] = useState(false);
+  const wizardComplete = Boolean(settings?.configured && overview?.projects.some((project) =>
+    project.lastCheck?.some((check) => check.key === 'write' && check.status !== 'error')
+    && project.lastCheck?.length
+    && project.lastCheck.every((check) => check.status !== 'error')
+    && project.counts.synced > 0
+    && project.lastWebhookAt,
+  ));
 
   useEffect(() => {
+    if (settingsQuery.isLoading || (configured && overviewQuery.isLoading) || tabInitialized) return;
     try {
       const saved = window.localStorage.getItem(TAB_STORAGE_KEY) as Tab | null;
-      if (saved && TABS.some((item) => item.id === saved)) setTab(saved);
+      const savedItem = saved ? TABS.find((item) => item.id === saved) : undefined;
+      if (savedItem && (configured || !savedItem.needsConnection)) setTab(saved!);
+      else setTab(wizardComplete ? 'projects' : 'start');
     } catch { /* storage unavailable */ }
-  }, []);
+    setTabInitialized(true);
+  }, [configured, overviewQuery.isLoading, settingsQuery.isLoading, tabInitialized, wizardComplete]);
   const selectTab = (next: Tab) => {
     setTab(next);
     try { window.localStorage.setItem(TAB_STORAGE_KEY, next); } catch { /* storage unavailable */ }
   };
-  const activeTab = !configured && TABS.find((item) => item.id === tab)?.needsConnection ? 'connection' : tab;
+  const activeTab = !configured && TABS.find((item) => item.id === tab)?.needsConnection ? 'start' : tab;
 
   const errorCount = overview?.projects.reduce((sum, project) => sum + project.counts.error, 0) ?? 0;
-  const waitingCount = overview?.projects.reduce((sum, project) => sum + project.counts.pending + project.counts.notSent, 0) ?? 0;
+  const waitingCount = overview?.projects.reduce((sum, project) => sum + project.counts.pending + project.counts.sending + project.counts.notSent, 0) ?? 0;
 
   return (
     <AdminPage className="max-w-none">
@@ -91,7 +105,8 @@ export function RoadmapIntegrationsPage() {
       </div>
 
       <div role="tabpanel" className="space-y-5">
-        {overviewQuery.error && activeTab !== 'connection' && activeTab !== 'guide' ? <AdminAlert tone="error">{overviewQuery.error instanceof Error ? overviewQuery.error.message : 'Не удалось загрузить статус'}</AdminAlert> : null}
+        {overviewQuery.error && activeTab !== 'connection' && activeTab !== 'guide' && activeTab !== 'start' ? <AdminAlert tone="error">{overviewQuery.error instanceof Error ? overviewQuery.error.message : 'Не удалось загрузить статус'}</AdminAlert> : null}
+        {activeTab === 'start' ? <AzureSyncStart settings={settings} overview={overview} loading={settingsQuery.isLoading || (configured && overviewQuery.isLoading)} error={settingsQuery.error ?? overviewQuery.error} onNavigate={selectTab} /> : null}
         {activeTab === 'connection' ? <ConnectionCard /> : null}
         {activeTab === 'guide' ? <AzureSyncGuide /> : null}
         {activeTab === 'write-back' && settings ? <WriteBackSettingsPanel settings={settings.writeBack} overview={overview} /> : null}

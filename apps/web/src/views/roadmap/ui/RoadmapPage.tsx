@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { AlertCircle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, ExternalLink, Eye, EyeOff, Maximize2, Minimize2, Pencil, Plus, RefreshCw, Users, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, ExternalLink, Eye, EyeOff, Maximize2, Minimize2, Pencil, Plus, RefreshCw, Users, X } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
@@ -73,7 +73,9 @@ function needsAzurePush(allocation: RoadmapAllocation) {
 
 function AzureSyncMark({ allocation }: { allocation: RoadmapAllocation }) {
   if (allocation.azureSyncStatus === 'pending') return <RefreshCw className="h-3 w-3 shrink-0 animate-spin text-amber-600 dark:text-amber-300" aria-label="Отправляется в Azure DevOps" />;
+  if (allocation.azureSyncStatus === 'sending') return <RefreshCw className="h-3 w-3 shrink-0 animate-spin text-sky-600 dark:text-sky-300" aria-label="Задача отправляется в Azure DevOps" />;
   if (allocation.azureSyncStatus === 'error') return <AlertCircle className="h-3 w-3 shrink-0 text-destructive" aria-label="Ошибка отправки в Azure DevOps" />;
+  if (allocation.azureSyncStatus === 'conflict') return <AlertTriangle className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-300" aria-label="Конфликт с изменением в Azure DevOps" />;
   if (allocation.azureSyncStatus === 'synced') return null;
   if (allocation.azureSyncStatus === 'skipped') return <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground/50" aria-label="Не отправляется в Azure DevOps" />;
   return <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/40" aria-label="Ещё не отправлено в Azure DevOps" />;
@@ -83,7 +85,9 @@ function AzureTaskPanel({ allocation, onRetry, retrying }: { allocation: Roadmap
   const status = allocation.azureSyncStatus;
   const label = status === 'synced' ? 'Задача синхронизирована'
     : status === 'pending' ? 'Отправляем в Azure DevOps…'
+      : status === 'sending' ? 'Задача отправляется в Azure DevOps…'
       : status === 'error' ? 'Не удалось отправить'
+        : status === 'conflict' ? 'Конфликт изменений'
         : status === 'skipped' ? 'Не отправляется'
           : 'Ещё не отправлено';
   return <div className="space-y-2 rounded-lg border border-border px-3 py-2.5 text-xs">
@@ -95,7 +99,7 @@ function AzureTaskPanel({ allocation, onRetry, retrying }: { allocation: Roadmap
       План {Number(allocation.estimatedHours)} ч · факт {Number(allocation.actualHours ?? 0)} ч{allocation.azureTaskState ? ` · ${allocation.azureTaskState}` : ''}
     </p>
     {allocation.azureSyncError ? <p className="break-words text-destructive">{allocation.azureSyncError}</p> : null}
-    {status !== 'synced' && status !== 'pending' ? <Button type="button" size="sm" variant="outline" className="h-7 gap-1.5 text-xs" disabled={retrying} onClick={onRetry}><ArrowUpFromLine className="h-3.5 w-3.5" />{retrying ? 'Отправляем…' : 'Отправить снова'}</Button> : null}
+    {status !== 'synced' && status !== 'pending' && status !== 'sending' ? <Button type="button" size="sm" variant="outline" className="h-7 gap-1.5 text-xs" disabled={retrying} onClick={onRetry}><ArrowUpFromLine className="h-3.5 w-3.5" />{retrying ? 'Отправляем…' : 'Отправить снова'}</Button> : null}
   </div>;
 }
 
@@ -665,7 +669,7 @@ export function RoadmapPage() {
     enabled: Boolean(roadmapProjectId),
     // While allocations are being written to Azure DevOps, poll until every status settles.
     refetchInterval: (query) => query.state.data?.azure?.writeBackEnabled
-      && query.state.data.workItems.some((item) => item.allocations.some((allocation) => allocation.azureSyncStatus === 'pending'))
+      && query.state.data.workItems.some((item) => item.allocations.some((allocation) => allocation.azureSyncStatus === 'pending' || allocation.azureSyncStatus === 'sending'))
       ? 3000
       : false,
   });

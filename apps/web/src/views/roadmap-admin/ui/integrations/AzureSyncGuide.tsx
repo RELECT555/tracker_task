@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowRight, BookOpen, Check, RefreshCw, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowRight, BookOpen, Check, RefreshCw, X } from 'lucide-react';
 import { Panel } from './parts';
 
 const OWNERSHIP: { field: string; owner: 'Roadmap' | 'Azure DevOps'; rule: string }[] = [
@@ -28,8 +28,10 @@ const DONT = [
 const STATUSES: { mark: React.ReactNode; label: string; detail: string }[] = [
   { mark: <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />, label: 'Не отправлено', detail: 'Назначение ещё ни разу не уходило в Azure' },
   { mark: <RefreshCw className="h-3.5 w-3.5 text-amber-600" />, label: 'Ожидает', detail: 'Изменено в Roadmap; уйдёт автоматически или по кнопке' },
+  { mark: <RefreshCw className="h-3.5 w-3.5 animate-spin text-sky-600" />, label: 'Отправляется', detail: 'Задача сейчас обрабатывается очередью отправки' },
   { mark: <Check className="h-3.5 w-3.5 text-emerald-600" />, label: 'В Azure', detail: 'Задача создана и совпадает с планом. На странице плана значка нет — всё в порядке' },
   { mark: <AlertCircle className="h-3.5 w-3.5 text-destructive" />, label: 'Ошибка', detail: 'Azure отклонил запись — текст ошибки виден в назначении и на вкладке «Проекты»' },
+  { mark: <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />, label: 'Конфликт', detail: 'Поле из правил записи изменили вручную в Azure — выберите действие' },
   { mark: <span className="h-2 w-2 rounded-full border border-muted-foreground/50" />, label: 'Пропущено', detail: 'Демо-участник или проект не включён в запись' },
 ];
 

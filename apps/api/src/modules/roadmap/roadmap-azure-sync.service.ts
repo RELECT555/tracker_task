@@ -23,7 +23,14 @@ type CacheEntry<T> = { value: T; loadedAt: number };
 type AllocationWithContext = Prisma.RoadmapAllocationGetPayload<{
   include: { role: true; workItem: { include: { project: true } } };
 }>;
-type ReadinessCheck = { key: string; label: string; status: 'ok' | 'warning' | 'error'; detail: string };
+export type ReadinessCheck = { key: string; label: string; status: 'ok' | 'warning' | 'error'; detail: string };
+
+export function worstReadinessStatus(checks: ReadinessCheck[] | null): ReadinessCheck['status'] | null {
+  if (!checks?.length) return null;
+  if (checks.some((check) => check.status === 'error')) return 'error';
+  if (checks.some((check) => check.status === 'warning')) return 'warning';
+  return 'ok';
+}
 
 export type AzureWebhookPayload = {
   eventType?: string;
@@ -152,7 +159,7 @@ export class RoadmapAzureSyncService {
   async overview() {
     const [settings, projects, allocations, errors] = await Promise.all([
       this.integration.getWriteBackSettings(),
-      this.prisma.roadmapProject.findMany({ orderBy: { name: 'asc' }, select: { id: true, externalId: true, name: true, url: true, syncedAt: true } }),
+      this.prisma.roadmapProject.findMany({ orderBy: { name: 'asc' }, select: { id: true, externalId: true, name: true, url: true, syncedAt: true, azureState: true } }),
       this.prisma.roadmapAllocation.findMany({ select: { azureSyncStatus: true, azureSyncedAt: true, workItem: { select: { projectId: true } } } }),
       this.prisma.roadmapAllocation.findMany({
         where: { azureSyncStatus: 'error' },
@@ -172,8 +179,15 @@ export class RoadmapAzureSyncService {
           ...project,
           enabled: !settings.projectIds || settings.projectIds.includes(project.id),
           total: own.length,
-          counts: { notSent: count(null), pending: count('pending'), synced: count('synced'), error: count('error'), skipped: count('skipped') },
+          counts: {
+            notSent: count(null), pending: count('pending'), sending: count('sending'), synced: count('synced'),
+            error: count('error'), conflict: count('conflict'), skipped: count('skipped'),
+          },
           lastPushedAt,
+          lastCheckAt: project.azureState?.lastCheckAt ?? null,
+          lastCheckStatus: this.worstCheckStatus(project.azureState?.lastCheckResult),
+          lastCheck: this.readinessChecks(project.azureState?.lastCheckResult),
+          lastWebhookAt: project.azureState?.lastWebhookAt ?? null,
         };
       }),
       errors: errors.map((allocation) => ({
@@ -206,6 +220,7 @@ export class RoadmapAzureSyncService {
       checks.push({ key: 'connection', label: 'Подключение и доступ к проекту', status: 'ok', detail: `Проект «${project.name}» доступен` });
     } catch (error) {
       checks.push({ key: 'connection', label: 'Подключение и доступ к проекту', status: 'error', detail: this.message(error) });
+      await this.persistCheckResult(projectId, checks);
       return { checks };
     }
 
@@ -285,6 +300,7 @@ export class RoadmapAzureSyncService {
     checks.push(publicSettings.webhookConfigured
       ? { key: 'webhook', label: 'Webhook для факта', status: 'ok', detail: 'Секрет создан. Убедитесь, что подписка в Azure DevOps активна.' }
       : { key: 'webhook', label: 'Webhook для факта', status: 'warning', detail: 'Не настроен — факт обновляется только кнопкой «Загрузить из Azure»' });
+    await this.persistCheckResult(projectId, checks);
     return { checks };
   }
 
@@ -309,6 +325,12 @@ export class RoadmapAzureSyncService {
     const project = await this.prisma.roadmapProject.findUnique({ where: { externalId: projectExternalId }, select: { id: true } });
     if (!project) return { accepted: false };
 
+    await this.prisma.roadmapAzureProjectState.upsert({
+      where: { projectId: project.id },
+      create: { projectId: project.id, lastWebhookAt: new Date() },
+      update: { lastWebhookAt: new Date() },
+    });
+
     if (eventType === 'workitem.deleted') {
       await this.handleDeletedWorkItem(project.id, String(workItemId));
       return { accepted: true };
@@ -326,6 +348,24 @@ export class RoadmapAzureSyncService {
   private enqueue(allocationIds: string[]) {
     allocationIds.forEach((id) => this.queue.add(id));
     this.kick();
+  }
+
+  private async persistCheckResult(projectId: string, checks: ReadinessCheck[]) {
+    await this.prisma.roadmapAzureProjectState.upsert({
+      where: { projectId },
+      create: { projectId, lastCheckAt: new Date(), lastCheckResult: checks },
+      update: { lastCheckAt: new Date(), lastCheckResult: checks },
+    });
+  }
+
+  private readinessChecks(value: Prisma.JsonValue | null | undefined): ReadinessCheck[] | null {
+    if (!Array.isArray(value)) return null;
+    return value.filter((item): item is ReadinessCheck => Boolean(item && typeof item === 'object' && 'key' in item && 'status' in item));
+  }
+
+  private worstCheckStatus(value: Prisma.JsonValue | null | undefined): ReadinessCheck['status'] | null {
+    const checks = this.readinessChecks(value);
+    return worstReadinessStatus(checks);
   }
 
   private kick() {
@@ -388,7 +428,9 @@ export class RoadmapAzureSyncService {
 
       const existing = taskId ? await this.fetchTask(taskId, credentials) : null;
       if (existing) {
-        const typeFields = await this.typeFields(project.externalId, String(existing.fields['System.WorkItemType'] ?? settings.workItemType), credentials);
+        const existingType = existing.fields['System.WorkItemType'];
+        const typeName = typeof existingType === 'string' ? existingType : settings.workItemType;
+        const typeFields = await this.typeFields(project.externalId, typeName, credentials);
         await this.updateTask(existing, { assignee, estimate, estimateChanged, settings, typeFields }, credentials);
       } else {
         const typeFields = await this.typeFields(project.externalId, settings.workItemType, credentials);

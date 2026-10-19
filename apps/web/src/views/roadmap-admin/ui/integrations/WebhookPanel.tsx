@@ -7,6 +7,7 @@ import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { baseURL } from '@/shared/api/client';
 import { Button } from '@/shared/ui/button';
 import { AdminAlert, StatusPill } from '../AdminLayout';
+import { HelpHint } from './HelpHint';
 import { errorText, Panel } from './parts';
 
 function webhookUrl() {
@@ -33,7 +34,7 @@ export function WebhookPanel({ webhookConfigured }: { webhookConfigured: boolean
       title="Webhook: факт из Azure DevOps без кнопки"
       description="Azure DevOps сам сообщает об изменениях work items — факт и состояния обновляются через пару секунд."
       icon={<Webhook className="h-[18px] w-[18px]" strokeWidth={1.7} />}
-      actions={<StatusPill active={webhookConfigured} label={webhookConfigured ? 'Секрет создан' : 'Не настроен'} />}
+      actions={<div className="flex items-center gap-1.5"><HelpHint text="Webhook сообщает Roadmap об изменениях в Azure, чтобы факт и конфликты обновлялись автоматически." example="API должен быть доступен Azure DevOps из интернета." faqId="webhook-needed" /><StatusPill active={webhookConfigured} label={webhookConfigured ? 'Секрет создан' : 'Не настроен'} /></div>}
     >
       <div className="space-y-5 px-5 py-5">
         {secretMutation.error ? <AdminAlert tone="error">{errorText(secretMutation.error)}</AdminAlert> : null}

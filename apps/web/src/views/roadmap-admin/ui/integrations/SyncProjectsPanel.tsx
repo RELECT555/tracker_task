@@ -58,7 +58,7 @@ function ProjectRow({ project, writeBackOff }: { project: OverviewProject; write
   const [checks, setChecks] = useState<RoadmapReadinessCheck[] | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const toSend = project.counts.notSent + project.counts.pending + project.counts.error;
+  const toSend = project.counts.notSent + project.counts.pending + project.counts.error + project.counts.conflict;
 
   const checkMutation = useMutation({
     mutationFn: () => roadmapApi.checkWriteBack(project.id),
@@ -87,13 +87,17 @@ function ProjectRow({ project, writeBackOff }: { project: OverviewProject; write
           <div className="flex flex-wrap gap-1.5">
             <Chip tone="ok" title="Задачи созданы и совпадают с планом">В Azure: {project.counts.synced}</Chip>
             {project.counts.pending ? <Chip tone="warn" title="Изменено в Roadmap, ждёт отправки">Ожидает: {project.counts.pending}</Chip> : null}
+            {project.counts.sending ? <Chip tone="info" title="Задача обрабатывается очередью">Отправляется: {project.counts.sending}</Chip> : null}
             {project.counts.notSent ? <Chip title="Ни разу не отправлялось">Не отправлено: {project.counts.notSent}</Chip> : null}
             {project.counts.error ? <Chip tone="error">Ошибок: {project.counts.error}</Chip> : null}
+            {project.counts.conflict ? <Chip tone="warn" title="Поле изменили вручную в Azure">Конфликтов: {project.counts.conflict}</Chip> : null}
             {project.counts.skipped ? <Chip title="Демо-участники или проект вне записи">Пропущено: {project.counts.skipped}</Chip> : null}
           </div>
           <p className="text-[11px] text-muted-foreground">
             Факт загружен: {project.syncedAt ? new Date(project.syncedAt).toLocaleString('ru-RU') : 'ещё нет'}
             {' · '}План отправлен: {project.lastPushedAt ? new Date(project.lastPushedAt).toLocaleString('ru-RU') : 'ещё нет'}
+            {' · '}Проверка: {project.lastCheckAt ? `${new Date(project.lastCheckAt).toLocaleString('ru-RU')} (${project.lastCheckStatus === 'ok' ? 'в порядке' : project.lastCheckStatus === 'warning' ? 'есть предупреждения' : 'есть ошибки'})` : 'ещё не запускалась'}
+            {' · '}Webhook: {project.lastWebhookAt ? new Date(project.lastWebhookAt).toLocaleString('ru-RU') : 'событий нет'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

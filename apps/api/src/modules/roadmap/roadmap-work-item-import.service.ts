@@ -67,11 +67,15 @@ export class RoadmapWorkItemImportService {
     const actualHours = typeof actualHoursValue === 'number' && Number.isFinite(actualHoursValue)
       ? actualHoursValue
       : null;
+    const stringValue = (value: unknown, fallback: string | null = null) => {
+      if (typeof value === 'string' || typeof value === 'number') return String(value);
+      return fallback;
+    };
     const data = {
-      parentExternalId: fields['System.Parent'] ? String(fields['System.Parent']) : null,
-      type: String(fields['System.WorkItemType'] ?? 'Feature'),
-      title: String(fields['System.Title'] ?? `Work item ${item.id}`),
-      state: fields['System.State'] ? String(fields['System.State']) : null,
+      parentExternalId: stringValue(fields['System.Parent']),
+      type: stringValue(fields['System.WorkItemType'], 'Feature')!,
+      title: stringValue(fields['System.Title'], `Work item ${item.id}`)!,
+      state: stringValue(fields['System.State']),
       url: item.url,
       actualHours,
       azureCustomFields: azureCustomFields as Prisma.InputJsonObject,

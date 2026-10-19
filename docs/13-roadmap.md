@@ -32,13 +32,16 @@ Use **Synchronize** on an imported project to refresh work item names, types, st
 
 ## Two-way sync with Azure DevOps
 
-The plan is owned by Roadmap; the actuals are owned by Azure DevOps. Everything is configured in **Integrations**, which has five tabs:
+The plan is owned by Roadmap; the actuals are owned by Azure DevOps. Everything is configured in **Integrations**, which has six tabs:
 
+- **Start** — a setup checklist and searchable FAQ. It remains the first tab until the connection, readiness, first successful sync, and webhook steps are complete; then **Projects and status** becomes the default.
 - **Connection** — organization URL, PAT and the PAT scopes needed for each feature.
 - **How it works** — the data flow, which system owns each field, do/don't rules, the status legend and the first-run order.
 - **Write settings** — mode, project scope, work item type, title/tag templates, fields to write and the Remaining Work policy.
 - **Projects and status** — per-project counters, **Check readiness**, **Load from Azure** (re-import + fact) and **Send to Azure** with a preview; recent errors with **Send again**.
 - **Webhook** — secret and step-by-step service hook setup.
+
+The integration overview stores the last readiness check and the last webhook event for each imported project. The checklist uses those persisted values, so it reflects the API state after a page reload. Assignment statuses include **sending** while a queue item is being processed and **conflict** when Azure changed a field controlled by Roadmap.
 
 **Plan → Azure DevOps (write-back).** Every assignment (work item × role × person × quarter) is mirrored by a work item (Task by default) under its Feature or Epic.
 

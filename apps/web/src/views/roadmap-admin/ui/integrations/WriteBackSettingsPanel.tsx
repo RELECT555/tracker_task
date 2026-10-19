@@ -7,6 +7,7 @@ import type { RoadmapWriteBackMode, RoadmapWriteBackOverview, RoadmapWriteBackSe
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
+import { HelpHint } from './HelpHint';
 import { errorText, Panel } from './parts';
 
 export const DEFAULT_WRITE_BACK: RoadmapWriteBackSettings = {
@@ -60,7 +61,7 @@ export function WriteBackSettingsPanel({ settings, overview }: { settings: Roadm
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
   const projects = overview?.projects ?? [];
-  const pendingTotal = projects.reduce((sum, project) => sum + project.counts.pending + project.counts.notSent + project.counts.error, 0);
+  const pendingTotal = projects.reduce((sum, project) => sum + project.counts.pending + project.counts.notSent + project.counts.error + project.counts.conflict, 0);
   const switchingToAuto = draft.mode === 'auto' && settings.mode !== 'auto' && pendingTotal > 0;
 
   const saveMutation = useMutation({
@@ -105,7 +106,7 @@ export function WriteBackSettingsPanel({ settings, overview }: { settings: Roadm
         {notice && !dirty ? <p role="status" className="px-5 py-3 text-sm text-emerald-700 dark:text-emerald-300">{notice}</p> : null}
         {dirty ? <p className="bg-amber-500/[0.06] px-5 py-2.5 text-xs text-amber-800 dark:text-amber-200">Есть несохранённые изменения.</p> : null}
 
-        <Section title="1. Когда отправлять">
+        <Section title="1. Когда отправлять" help="Определяет, когда изменения плана попадут в Azure DevOps." faqId="when-plan-is-filled">
           <div className="grid gap-3 md:grid-cols-3">
             {MODES.map((mode) => <label key={mode.value} className={`cursor-pointer rounded-lg border p-3.5 transition-colors ${draft.mode === mode.value ? 'border-primary bg-primary/[0.05] ring-1 ring-primary/30' : 'border-border hover:border-primary/40'}`}>
               <span className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -120,7 +121,7 @@ export function WriteBackSettingsPanel({ settings, overview }: { settings: Roadm
           </p> : null}
         </Section>
 
-        <Section title="2. Какие проекты" hint="Ограничьте запись, чтобы безопасно опробовать её на одном проекте.">
+        <Section title="2. Какие проекты" hint="Ограничьте запись, чтобы безопасно опробовать её на одном проекте." help="Выберите проекты, для которых разрешена запись задач." faqId="what-is-two-way-sync">
           <div className="flex flex-wrap gap-4 text-sm">
             <label className="flex items-center gap-2"><input type="radio" name="write-back-scope" className="accent-primary" checked={draft.projectIds === null} onChange={() => update({ projectIds: null })} />Все импортированные проекты</label>
             <label className="flex items-center gap-2"><input type="radio" name="write-back-scope" className="accent-primary" checked={draft.projectIds !== null} onChange={() => update({ projectIds: draft.projectIds ?? [] })} />Только выбранные</label>
@@ -135,16 +136,16 @@ export function WriteBackSettingsPanel({ settings, overview }: { settings: Roadm
           </div> : null}
         </Section>
 
-        <Section title="3. Что создавать" hint="Тип должен существовать в процессе проекта. Обычно это Task.">
+        <Section title="3. Что создавать" hint="Тип должен существовать в процессе проекта. Обычно это Task." help="Тип, название и теги определяют создаваемую задачу." faqId="what-appears-in-azure">
           <div className="grid gap-4 lg:grid-cols-[200px_1fr]">
-            <label className="space-y-1.5 text-xs font-medium text-muted-foreground">Тип work item
+            <label className="space-y-1.5 text-xs font-medium text-muted-foreground"><span className="flex items-center gap-1">Тип work item <HelpHint text="Тип work item должен быть доступен в процессе проекта." example="Task" /></span>
               <Input value={draft.workItemType} maxLength={64} onChange={(event) => update({ workItemType: event.target.value })} className="h-9" placeholder="Task" />
             </label>
             <div className="space-y-3">
-              <label className="block space-y-1.5 text-xs font-medium text-muted-foreground">Шаблон названия
+              <label className="block space-y-1.5 text-xs font-medium text-muted-foreground"><span className="flex items-center gap-1">Шаблон названия <HelpHint text="Подставляет токены в заголовок задачи." example="{role}: {title} ({quarter})" faqId="what-appears-in-azure" /></span>
                 <Input ref={titleRef} value={draft.titleTemplate} maxLength={200} onFocus={() => setLastFocused('title')} onChange={(event) => update({ titleTemplate: event.target.value })} className="h-9 font-mono text-[13px]" />
               </label>
-              <label className="block space-y-1.5 text-xs font-medium text-muted-foreground">Теги (через «;»)
+              <label className="block space-y-1.5 text-xs font-medium text-muted-foreground"><span className="flex items-center gap-1">Теги (через «;») <HelpHint text="Теги помогают отличать задачи Roadmap и строить запросы в Azure." example="Roadmap; Roadmap {quarterKey}; {role}" faqId="what-appears-in-azure" /></span>
                 <Input ref={tagsRef} value={draft.tagsTemplate} maxLength={200} onFocus={() => setLastFocused('tags')} onChange={(event) => update({ tagsTemplate: event.target.value })} className="h-9 font-mono text-[13px]" placeholder="Roadmap" />
               </label>
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
@@ -161,17 +162,17 @@ export function WriteBackSettingsPanel({ settings, overview }: { settings: Roadm
           </div>
         </Section>
 
-        <Section title="4. Какие поля заполнять">
+        <Section title="4. Какие поля заполнять" help="Выберите поля, которые Roadmap будет заполнять при отправке задачи." faqId="custom-fields">
           <div className="grid gap-2 md:grid-cols-2">
             {FIELDS.map((field) => <label key={field.key} className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border/70 p-3">
               <input type="checkbox" className="mt-0.5 accent-primary" checked={draft.fields[field.key]} onChange={(event) => update({ fields: { ...draft.fields, [field.key]: event.target.checked } })} />
-              <span><span className="block text-sm font-medium text-foreground">{field.title}</span><span className="mt-0.5 block text-xs text-muted-foreground">{field.detail}</span></span>
+              <span><span className="flex items-center gap-1 text-sm font-medium text-foreground">{field.title}<HelpHint text={field.detail} faqId="custom-fields" /></span><span className="mt-0.5 block text-xs text-muted-foreground">{field.detail}</span></span>
             </label>)}
           </div>
           {!draft.fields.originalEstimate && !draft.fields.remainingWork ? <p className="mt-3 flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />Ни одно поле оценки не выбрано — в Azure не будет плановых часов.</p> : null}
         </Section>
 
-        <Section title="5. Как обновлять Remaining Work" hint="Применяется, когда в Roadmap меняют оценку уже отправленного назначения.">
+        <Section title="5. Как обновлять Remaining Work" hint="Применяется, когда в Roadmap меняют оценку уже отправленного назначения." help="Выберите, пересчитывать ли остаток после изменения оценки." faqId="plan-changes">
           <div className="grid gap-3 md:grid-cols-2">
             {([
               ['recalculate', 'Пересчитывать', 'Remaining Work = новая оценка − уже списанное (Completed Work). Остаток всегда соответствует плану.'],
@@ -187,9 +188,9 @@ export function WriteBackSettingsPanel({ settings, overview }: { settings: Roadm
   );
 }
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function Section({ title, hint, help, faqId, children }: { title: string; hint?: string; help?: string; faqId?: string; children: React.ReactNode }) {
   return <div className="px-5 py-4">
-    <p className="text-sm font-semibold text-foreground">{title}</p>
+    <p className="flex items-center gap-1 text-sm font-semibold text-foreground">{title}{help ? <HelpHint text={help} faqId={faqId} /> : null}</p>
     {hint ? <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p> : null}
     <div className="mt-3">{children}</div>
   </div>;

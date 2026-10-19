@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { normalizeWriteBackSettings, WriteBackSettings } from './roadmap-write-back.settings';
 
@@ -179,7 +178,7 @@ export class RoadmapIntegrationService {
   private async readStoredSettings(): Promise<StoredIntegration | null> {
     const setting = await this.prisma.systemSetting.findUnique({ where: { key: this.settingKey } });
     return setting?.value && typeof setting.value === 'object' && !Array.isArray(setting.value)
-      ? (setting.value as StoredIntegration)
+      ? setting.value
       : null;
   }
 
@@ -190,8 +189,8 @@ export class RoadmapIntegrationService {
   private async writeStoredSettings(value: StoredIntegration) {
     await this.prisma.systemSetting.upsert({
       where: { key: this.settingKey },
-      create: { key: this.settingKey, value: value as Prisma.InputJsonValue },
-      update: { value: value as Prisma.InputJsonValue },
+      create: { key: this.settingKey, value },
+      update: { value },
     });
   }
 

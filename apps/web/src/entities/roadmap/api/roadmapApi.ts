@@ -62,7 +62,7 @@ export interface RoadmapAllocation {
   actualHours?: number | string | null;
 }
 
-export type RoadmapAzureSyncStatus = 'pending' | 'synced' | 'error' | 'skipped';
+export type RoadmapAzureSyncStatus = 'pending' | 'sending' | 'synced' | 'error' | 'conflict' | 'skipped';
 
 export interface RoadmapWorkItem {
   id: string;
@@ -157,8 +157,12 @@ export interface RoadmapWriteBackOverview {
     syncedAt: string | null;
     enabled: boolean;
     total: number;
-    counts: { notSent: number; pending: number; synced: number; error: number; skipped: number };
+    counts: { notSent: number; pending: number; sending: number; synced: number; error: number; conflict: number; skipped: number };
     lastPushedAt: string | null;
+    lastCheckAt: string | null;
+    lastCheckStatus: RoadmapReadinessCheck['status'] | null;
+    lastCheck: RoadmapReadinessCheck[] | null;
+    lastWebhookAt: string | null;
   }[];
   errors: {
     allocationId: string;
