@@ -28,8 +28,7 @@ export class AdminRoleGuard implements CanActivate {
     });
 
     const isAdmin =
-      user?.isActive &&
-      user.roles.some((entry) => entry.role.code === 'admin');
+      user?.isActive && user.roles.some((entry) => entry.role.code === 'admin');
 
     if (!isAdmin) {
       throw new ForbiddenException({

@@ -29,8 +29,8 @@ export function RoadmapAdminHomePage() {
   const roleCount = roleCatalogQuery.data?.length;
 
   return (
-    <main className="min-h-0 flex-1 overflow-auto px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-7">
+    <main className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full space-y-7">
         <section className="relative overflow-hidden rounded-2xl border border-border bg-card px-5 py-6 sm:px-7 sm:py-7">
           <div className="pointer-events-none absolute -right-14 -top-24 h-64 w-64 rounded-full bg-primary/[0.08] blur-3xl" />
           <div className="relative flex flex-wrap items-end justify-between gap-5">

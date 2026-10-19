@@ -46,7 +46,7 @@ export function RoadmapIntegrationsPage() {
 
   return (
     <main className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-4xl space-y-6">
+      <div className="mx-auto w-full space-y-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Интеграции</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">

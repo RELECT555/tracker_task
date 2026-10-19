@@ -167,8 +167,8 @@ export function RoadmapAnalyticsPage() {
     else if (projects.length) setProjectId(projects[0].id);
   }, [projectId, projects]);
 
-  return <main className="min-h-0 flex-1 overflow-auto px-4 py-6 sm:px-6 lg:px-8">
-    <div className="mx-auto max-w-7xl space-y-6">
+  return <main className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div><p className="text-xs font-semibold uppercase tracking-[0.13em] text-primary">Roadmap</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Аналитика</h1><p className="mt-1.5 text-sm text-muted-foreground">Короткая сводка по задачам, назначениям и квартальному плану.</p></div>
         <AzureProjectPicker projects={projects} value={projectId} onChange={setProjectId} disabled={projectsQuery.isLoading} placeholder="Выбрать проект" />

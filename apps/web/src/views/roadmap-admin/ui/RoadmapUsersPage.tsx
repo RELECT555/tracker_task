@@ -28,8 +28,8 @@ export function RoadmapUsersPage() {
   const error = usersQuery.error ?? sync.error;
 
   return (
-    <main className="min-h-0 flex-1 overflow-auto px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-5xl space-y-6">
+    <main className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Пользователи</h1>
           <Button onClick={() => sync.mutate()} disabled={sync.isPending} className="gap-2"><RefreshCw className={`h-4 w-4 ${sync.isPending ? 'animate-spin' : ''}`} />{sync.isPending ? 'Синхронизация…' : 'Синхронизировать'}</Button>
