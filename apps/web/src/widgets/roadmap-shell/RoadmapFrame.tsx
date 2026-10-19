@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
-import { Cable, ChartNoAxesCombined, Check, ChevronUp, GitBranch, LogIn, LogOut, Monitor, Moon, PanelsTopLeft, Rows3, Settings2, Sun, UserRoundCog, Users } from 'lucide-react';
+import { Cable, ChartNoAxesCombined, Check, ChevronDown, ChevronUp, GitBranch, LogIn, LogOut, Monitor, Moon, PanelsTopLeft, Rows3, Settings2, Sun, UserRoundCog, Users } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { DEV_ACCOUNTS } from '@/features/auth/lib/dev-accounts';
@@ -67,8 +67,13 @@ export function RoadmapFrame({ children }: { children: React.ReactNode }) {
   const { theme, setTheme } = useTheme();
   const [themeMounted, setThemeMounted] = useState(false);
   const isAdmin = isAdminUser(user);
+  const isAdminSection = pathname.startsWith(routes.roadmapAdminHome);
+  const [adminMenuOpen, setAdminMenuOpen] = useState(isAdminSection);
   const isPlanner = pathname === routes.roadmap;
   useEffect(() => setThemeMounted(true), []);
+  useEffect(() => {
+    if (isAdminSection) setAdminMenuOpen(true);
+  }, [isAdminSection, pathname]);
   const themeLabel = !themeMounted ? 'Системная' : theme === 'dark' ? 'Тёмная' : theme === 'light' ? 'Светлая' : 'Системная';
   const ThemeIcon = !themeMounted ? Monitor : theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
   const cycleTheme = () => {
@@ -119,8 +124,17 @@ export function RoadmapFrame({ children }: { children: React.ReactNode }) {
 
           {isAdmin ? (
             <>
-              <p className="mb-2 mt-7 px-3 text-[11px] font-medium uppercase tracking-wider text-sidebar-section">Администрирование</p>
-              <div className="space-y-1">
+              <button
+                type="button"
+                aria-expanded={adminMenuOpen}
+                aria-controls="roadmap-admin-navigation"
+                onClick={() => setAdminMenuOpen((open) => !open)}
+                className="group mb-2 mt-7 flex w-full items-center justify-between rounded-md px-3 py-1 text-left text-[11px] font-medium uppercase tracking-wider text-sidebar-section transition-colors hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              >
+                <span>Администрирование</span>
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${adminMenuOpen ? 'rotate-180' : ''}`} strokeWidth={1.7} aria-hidden="true" />
+              </button>
+              {adminMenuOpen ? <div id="roadmap-admin-navigation" className="space-y-1">
                 {adminLinks.map(({ href, label, icon: Icon }) => {
                   const active = pathname === href;
                   return <Link
@@ -133,7 +147,7 @@ export function RoadmapFrame({ children }: { children: React.ReactNode }) {
                     {label}
                   </Link>;
                 })}
-              </div>
+              </div> : null}
             </>
           ) : null}
         </nav>
