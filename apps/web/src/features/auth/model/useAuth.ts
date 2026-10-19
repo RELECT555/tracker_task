@@ -54,9 +54,6 @@ export function useAuth() {
       setTokens(data.accessToken, data.refreshToken);
       setHasToken(true);
       queryClient.setQueryData(['auth', 'me'], { user: data.user });
-      // An explicit ?redirect= wins; otherwise first-time users get the tour.
-      // TODO: flip ALWAYS_SHOW_WELCOME back to false — it is on so the screen
-      // can be reviewed on every login.
       const target = variables.redirectTo ?? routes.workspaces;
       router.push(target);
       router.refresh();

@@ -137,10 +137,8 @@ export function RoadmapAnalyticsPage() {
   const features = useMemo(() => workItems.filter((item) => item.type.toLocaleLowerCase('ru-RU') !== 'epic'), [workItems]);
   const allocations = useMemo(() => workItems.flatMap((item) => item.allocations), [workItems]);
   const peopleCount = new Set(allocations.map((allocation) => allocation.personExternalId)).size;
-  const quarterHours = allocations.reduce((sum, allocation) => sum + allocation.periods.reduce((periodSum, period) => {
-    const monthKey = period.monthKey ?? '';
-    return periodSum + (quarter.monthKeys.includes(monthKey) ? Number(period.hours) : 0);
-  }, 0), 0);
+  const quarterKey = `${quarter.year}-Q${quarter.quarter}`;
+  const quarterHours = allocations.reduce((sum, allocation) => sum + (allocation.quarterKey === quarterKey ? Number(allocation.estimatedHours) : 0), 0);
   const totalEstimatedHours = allocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0);
   const featuresWithAssignments = features.filter((feature) => feature.allocations.length > 0).length;
 
@@ -159,9 +157,9 @@ export function RoadmapAnalyticsPage() {
       name: role.name,
       color: role.color,
       estimated: roleAllocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0),
-      planned: roleAllocations.reduce((sum, allocation) => sum + allocation.periods.reduce((periodSum, period) => periodSum + (quarter.monthKeys.includes(period.monthKey ?? '') ? Number(period.hours) : 0), 0), 0),
+      planned: roleAllocations.reduce((sum, allocation) => sum + (allocation.quarterKey === quarterKey ? Number(allocation.estimatedHours) : 0), 0),
     };
-  }).sort((a, b) => b.estimated - a.estimated), [allocations, plan?.roles, quarter.monthKeys]);
+  }).sort((a, b) => b.estimated - a.estimated), [allocations, plan?.roles, quarterKey]);
   useEffect(() => {
     if (projectId && projects.some((item) => item.id === projectId)) return;
     const firstImported = projects.find((item) => item.imported);

@@ -21,7 +21,7 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    router.replace(routes.inbox);
+    router.replace(routes.roadmap);
   }, [isLoading, router, user]);
 
   if (isLoading || !allowed) {

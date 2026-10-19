@@ -28,6 +28,7 @@ class SaveAllocationDto {
   @IsString() personExternalId!: string;
   @IsString() personName!: string;
   @IsOptional() @IsString() personEmail?: string;
+  @Matches(/^\d{4}-Q[1-4]$/) quarterKey!: string;
   @IsNumber() @Min(0) estimatedHours!: number;
   @IsArray() @ValidateNested({ each: true }) @Type(() => PeriodDto) periods!: PeriodDto[];
 }

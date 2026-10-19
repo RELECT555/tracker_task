@@ -1,270 +1,43 @@
-'use client';
+﻿'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { Eye, EyeOff, Monitor, Moon, Sun } from 'lucide-react';
-import { useTheme } from 'next-themes';
+import { type FormEvent, useState } from 'react';
 import { useAuth } from '@/features/auth/model/useAuth';
-import { loginWithMicrosoft } from '@/features/auth/lib/microsoft-auth';
-import { routes } from '@/shared/config/routes';
 import { safeRedirectPath } from '@/shared/config/auth';
+import { routes } from '@/shared/config/routes';
+import { ApiError } from '@/shared/api/client';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
-import { SilkShader } from '@/shared/ui/silk-shader';
-import { WayoMark } from '@/shared/ui/wayo-mark';
-import { ApiError } from '@/shared/api/client';
-import { cn } from '@/shared/lib/utils';
-
-function MicrosoftLogo({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 21 21" aria-hidden>
-      <rect x="1" y="1" width="9" height="9" fill="#f25022" />
-      <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
-      <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
-      <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
-    </svg>
-  );
-}
-
-function LoginThemeToggle() {
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
-
-  const cycleTheme = () => {
-    const order = ['light', 'dark', 'system'] as const;
-    const idx = order.indexOf((theme as (typeof order)[number]) ?? 'system');
-    setTheme(order[(idx + 1) % order.length]);
-  };
-
-  const themeLabel = !mounted
-    ? 'Системная'
-    : theme === 'dark'
-      ? 'Тёмная'
-      : theme === 'light'
-        ? 'Светлая'
-        : 'Системная';
-
-  const ThemeIcon =
-    !mounted ? Monitor : theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
-
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      onClick={cycleTheme}
-      aria-label={`Тема: ${themeLabel}`}
-      title={themeLabel}
-      className="absolute right-4 top-4 z-20 h-9 w-9 text-muted-foreground hover:text-foreground"
-    >
-      <ThemeIcon className="h-4 w-4" />
-    </Button>
-  );
-}
-
-function HeroCaption() {
-  return (
-    <div className="relative max-w-lg [text-shadow:0_1px_16px_rgb(0_0_0/0.45)]">
-      <div
-        aria-hidden
-        className="absolute -inset-x-12 -inset-y-10 rounded-[50%] bg-black/25 blur-3xl"
-      />
-      <p className="animate-element animate-delay-800 relative text-4xl font-medium leading-[1.12] tracking-[-0.035em] text-white sm:text-5xl">
-        Здесь могла бы быть
-        <span className="mt-1.5 block font-semibold">
-          <span className="relative inline-block pb-2">
-            ваша реклама
-            <span
-              aria-hidden
-              className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-gradient-to-r from-white/90 via-violet-200 to-pink-200 shadow-[0_0_16px_rgb(255_255_255/0.55)]"
-            />
-          </span>
-        </span>
-      </p>
-    </div>
-  );
-}
 
 export function LoginPage() {
   const searchParams = useSearchParams();
-  const redirectParam = searchParams.get('redirect');
-  // Undefined (not a default) so useAuth can send first-time users to the tour.
-  const redirectTo = redirectParam
-    ? safeRedirectPath(redirectParam, routes.inbox)
-    : undefined;
-  const { login, isLoggingIn } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isMicrosoftLoading, setIsMicrosoftLoading] = useState(false);
+  const { login, loginError, isLoggingIn } = useAuth();
+  const [email, setEmail] = useState('admin@tracker.local');
+  const [password, setPassword] = useState('tracker');
+  const redirectTo = safeRedirectPath(searchParams.get('redirect'), routes.roadmap);
 
-  const busy = isLoggingIn || isMicrosoftLoading;
-
-  async function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
-    try {
-      await login({ email, password }, redirectTo);
-    } catch (err) {
-      const message =
-        err instanceof ApiError ? err.message : 'Не удалось выполнить вход';
-      setError(message);
-    }
+    await login({ email, password }, redirectTo);
   }
 
-  async function handleMicrosoftLogin() {
-    setError(null);
-    setIsMicrosoftLoading(true);
-    try {
-      await loginWithMicrosoft();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось войти через Microsoft');
-    } finally {
-      setIsMicrosoftLoading(false);
-    }
-  }
+  const errorMessage = loginError instanceof ApiError ? loginError.message : loginError ? 'Не удалось выполнить вход' : null;
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-background md:flex-row">
-      {/* One shader across the whole page — no seam between the columns */}
-      <div aria-hidden className="absolute inset-0 z-0">
-        <SilkShader />
-        {/* Scrim: opaque under the form, transparent over the right half */}
-        <div className="absolute inset-0 bg-background/70 backdrop-blur-[2px] md:hidden" />
-        <div className="absolute inset-0 hidden bg-gradient-to-r from-background from-15% via-background/90 via-38% to-transparent to-72% md:block" />
-      </div>
-
-      <LoginThemeToggle />
-
-      {/* Brand — anchored to the page corner, not stacked above the form */}
-      <div className="animate-element animate-delay-100 absolute left-6 top-6 z-20 flex items-center gap-3 md:left-8 md:top-8">
-        <WayoMark framed className="h-11 w-11 rounded-lg" title="Wayo" />
-        <span className="text-xl font-semibold tracking-tight text-foreground">Wayo</span>
-      </div>
-
-      {/* Left column — form, sitting on the faded end of the shader */}
-      <section className="relative z-10 flex flex-1 items-center justify-center px-4 py-24 md:px-8 md:py-12">
-        <div
-          className={cn(
-            'animate-element animate-delay-200 relative z-10 w-full max-w-[420px]',
-            'rounded-[20px] border border-white/40 bg-card/80 p-8 backdrop-blur-2xl md:p-9',
-            'shadow-[0_1px_1px_rgb(0_0_0/0.04),0_28px_60px_-24px_rgb(30_27_75/0.35)]',
-            'dark:border-white/10 dark:bg-card/60',
-            'dark:shadow-[0_1px_1px_rgb(255_255_255/0.04),0_28px_70px_-24px_rgb(0_0_0/0.7)]',
-          )}
-        >
-          {/* Glass edge — bright hairline along the top, fading to the sides */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/25"
-          />
-
-          <header className="mb-8">
-            <h1 className="animate-element animate-delay-300 text-[26px] font-semibold leading-none tracking-tight text-foreground">
-              Вход
-            </h1>
-            <p className="animate-element animate-delay-400 mt-2.5 text-sm text-muted-foreground">
-              Запросы, маршруты и согласования
-            </p>
-          </header>
-
-          <div className="space-y-5">
-            <Button
-              type="button"
-              variant="outline"
-              className={cn(
-                'animate-element animate-delay-500 h-11 w-full justify-center gap-2.5 rounded-xl',
-                'border-border/80 bg-card/60 font-medium backdrop-blur-sm',
-                'transition-shadow hover:shadow-sm',
-              )}
-              disabled={busy}
-              onClick={() => void handleMicrosoftLogin()}
-            >
-              <MicrosoftLogo className="h-4 w-4 shrink-0" />
-              {isMicrosoftLoading ? 'Microsoft…' : 'Войти через Microsoft'}
-            </Button>
-
-            <div className="animate-element animate-delay-600 relative flex items-center gap-3">
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent to-border" />
-              <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                или email
-              </span>
-              <div className="h-px flex-1 bg-gradient-to-l from-transparent to-border" />
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="animate-element animate-delay-700 space-y-1.5">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                  className="h-11 rounded-xl bg-field/70 backdrop-blur-sm"
-                />
-              </div>
-              <div className="animate-element animate-delay-800 space-y-1.5">
-                <Label htmlFor="password">Пароль</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    required
-                    className="h-11 rounded-xl bg-field/70 pr-11 backdrop-blur-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((value) => !value)}
-                    aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
-                    className={cn(
-                      'absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl',
-                      'text-muted-foreground transition-colors hover:text-foreground',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
-                    )}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" strokeWidth={1.5} />
-                    ) : (
-                      <Eye className="h-4 w-4" strokeWidth={1.5} />
-                    )}
-                  </button>
-                </div>
-              </div>
-              {error ? (
-                <p className="text-sm text-destructive" role="alert">
-                  {error}
-                </p>
-              ) : null}
-              <Button
-                type="submit"
-                className={cn(
-                  'animate-element animate-delay-900 mt-2 h-11 w-full rounded-xl font-medium',
-                  'shadow-[0_8px_20px_-8px_hsl(var(--primary)/0.65)]',
-                  'transition-shadow hover:shadow-[0_10px_26px_-8px_hsl(var(--primary)/0.8)]',
-                )}
-                disabled={busy}
-              >
-                {isLoggingIn ? 'Вход…' : 'Войти'}
-              </Button>
-            </form>
-          </div>
-        </div>
+    <main className="flex min-h-screen items-center justify-center bg-background px-5 py-12">
+      <section className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Roadmap</p>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">Вход в рабочее пространство</h1>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Используйте корпоративную учётную запись, чтобы открыть план проекта.</p>
+        <form onSubmit={handleSubmit} className="mt-7 space-y-5">
+          <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required /></div>
+          <div className="space-y-2"><Label htmlFor="password">Пароль</Label><Input id="password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></div>
+          {errorMessage ? <p role="alert" className="text-sm text-destructive">{errorMessage}</p> : null}
+          <Button type="submit" className="w-full" disabled={isLoggingIn}>{isLoggingIn ? 'Выполняется вход…' : 'Войти'}</Button>
+        </form>
       </section>
-
-      {/* Right column — caption floating over the exposed part of the shader */}
-      {/* Right column — caption on the same midline as the form, not a corner */}
-      <section className="relative z-10 hidden flex-1 items-center justify-center px-8 py-12 md:flex">
-        <HeroCaption />
-      </section>
-    </div>
+    </main>
   );
 }
+

@@ -26,6 +26,10 @@ const NAME_COLUMN_STORAGE_KEY = 'roadmap-name-column-width';
 const NAME_COLUMN_MIN_WIDTH = 280;
 const NAME_COLUMN_MAX_WIDTH = 900;
 const DEFAULT_NAME_COLUMN_WIDTH = 440;
+// Monthly (period) planning is temporarily disabled; stored month values are kept untouched.
+const PERIOD_PLANNING_ENABLED = false;
+
+type AllocationInput = Omit<Parameters<typeof roadmapApi.saveAllocation>[0], 'quarterKey'>;
 
 function NameColumnResizeHandle({ width, onChange }: { width: number; onChange: (width: number) => void }) {
   const dragStart = useRef<{ x: number; width: number } | null>(null);
@@ -142,7 +146,7 @@ function QuarterAssignmentButton({ item, roles, saving, canConfigure, onSave }: 
   roles: RoadmapRole[];
   saving: boolean;
   canConfigure: boolean;
-  onSave: (data: Parameters<typeof roadmapApi.saveAllocation>[0]) => void;
+  onSave: (data: AllocationInput) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [roleId, setRoleId] = useState('');
@@ -211,7 +215,7 @@ function QuarterAssignmentButton({ item, roles, saving, canConfigure, onSave }: 
               onChange={setPersonId}
             />
           </div>
-          <label className="block space-y-1 text-xs font-medium text-muted-foreground">Общая оценка, ч
+          <label className="block space-y-1 text-xs font-medium text-muted-foreground">Оценка на квартал, ч
             <input type="number" min="0" step="0.5" value={hours} onChange={(event) => setHours(event.target.value)} className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm text-foreground" placeholder="0" />
           </label>
           {!members.length ? <p className="text-xs text-muted-foreground">Все участники этой роли уже назначены.</p> : null}
@@ -252,7 +256,7 @@ function QuarterPlanningGrid({
   expandedEpics: Set<string>;
   onToggleEpic: (epicId: string) => void;
   onSaveQuarter: (allocation: RoadmapAllocation, values: { monthKey: string; hours: number }[]) => Promise<boolean>;
-  onAddAssignment: (data: Parameters<typeof roadmapApi.saveAllocation>[0]) => void;
+  onAddAssignment: (data: AllocationInput) => void;
   showEpicAssignments: boolean;
 }) {
   const monthHours = (allocations: RoadmapAllocation[], monthKey: string) => allocations.reduce((sum, allocation) =>
@@ -269,6 +273,11 @@ function QuarterPlanningGrid({
         <div className={epic ? 'flex min-w-0 items-center gap-2' : `relative flex min-w-0 items-center gap-2 pl-12 before:absolute before:left-0 before:top-[-10px] before:border-l-2 before:border-border/80 after:absolute after:left-0 after:top-3 after:w-5 after:border-t-2 after:border-border/80 ${isLastChild ? 'before:h-5' : 'before:bottom-[-10px]'}`}>
           {epic ? <button type="button" aria-expanded={expandedEpics.has(item.id)} aria-label={`${expandedEpics.has(item.id) ? 'Свернуть' : 'Развернуть'} эпик ${item.title}`} onClick={() => onToggleEpic(item.id)} className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted"><ChevronRight className={`h-4 w-4 transition-transform ${expandedEpics.has(item.id) ? 'rotate-90' : ''}`} /></button> : null}
           <span className="min-w-0 flex-1 truncate" title={item.title}>{item.title}</span>
+          {item.actualHours !== null ? <span className="shrink-0 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-emerald-700 dark:text-emerald-300" title="Фактическое время из Azure DevOps">Факт {Number(item.actualHours)} ч</span> : null}
+          {Object.entries(item.azureCustomFields ?? {}).filter(([fieldName, value]) => /role|estimate/i.test(fieldName) && value !== null && value !== '').map(([fieldName, value]) => {
+            const displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+            return <span key={fieldName} className="max-w-44 shrink-0 truncate rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-sky-700 dark:text-sky-300" title={`${fieldName}: ${displayValue}`}>{fieldName.split('.').at(-1)}: {displayValue}</span>;
+          })}
           <span className="shrink-0 rounded-full bg-background/70 px-2 py-0.5 text-[10px] font-normal text-muted-foreground">{itemAllocations.length} назн.</span>
           {!epic || showEpicAssignments ? <QuarterAssignmentButton item={item} roles={roles} saving={saving} canConfigure={canConfigure} onSave={onAddAssignment} /> : null}
         </div>
@@ -436,6 +445,7 @@ function AllocationEditor({
   defaultPersonExternalId,
   triggerLabel,
   triggerClassName,
+  quarterLabel,
   onSave,
   saving,
 }: {
@@ -451,6 +461,7 @@ function AllocationEditor({
   defaultPersonExternalId?: string | null;
   triggerLabel?: string;
   triggerClassName?: string;
+  quarterLabel: string;
   onSave: (data: {
     allocationId?: string;
     workItemId: string;
@@ -509,7 +520,7 @@ function AllocationEditor({
           <div className="flex items-start justify-between border-b border-border px-4 py-3">
             <div>
               <h3 className="text-sm font-semibold">{initial ? 'Оценка участника' : 'Назначение участника'}</h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">{role.name} · {item.title}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{role.name} · {item.title} · {quarterLabel}</p>
             </div>
             <Button type="button" variant="ghost" size="icon" className="-mr-2 -mt-1 h-8 w-8" aria-label="Закрыть" onClick={() => setOpen(false)}><X className="h-4 w-4" /></Button>
           </div>
@@ -537,7 +548,7 @@ function AllocationEditor({
               />
             </label>
             <label className="block space-y-1.5 text-xs font-medium text-muted-foreground">
-              Общая оценка
+              Оценка на {quarterLabel}
               <div className="relative">
                 <input type="number" min="0" step="0.5" value={hours} onChange={(event) => setHours(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 pr-12 text-sm text-foreground" placeholder="0" />
                 <span className="absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">часов</span>
@@ -668,16 +679,21 @@ export function RoadmapPage() {
       Promise.all(allocations.map((allocation) => roadmapApi.saveAllocation(allocation))),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
   });
-  const epics = useMemo(() => plan?.workItems.filter((item) => item.type.toLowerCase() === 'epic') ?? [], [plan]);
-  const features = useMemo(() => plan?.workItems.filter((item) => item.type.toLowerCase() === 'feature') ?? [], [plan]);
-  const plannedItems = plan?.workItems ?? [];
+  const currentQuarterKey = `${quarterSelection.year}-Q${quarterSelection.quarter}`;
+  const currentQuarterLabel = `Q${quarterSelection.quarter} ${quarterSelection.year}`;
+  const currentQuarterMonths = quarterMonths(quarterSelection.year, quarterSelection.quarter);
+  // Planning is quarterly: only allocations of the selected quarter are shown and edited.
+  const plannedItems = useMemo(() => plan?.workItems.map((item) => ({
+    ...item,
+    allocations: item.allocations.filter((allocation) => allocation.quarterKey === currentQuarterKey),
+  })) ?? [], [plan, currentQuarterKey]);
+  const epics = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'epic'), [plannedItems]);
+  const features = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'feature'), [plannedItems]);
   const assignedPeopleCount = new Set([
-    ...(plan?.workItems.flatMap((item) => item.allocations.map((allocation) => allocation.personExternalId)) ?? []),
+    ...(plannedItems.flatMap((item) => item.allocations.map((allocation) => allocation.personExternalId))),
     ...(plan?.roles.flatMap((role) => role.defaultPersonExternalId ? [role.defaultPersonExternalId] : []) ?? []),
   ]).size;
-  const totalHours = plan?.workItems.reduce((sum, item) => sum + item.allocations.reduce((inner, allocation) => inner + Number(allocation.estimatedHours), 0), 0) ?? 0;
-  const currentQuarterKey = `${quarterSelection.year}-Q${quarterSelection.quarter}`;
-  const currentQuarterMonths = quarterMonths(quarterSelection.year, quarterSelection.quarter);
+  const totalHours = plannedItems.reduce((sum, item) => sum + item.allocations.reduce((inner, allocation) => inner + Number(allocation.estimatedHours), 0), 0);
   const allEpicsExpanded = epics.length > 0 && epics.every((epic) => expandedEpics.has(epic.id));
   const quarterTotalHours = plannedItems
     .filter((item) => item.type.toLowerCase() === 'feature' || item.type.toLowerCase() === 'epic')
@@ -688,6 +704,7 @@ export function RoadmapPage() {
     const date = new Date(current.year, (current.quarter - 1) * 3 + offset * 3, 1);
     return { year: date.getFullYear(), quarter: Math.floor(date.getMonth() / 3) + 1 };
   });
+  const saveAllocation = (data: AllocationInput) => saveMutation.mutate({ ...data, quarterKey: currentQuarterKey });
   const saveQuarter = async (allocation: RoadmapAllocation, months: { monthKey: string; hours: number }[]) => {
     try {
       await saveQuarterMutation.mutateAsync({ allocationId: allocation.id, quarterKey: currentQuarterKey, months });
@@ -697,7 +714,7 @@ export function RoadmapPage() {
     }
   };
 
-  function splitEvenly(workItemId: string, allocations: RoadmapWorkItem['allocations']) {
+  function splitEvenly(workItemId: string, quarterKey: string, allocations: RoadmapWorkItem['allocations']) {
     if (allocations.length < 2) return;
     const share = (total: number, index: number) => {
       const roundedShare = Math.round((total / allocations.length) * 100) / 100;
@@ -720,6 +737,7 @@ export function RoadmapPage() {
       personExternalId: allocation.personExternalId,
       personName: allocation.personName,
       personEmail: allocation.personEmail,
+      quarterKey,
       estimatedHours: share(totalEstimatedHours, index),
       periods: [...periodTotals.values()].map((period) => ({
         monthKey: period.monthKey,
@@ -751,7 +769,7 @@ export function RoadmapPage() {
             </div>
             <p className={`mt-0.5 text-[11px] text-muted-foreground ${isEpic ? 'pl-6' : isChild ? 'pl-7' : 'pl-3'}`}>
               <span className={isEpic ? 'mr-1 font-medium' : 'mr-1'}>{isEpic ? 'Epic' : 'Feature'}</span>
-              #{item.externalId}{item.state ? ` · ${item.state}` : ''}
+              #{item.externalId}{item.state ? ` · ${item.state}` : ''}{` · План ${itemHours} ч · Факт ${Number(item.actualHours ?? 0)} ч`}
             </p>
           </div>
         </td>
@@ -776,7 +794,7 @@ export function RoadmapPage() {
                 </div>
                 {view === 'periods' && allocation.periods.length ? <div className="mt-2 space-y-1 border-t border-border/60 pt-1.5">{allocation.periods.map((period) => <div key={period.id ?? period.startsAt} className="flex justify-between gap-2 text-[10px] text-muted-foreground"><span>{period.label}</span><span className="tabular-nums">{Number(period.hours)} ч</span></div>)}</div> : null}
               </div>
-              {(!isEpic || showEpicAssignments) && rolePeople.length ? <AllocationEditor item={item} role={role} people={rolePeople} initial={allocation} defaultPersonExternalId={role.defaultPersonExternalId} saving={saveMutation.isPending} onSave={(data) => saveMutation.mutate(data)} /> : null}
+              {(!isEpic || showEpicAssignments) && rolePeople.length ? <AllocationEditor item={item} role={role} people={rolePeople} initial={allocation} defaultPersonExternalId={role.defaultPersonExternalId} quarterLabel={currentQuarterLabel} saving={saveMutation.isPending} onSave={saveAllocation} /> : null}
             </div>
           );
           const renderDefaultPerson = () => role.defaultPersonExternalId && role.defaultPersonName ? <div className="rounded-md border border-dashed border-border bg-muted/20 px-2 py-1.5"><div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">{role.defaultPersonName.slice(0, 1)}</span><p title={role.defaultPersonEmail ?? undefined} className="truncate text-xs font-medium text-foreground">{role.defaultPersonName}</p></div><span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">по умолчанию</span></div></div> : null;
@@ -786,18 +804,18 @@ export function RoadmapPage() {
                 <p>{featureAllocations.length ? <><span className="font-medium text-foreground">{featureAllocations.length} назнач. в фичах</span><span className="ml-1 tabular-nums">· {featureAllocations.reduce((sum, allocation) => sum + Number(view === 'roles' ? allocation.estimatedHours : allocation.periods.reduce((periodSum, period) => periodSum + Number(period.hours), 0)), 0)} ч</span></> : 'Нет назначений в фичах'}</p>
                 {showEpicAssignments ? <div className="space-y-1.5 border-l border-border pl-2">
                   {allocations.map(renderAssignment)}
-                  {rolePeople.length ? <AllocationEditor item={item} role={role} people={rolePeople} defaultPersonExternalId={role.defaultPersonExternalId} triggerLabel={allocations.length ? 'Добавить участника' : 'Назначить на эпик'} triggerClassName="mt-0 h-8 w-full justify-start gap-1.5 px-2 text-xs font-medium" saving={saveMutation.isPending} onSave={(data) => saveMutation.mutate(data)} /> : <span className="text-[10px] text-muted-foreground">Добавьте участников в роль в администрировании.</span>}
+                  {rolePeople.length ? <AllocationEditor item={item} role={role} people={rolePeople} defaultPersonExternalId={role.defaultPersonExternalId} triggerLabel={allocations.length ? 'Добавить участника' : 'Назначить на эпик'} triggerClassName="mt-0 h-8 w-full justify-start gap-1.5 px-2 text-xs font-medium" quarterLabel={currentQuarterLabel} saving={saveMutation.isPending} onSave={saveAllocation} /> : <span className="text-[10px] text-muted-foreground">Добавьте участников в роль в администрировании.</span>}
                 </div> : allocations.length ? <p>{allocations.length} назнач. на эпике · {allocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0)} ч</p> : null}
               </div> : <div className="space-y-1">
                 {allocations.length > 1 ? (
-                  <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" disabled={saveMutation.isPending || splitMutation.isPending} title="Распределить общий объём часов и часы периодов поровну между участниками" onClick={() => splitEvenly(item.id, allocations)}>
+                  <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" disabled={saveMutation.isPending || splitMutation.isPending} title="Распределить общий объём часов и часы периодов поровну между участниками" onClick={() => splitEvenly(item.id, currentQuarterKey, allocations)}>
                     <Equal className="h-3.5 w-3.5" />{splitMutation.isPending ? 'Делим часы…' : 'Разделить поровну'}
                   </Button>
                 ) : null}
                 {!allocations.length ? renderDefaultPerson() : null}
                 {allocations.map(renderAssignment)}
                 {!isEpic ? rolePeople.length ? (
-                  <AllocationEditor item={item} role={role} people={rolePeople} defaultPersonExternalId={role.defaultPersonExternalId} saving={saveMutation.isPending} onSave={(data) => saveMutation.mutate(data)} />
+                  <AllocationEditor item={item} role={role} people={rolePeople} defaultPersonExternalId={role.defaultPersonExternalId} quarterLabel={currentQuarterLabel} saving={saveMutation.isPending} onSave={saveAllocation} />
                 ) : (
                   <div className="px-1 pt-1 text-[11px] text-muted-foreground">
                     <p>{people.length ? 'К роли не добавлены участники' : 'Список участников Azure DevOps не синхронизирован'}</p>
@@ -809,10 +827,13 @@ export function RoadmapPage() {
           );
         })}
         {!roles.length ? <td className="min-w-52 px-3 py-3 text-xs text-muted-foreground">Роль не настроена</td> : null}
-        <td className={`whitespace-nowrap px-4 py-3 text-right text-sm font-medium tabular-nums text-foreground ${isEpic ? 'bg-muted/30' : ''}`}>
+      <td className={`whitespace-nowrap px-4 py-3 text-right text-sm font-medium tabular-nums text-foreground ${isEpic ? 'bg-muted/30' : ''}`}>
           {view === 'roles'
             ? `${itemHours} ч`
             : `${periods.reduce((sum, period) => sum + Number(period.hours), 0)} ч`}
+        </td>
+        <td className={`whitespace-nowrap px-4 py-3 text-right text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-300 ${isEpic ? 'bg-muted/30' : ''}`}>
+          {Number(item.actualHours ?? 0)} ч
         </td>
       </tr>
     );
@@ -822,7 +843,7 @@ export function RoadmapPage() {
 
   return (
     <main className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-[1500px] space-y-5">
+        <div className="mx-auto flex min-h-full w-full flex-col gap-5">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Планирование ресурсов</p>
@@ -883,7 +904,7 @@ export function RoadmapPage() {
                   <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{plan.workItems.length}</p>
                 </div>
                 <div className="rounded-xl border border-border bg-card px-4 py-3">
-                  <p className="text-xs text-muted-foreground">{view === 'periods' ? `План Q${quarterSelection.quarter}` : 'Общая оценка'}</p>
+                  <p className="text-xs text-muted-foreground">План на {currentQuarterLabel}</p>
                   <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{view === 'periods' ? quarterTotalHours : totalHours} <span className="text-sm font-normal text-muted-foreground">часов</span></p>
                 </div>
                 <div className="rounded-xl border border-border bg-card px-4 py-3">
@@ -899,7 +920,7 @@ export function RoadmapPage() {
                 aria-label={focusMode ? 'Режим заполнения плана' : undefined}
                 className={focusMode
                   ? 'fixed inset-3 z-50 flex h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl'
-                  : 'overflow-hidden rounded-xl border border-border bg-card'}
+                  : 'flex min-h-[420px] flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card'}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
                   <div>
@@ -922,19 +943,21 @@ export function RoadmapPage() {
 
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
                   <div className="flex items-center gap-1">
-                    <Button type="button" size="sm" variant={view === 'roles' ? 'secondary' : 'ghost'} onClick={() => setView('roles')} className="h-8 gap-1.5"><Users className="h-3.5 w-3.5" />По ролям</Button>
-                    <Button type="button" size="sm" variant={view === 'periods' ? 'secondary' : 'ghost'} onClick={() => setView('periods')} className="h-8 gap-1.5"><Clock3 className="h-3.5 w-3.5" />По периодам</Button>
+                    {PERIOD_PLANNING_ENABLED ? <>
+                      <Button type="button" size="sm" variant={view === 'roles' ? 'secondary' : 'ghost'} onClick={() => setView('roles')} className="h-8 gap-1.5"><Users className="h-3.5 w-3.5" />По ролям</Button>
+                      <Button type="button" size="sm" variant={view === 'periods' ? 'secondary' : 'ghost'} onClick={() => setView('periods')} className="h-8 gap-1.5"><Clock3 className="h-3.5 w-3.5" />По периодам</Button>
+                    </> : null}
                     {epics.length ? <Button type="button" size="sm" variant={showEpicAssignments ? 'secondary' : 'ghost'} onClick={() => setShowEpicAssignments((value) => !value)} aria-pressed={showEpicAssignments} className="h-8 gap-1.5">{showEpicAssignments ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}{showEpicAssignments ? 'Скрыть назначения эпиков' : 'Показать назначения эпиков'}</Button> : null}
                   </div>
-                  {view === 'periods' ? <div className="flex flex-wrap items-center gap-2">
-                    {focusMode ? <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setExpandedEpics(allEpicsExpanded ? new Set() : new Set(epics.map((epic) => epic.id)))}>{allEpicsExpanded ? 'Свернуть всё' : 'Развернуть всё'}</Button> : null}
-                    <Button type="button" variant={showUnassignedPeriods ? 'secondary' : 'outline'} size="sm" className="h-8" onClick={() => setShowUnassignedPeriods((value) => !value)}>{showUnassignedPeriods ? 'Скрыть без назначений' : 'Показать без назначений'}</Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {view === 'periods' && focusMode ? <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setExpandedEpics(allEpicsExpanded ? new Set() : new Set(epics.map((epic) => epic.id)))}>{allEpicsExpanded ? 'Свернуть всё' : 'Развернуть всё'}</Button> : null}
+                    {view === 'periods' ? <Button type="button" variant={showUnassignedPeriods ? 'secondary' : 'outline'} size="sm" className="h-8" onClick={() => setShowUnassignedPeriods((value) => !value)}>{showUnassignedPeriods ? 'Скрыть без назначений' : 'Показать без назначений'}</Button> : null}
                     <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
                     <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Предыдущий квартал" onClick={() => shiftQuarter(-1)}><ChevronLeft className="h-4 w-4" /></Button>
-                    <span className="min-w-20 text-center text-xs font-semibold tabular-nums">Q{quarterSelection.quarter} {quarterSelection.year}</span>
+                    <span className="min-w-20 text-center text-xs font-semibold tabular-nums">{currentQuarterLabel}</span>
                     <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Следующий квартал" onClick={() => shiftQuarter(1)}><ChevronRight className="h-4 w-4" /></Button>
                     </div>
-                  </div> : null}
+                  </div>
                 </div>
 
                 {roles.length && !people.length && configured ? <div className="border-b border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">Чтобы назначать людей на роли, сначала синхронизируйте пользователей Azure DevOps в администрировании Roadmap.</div> : null}
@@ -942,7 +965,7 @@ export function RoadmapPage() {
                 {!plan.workItems.length ? (
                   <div className="px-6 py-12 text-center text-sm text-muted-foreground">В проекте пока нет эпиков или фич. Синхронизируйте его с Azure DevOps.</div>
                 ) : (
-                  <div className={focusMode ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'overflow-auto'}>
+                  <div className={focusMode ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'flex flex-1 flex-col'}>
                     {!roles.length ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/20 px-4 py-3">
                         <div>
@@ -971,16 +994,17 @@ export function RoadmapPage() {
                         return next;
                       })}
                       onSaveQuarter={saveQuarter}
-                      onAddAssignment={(data) => saveMutation.mutate(data)}
+                      onAddAssignment={saveAllocation}
                       showEpicAssignments={showEpicAssignments}
-                    /> : <div className={focusMode ? 'min-h-0 flex-1 overflow-auto' : 'overflow-auto'}><table className="w-full min-w-max table-fixed border-collapse text-left">
+                    /> : <div className={focusMode ? 'min-h-0 flex-1 overflow-auto' : 'max-h-[calc(100dvh-7rem)] flex-1 overflow-auto'}><table className="w-full min-w-max table-fixed border-collapse text-left">
                       <colgroup>
                         <col style={{ width: `${nameColumnWidth}px` }} />
                         {roles.map((role) => <col key={role.id} style={{ width: '260px' }} />)}
                         {!roles.length ? <col style={{ width: '240px' }} /> : null}
                         <col style={{ width: '120px' }} />
+                        <col style={{ width: '120px' }} />
                       </colgroup>
-                      <thead className="sticky top-0 z-[1] bg-muted/80">
+                      <thead className="sticky top-0 z-[1] bg-muted/95 backdrop-blur">
                         <tr className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                           <th className="relative min-w-72 px-4 py-2.5 pr-5"><div className="flex items-center justify-between gap-3"><span>Эпик / фича</span>{canConfigure ? <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
                             <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-8 shrink-0 gap-1 px-2.5 text-xs" disabled={!roadmapProjectId || addRoleMutation.isPending}><Plus className="h-3.5 w-3.5" />Добавить роль</Button></PopoverTrigger>
@@ -1004,7 +1028,8 @@ export function RoadmapPage() {
                             </div>
                           </th>)}
                           {!roles.length ? <th className="min-w-52 px-3 py-3">Роль / участник</th> : null}
-                          <th className="min-w-24 px-4 py-3 text-right">{view === 'roles' ? 'Всего' : 'По периодам'}</th>
+                          <th className="min-w-24 px-4 py-3 text-right">План</th>
+                          <th className="min-w-24 px-4 py-3 text-right">Факт</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1023,7 +1048,7 @@ export function RoadmapPage() {
                         })}
                         {features.filter((feature) => !feature.parentExternalId || !epics.some((epic) => epic.externalId === feature.parentExternalId)).map((feature) => renderItemRow(feature))}
                       </tbody>
-                      <tfoot className="border-t-2 border-border bg-muted/60">
+                      <tfoot className="sticky bottom-0 z-[1] border-t-2 border-border bg-muted/95 backdrop-blur">
                         <tr className="text-sm font-semibold text-foreground">
                           <th scope="row" className="px-4 py-3">Итого по проекту</th>
                           {roles.map((role) => {
@@ -1037,6 +1062,7 @@ export function RoadmapPage() {
                           <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">{view === 'roles' ? totalHours : plannedItems
                             .flatMap((item) => item.allocations)
                             .reduce((sum, allocation) => sum + allocation.periods.reduce((periodSum, period) => periodSum + Number(period.hours), 0), 0)} ч</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-300">{[...epics, ...features.filter((feature) => !feature.parentExternalId || !epics.some((epic) => epic.externalId === feature.parentExternalId))].reduce((sum, item) => sum + Number(item.actualHours ?? 0), 0)} ч</td>
                         </tr>
                       </tfoot>
                     </table></div>}

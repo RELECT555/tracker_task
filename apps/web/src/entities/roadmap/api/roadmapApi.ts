@@ -46,6 +46,8 @@ export interface RoadmapAllocation {
   personExternalId: string;
   personName: string;
   personEmail: string | null;
+  /** Planning quarter in `YYYY-Qn` format; the estimate is the hours for this quarter. */
+  quarterKey: string;
   estimatedHours: number | string;
   role: RoadmapRole;
   periods: RoadmapPeriod[];
@@ -59,6 +61,8 @@ export interface RoadmapWorkItem {
   title: string;
   state: string | null;
   url: string | null;
+  actualHours: number | string | null;
+  azureCustomFields: Record<string, unknown> | null;
   allocations: RoadmapAllocation[];
 }
 
@@ -144,6 +148,7 @@ const liveRoadmapApi = {
     personExternalId: string;
     personName: string;
     personEmail?: string | null;
+    quarterKey: string;
     estimatedHours: number;
     periods: Omit<RoadmapPeriod, 'id'>[];
   }) =>

@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { RoadmapIntegrationService } from './roadmap-integration.service';
 
@@ -15,6 +16,7 @@ type AzureWorkItem = {
   url: string;
   fields: Record<string, unknown>;
 };
+type AzureWorkItemField = { referenceName: string; name?: string; isCustom?: boolean };
 type AzurePerson = {
   descriptor: string;
   subjectKind?: string;
@@ -80,21 +82,35 @@ export class RoadmapService {
     });
 
     const wiql = {
-      query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.WorkItemType] IN ('Epic', 'Feature') ORDER BY [System.Id]`,
+      query: 'SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project ORDER BY [System.Id]',
     };
     const result = await this.azureJson<{ workItems: AzureWorkItemRef[] }>(
       `${credentials.organizationUrl}/${encodeURIComponent(externalId)}/_apis/wit/wiql?$top=20000&api-version=${this.apiVersion}`,
       credentials,
       { method: 'POST', body: JSON.stringify(wiql) },
     );
+    const fieldCatalog = await this.azureJson<{ value: AzureWorkItemField[] }>(
+      `${credentials.organizationUrl}/_apis/wit/fields?api-version=${this.apiVersion}`,
+      credentials,
+    );
+    const customFieldNames = fieldCatalog.value
+      .filter((field) => (field.isCustom || field.referenceName.startsWith('Custom.'))
+        && /role|estimate/i.test(`${field.name ?? ''} ${field.referenceName}`))
+      .map((field) => field.referenceName);
+    const customFieldLabels = new Map(fieldCatalog.value.map((field) => [field.referenceName, field.name ?? field.referenceName]));
     const imported: AzureWorkItem[] = [];
     for (let offset = 0; offset < result.workItems.length; offset += 200) {
       const ids = result.workItems.slice(offset, offset + 200).map((item) => item.id);
       if (!ids.length) continue;
-      const fields = ['System.Id', 'System.Title', 'System.WorkItemType', 'System.State', 'System.Parent'];
+      const fields = [
+        'System.Id', 'System.Title', 'System.WorkItemType', 'System.State', 'System.Parent',
+        'Microsoft.VSTS.Scheduling.CompletedWork',
+        ...customFieldNames,
+      ];
       const batch = await this.azureJson<{ value: AzureWorkItem[] }>(
-        `${credentials.organizationUrl}/_apis/wit/workitems?ids=${ids.join(',')}&fields=${encodeURIComponent(fields.join(','))}&api-version=${this.apiVersion}`,
+        `${credentials.organizationUrl}/_apis/wit/workitemsbatch?api-version=${this.apiVersion}`,
         credentials,
+        { method: 'POST', body: JSON.stringify({ ids, fields }) },
       );
       imported.push(...batch.value);
     }
@@ -102,6 +118,13 @@ export class RoadmapService {
     for (let offset = 0; offset < imported.length; offset += 200) {
       const databaseBatch = imported.slice(offset, offset + 200).map((item) => {
         const fields = item.fields;
+        const azureCustomFields = Object.fromEntries(customFieldNames
+          .filter((fieldName) => fields[fieldName] !== undefined)
+          .map((fieldName) => [customFieldLabels.get(fieldName) ?? fieldName, fields[fieldName]]));
+        const actualHoursValue = fields['Microsoft.VSTS.Scheduling.CompletedWork'];
+        const actualHours = typeof actualHoursValue === 'number' && Number.isFinite(actualHoursValue)
+          ? actualHoursValue
+          : null;
         return this.prisma.roadmapWorkItem.upsert({
           where: { projectId_externalId: { projectId: project.id, externalId: String(item.id) } },
           create: {
@@ -112,6 +135,8 @@ export class RoadmapService {
             title: String(fields['System.Title'] ?? `Work item ${item.id}`),
             state: fields['System.State'] ? String(fields['System.State']) : null,
             url: item.url,
+            actualHours,
+            azureCustomFields: azureCustomFields as Prisma.InputJsonObject,
           },
           update: {
             parentExternalId: fields['System.Parent'] ? String(fields['System.Parent']) : null,
@@ -119,6 +144,8 @@ export class RoadmapService {
             title: String(fields['System.Title'] ?? `Work item ${item.id}`),
             state: fields['System.State'] ? String(fields['System.State']) : null,
             url: item.url,
+            actualHours,
+            azureCustomFields: azureCustomFields as Prisma.InputJsonObject,
           },
         });
       });
@@ -147,7 +174,28 @@ export class RoadmapService {
     });
     if (!project) throw new NotFoundException('Roadmap project was not found');
     const roles = await this.listRoles(projectId);
-    return { ...project, roles };
+    const itemByExternalId = new Map(project.workItems.map((item) => [item.externalId, item]));
+    const rolledUpActualHours = new Map<string, number>();
+    for (const item of project.workItems) {
+      if (!['epic', 'feature', 'task'].includes(item.type.toLowerCase())) continue;
+      const actualHours = Number(item.actualHours ?? 0);
+      if (!Number.isFinite(actualHours) || actualHours === 0) continue;
+
+      let ancestor: (typeof project.workItems)[number] | undefined = item;
+      const visited = new Set<string>();
+      while (ancestor && !visited.has(ancestor.externalId)) {
+        visited.add(ancestor.externalId);
+        const ancestorType = ancestor.type.toLowerCase();
+        if (ancestorType === 'epic' || ancestorType === 'feature') {
+          rolledUpActualHours.set(ancestor.id, (rolledUpActualHours.get(ancestor.id) ?? 0) + actualHours);
+        }
+        ancestor = ancestor.parentExternalId ? itemByExternalId.get(ancestor.parentExternalId) : undefined;
+      }
+    }
+    const workItems = project.workItems.map((item) => ['epic', 'feature'].includes(item.type.toLowerCase())
+      ? { ...item, actualHours: rolledUpActualHours.get(item.id) ?? 0 }
+      : item);
+    return { ...project, workItems, roles };
   }
 
   async listAzurePeople() {
@@ -382,6 +430,9 @@ export class RoadmapService {
   }
 
   async deleteRole(id: string) {
+    if (await this.prisma.roadmapAllocation.count({ where: { roleId: id } })) {
+      throw new ConflictException('Роль уже используется в плане проекта. Сначала снимите её назначения с фич.');
+    }
     await this.prisma.roadmapRole.delete({ where: { id } });
     return { deleted: true };
   }
@@ -393,6 +444,7 @@ export class RoadmapService {
     personExternalId: string;
     personName: string;
     personEmail?: string;
+    quarterKey: string;
     estimatedHours: number;
     periods: { monthKey?: string; label: string; startsAt: string; endsAt: string; hours: number }[];
   }) {
@@ -429,21 +481,22 @@ export class RoadmapService {
       const current = await this.prisma.roadmapAllocation.findUnique({ where: { id: dto.allocationId }, select: { id: true, workItemId: true, roleId: true } });
       if (!current || current.workItemId !== dto.workItemId || current.roleId !== dto.roleId) throw new NotFoundException('Roadmap allocation was not found');
       const duplicate = await this.prisma.roadmapAllocation.findFirst({
-        where: { workItemId: dto.workItemId, roleId: dto.roleId, personExternalId: dto.personExternalId, id: { not: dto.allocationId } },
+        where: { workItemId: dto.workItemId, roleId: dto.roleId, personExternalId: dto.personExternalId, quarterKey: dto.quarterKey, id: { not: dto.allocationId } },
         select: { id: true },
       });
-      if (duplicate) throw new ConflictException('This person already has an estimate for this work item and role');
+      if (duplicate) throw new ConflictException('This person already has an estimate for this work item, role and quarter');
       allocation = await this.prisma.roadmapAllocation.update({
         where: { id: dto.allocationId },
-        data: { personExternalId: dto.personExternalId, personName: membership.person.name, personEmail: membership.person.email, estimatedHours: dto.estimatedHours },
+        data: { personExternalId: dto.personExternalId, personName: membership.person.name, personEmail: membership.person.email, quarterKey: dto.quarterKey, estimatedHours: dto.estimatedHours },
       });
     } else {
       allocation = await this.prisma.roadmapAllocation.upsert({
         where: {
-          workItemId_roleId_personExternalId: {
+          workItemId_roleId_personExternalId_quarterKey: {
             workItemId: dto.workItemId,
             roleId: dto.roleId,
             personExternalId: dto.personExternalId,
+            quarterKey: dto.quarterKey,
           },
         },
         create: {
@@ -452,6 +505,7 @@ export class RoadmapService {
         personExternalId: dto.personExternalId,
         personName: membership.person.name,
         personEmail: membership.person.email,
+        quarterKey: dto.quarterKey,
         estimatedHours: dto.estimatedHours,
         },
         update: {

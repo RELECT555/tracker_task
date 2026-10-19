@@ -387,6 +387,8 @@ model RoadmapWorkItem {
   title            String              @db.VarChar(1000)
   state            String?             @db.VarChar(100)
   url              String?             @db.VarChar(1000)
+  actualHours      Decimal?            @map("actual_hours") @db.Decimal(10, 2)
+  azureCustomFields Json?               @map("azure_custom_fields")
   updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz()
   project          RoadmapProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   allocations      RoadmapAllocation[]
@@ -421,13 +423,14 @@ model RoadmapAllocation {
   personExternalId String                    @map("person_external_id") @db.VarChar(255)
   personName       String                    @map("person_name") @db.VarChar(255)
   personEmail      String?                   @map("person_email") @db.VarChar(255)
+  quarterKey       String                    @map("quarter_key") @db.VarChar(7)
   estimatedHours   Decimal                   @map("estimated_hours") @db.Decimal(10, 2)
   workItem         RoadmapWorkItem           @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   role             RoadmapRole               @relation(fields: [roleId], references: [id], onDelete: Restrict)
   periods          RoadmapPeriodAllocation[]
   updatedAt        DateTime                  @updatedAt @map("updated_at") @db.Timestamptz()
 
-  @@unique([workItemId, roleId, personExternalId])
+  @@unique([workItemId, roleId, personExternalId, quarterKey], map: "roadmap_allocations_person_quarter_key")
   @@index([workItemId])
   @@map("roadmap_allocations")
 }

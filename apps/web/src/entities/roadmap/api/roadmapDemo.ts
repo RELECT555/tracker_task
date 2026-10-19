@@ -53,7 +53,7 @@ export const roadmapDemoApi = {
   deleteRole: (id: string) => call<{ deleted: boolean }>('deleteRole', [id]),
   saveAllocation: (input: {
     allocationId?: string; workItemId: string; roleId: string; personExternalId: string;
-    personName: string; personEmail?: string | null; estimatedHours: number;
+    personName: string; personEmail?: string | null; quarterKey: string; estimatedHours: number;
     periods: Omit<RoadmapPeriod, 'id'>[];
   }) => call<RoadmapAllocation>('saveAllocation', [input]),
   saveAllocationQuarter: (allocationId: string, quarterKey: string, months: { monthKey: string; hours: number }[]) =>

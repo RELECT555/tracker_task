@@ -6,6 +6,8 @@ import type {
 export const DEMO_BLOB_PATH = 'roadmap/demo-state-v1.json';
 const PROJECT_ID = 'demo-roadmap-project';
 const AZURE_PROJECT_ID = 'demo-azure-project';
+// Allocations saved before quarterly planning belong to this quarter.
+const LEGACY_QUARTER_KEY = '2026-Q4';
 type DemoPerson = RoadmapPerson & { externalId: string };
 
 export type DemoState = {
@@ -76,7 +78,8 @@ export function createInitialDemoState(): DemoState {
     ['DEMO-310', 'DEMO-300', 'Feature', 'Поиск по заявкам', 'Active'],
   ];
   const workItems: RoadmapProjectPlan['workItems'] = itemSeeds.map(([externalId, parentExternalId, type, title, state]) => ({
-    id: `item-${externalId}`, externalId, parentExternalId, type, title, state, url: null, allocations: [],
+    id: `item-${externalId}`, externalId, parentExternalId, type, title, state, url: null,
+    actualHours: null, azureCustomFields: null, allocations: [],
   }));
 
   const person = (externalId: string) => peopleSeed.find((item) => item.externalId === externalId)!;
@@ -87,7 +90,7 @@ export function createInitialDemoState(): DemoState {
     const assignedRole = role(roleId);
     const allocation: RoadmapAllocation = {
       id: `allocation-${itemKey}-${roleId}-${personId}`, roleId, personExternalId: personId,
-      personName: member.name, personEmail: member.email, estimatedHours,
+      personName: member.name, personEmail: member.email, quarterKey: LEGACY_QUARTER_KEY, estimatedHours,
       role: { id: assignedRole.id, projectId: PROJECT_ID, name: assignedRole.name, color: assignedRole.color, isMock: true },
       periods: Object.entries(months).map(([key, hours]) => monthPeriod(key, hours)),
     };
@@ -138,7 +141,9 @@ function peopleWithRoles(state: DemoState): RoadmapPerson[] {
 }
 function planOf(state: DemoState): RoadmapProjectPlan {
   return { ...state.plan, roles: clone(rolesOf(state)), workItems: state.plan.workItems.map((item) => ({
-    ...item, allocations: item.allocations.map((allocation) => ({ ...allocation, role: clone(roleOf(state, allocation.roleId)) })),
+    ...item, allocations: item.allocations.map((allocation) => ({
+      ...allocation, quarterKey: allocation.quarterKey ?? LEGACY_QUARTER_KEY, role: clone(roleOf(state, allocation.roleId)),
+    })),
   })) };
 }
 function integrationSettings(state: DemoState): RoadmapIntegrationSettings {
@@ -212,17 +217,18 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
       state.plan.roles = rolesOf(state); return { deleted: true };
     }
     case 'saveAllocation': {
-      const input = arg0 as { allocationId?: string; workItemId: string; roleId: string; personExternalId: string; personName: string; personEmail?: string | null; estimatedHours: number; periods: Omit<RoadmapPeriod, 'id'>[] };
+      const input = arg0 as { allocationId?: string; workItemId: string; roleId: string; personExternalId: string; personName: string; personEmail?: string | null; quarterKey: string; estimatedHours: number; periods: Omit<RoadmapPeriod, 'id'>[] };
       const item = findWorkItem(state, input.workItemId);
       const externalId = normalizePersonIds(state, [input.personExternalId])[0];
       const person = state.people.find((candidate) => candidate.externalId === externalId);
       const index = item.allocations.findIndex((allocation) => allocation.id === input.allocationId ||
-        (allocation.roleId === input.roleId && allocation.personExternalId === externalId));
+        (allocation.roleId === input.roleId && allocation.personExternalId === externalId
+          && (allocation.quarterKey ?? LEGACY_QUARTER_KEY) === input.quarterKey));
       const previous = index >= 0 ? item.allocations[index] : undefined;
       const allocation: RoadmapAllocation = {
         id: previous?.id ?? `allocation-${crypto.randomUUID()}`, roleId: input.roleId, personExternalId: externalId,
         personName: person?.name ?? input.personName, personEmail: person?.email ?? input.personEmail ?? null,
-        estimatedHours: input.estimatedHours, role: clone(roleOf(state, input.roleId)),
+        quarterKey: input.quarterKey, estimatedHours: input.estimatedHours, role: clone(roleOf(state, input.roleId)),
         periods: input.periods.map((item, i) => ({ ...item, id: previous?.periods[i]?.id ?? `period-${crypto.randomUUID()}` })),
       };
       if (index >= 0) item.allocations[index] = allocation; else item.allocations.push(allocation);

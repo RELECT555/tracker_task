@@ -6,7 +6,7 @@ import { Providers } from './providers';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Wayo',
+  title: 'Roadmap',
   description: 'Согласование запросов и маршруты',
 };
 
