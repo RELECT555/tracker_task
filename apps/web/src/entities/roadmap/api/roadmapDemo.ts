@@ -1,6 +1,10 @@
 import type {
   AzureProject,
   RoadmapAllocation,
+  RoadmapAzurePushPreview,
+  RoadmapReadinessCheck,
+  RoadmapWriteBackOverview,
+  RoadmapWriteBackSettings,
   RoadmapIntegrationSettings,
   RoadmapPeriod,
   RoadmapPerson,
@@ -13,7 +17,8 @@ type DemoMethod =
   | 'projects' | 'syncProject' | 'plan' | 'people' | 'roles' | 'adminPeople' | 'syncAdminPeople'
   | 'adminRoles' | 'roleCatalog' | 'createRoleTemplate' | 'addRoleFromCatalog' | 'createRole'
   | 'updateRole' | 'setRoleMembers' | 'setRoleDefaultPerson' | 'deleteRole' | 'saveAllocation'
-  | 'saveAllocationQuarter';
+  | 'saveAllocationQuarter' | 'saveWriteBackSettings' | 'writeBackOverview' | 'checkWriteBack'
+  | 'webhookSecret' | 'rotateWebhookSecret' | 'previewAzurePush' | 'pushProjectToAzure' | 'pushAllocationToAzure';
 
 async function call<T>(method: DemoMethod, args: unknown[] = []): Promise<T> {
   const response = await fetch('/api/roadmap-demo', {
@@ -35,9 +40,17 @@ export const roadmapDemoApi = {
   integrationSettings: () => call<RoadmapIntegrationSettings>('integrationSettings'),
   saveIntegrationSettings: (input: { organizationUrl: string; pat?: string }) => call<RoadmapIntegrationSettings>('saveIntegrationSettings', [input]),
   testIntegrationConnection: (input: { organizationUrl?: string; pat?: string }) => call<{ ok: true; projectCount: number }>('testIntegrationConnection', [input]),
+  saveWriteBackSettings: (settings: RoadmapWriteBackSettings) => call<RoadmapIntegrationSettings>('saveWriteBackSettings', [settings]),
+  writeBackOverview: () => call<RoadmapWriteBackOverview>('writeBackOverview'),
+  checkWriteBack: (projectId: string) => call<{ checks: RoadmapReadinessCheck[] }>('checkWriteBack', [projectId]),
+  webhookSecret: () => call<{ secret: string }>('webhookSecret'),
+  rotateWebhookSecret: () => call<{ secret: string }>('rotateWebhookSecret'),
   projects: () => call<{ data: AzureProject[]; source: 'cache' }>('projects'),
   syncProject: (project: AzureProject) => call<{ projectId: string; importedWorkItems: number }>('syncProject', [project]),
   plan: (projectId: string) => call<RoadmapProjectPlan>('plan', [projectId]),
+  previewAzurePush: (projectId: string) => call<RoadmapAzurePushPreview>('previewAzurePush', [projectId]),
+  pushProjectToAzure: (projectId: string, allocationIds?: string[]) => call<{ queued: number }>('pushProjectToAzure', [projectId, allocationIds]),
+  pushAllocationToAzure: (allocationId: string) => call<{ queued: number }>('pushAllocationToAzure', [allocationId]),
   people: () => call<{ data: RoadmapPerson[] }>('people'),
   roles: (projectId: string) => call<RoadmapRole[]>('roles', [projectId]),
   adminPeople: () => call<RoadmapPerson[]>('adminPeople'),

@@ -1,6 +1,6 @@
 import type {
   AzureProject, RoadmapAllocation, RoadmapIntegrationSettings, RoadmapPeriod,
-  RoadmapPerson, RoadmapProjectPlan, RoadmapRole,
+  RoadmapPerson, RoadmapProjectPlan, RoadmapRole, RoadmapWriteBackSettings,
 } from './roadmapApi';
 
 export const DEMO_BLOB_PATH = 'roadmap/demo-state-v1.json';
@@ -9,6 +9,11 @@ const AZURE_PROJECT_ID = 'demo-azure-project';
 // Allocations saved before quarterly planning belong to this quarter.
 const LEGACY_QUARTER_KEY = '2026-Q4';
 type DemoPerson = RoadmapPerson & { externalId: string };
+const DEMO_WRITE_BACK: RoadmapWriteBackSettings = {
+  mode: 'off', workItemType: 'Task', titleTemplate: '{role}: {title} ({quarter})', tagsTemplate: 'Roadmap; Roadmap {quarterKey}; {role}',
+  fields: { assignedTo: true, originalEstimate: true, remainingWork: true, iteration: true, areaPath: true, description: true },
+  remainingWorkPolicy: 'recalculate', projectIds: null,
+};
 
 export type DemoState = {
   version: 1;
@@ -148,7 +153,8 @@ function planOf(state: DemoState): RoadmapProjectPlan {
 }
 function integrationSettings(state: DemoState): RoadmapIntegrationSettings {
   return { provider: 'azure-devops', organizationUrl: state.organizationUrl, configured: false,
-    patConfigured: false, source: 'unconfigured', encryptionKeyConfigured: false };
+    patConfigured: false, source: 'unconfigured', encryptionKeyConfigured: false,
+    writeBackEnabled: false, writeBack: DEMO_WRITE_BACK, webhookConfigured: false };
 }
 function findWorkItem(state: DemoState, id: string) {
   const item = state.plan.workItems.find((candidate) => candidate.id === id || candidate.externalId === id);
@@ -166,6 +172,10 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
     case 'integrationSettings': return integrationSettings(state);
     case 'saveIntegrationSettings': state.organizationUrl = arg0.organizationUrl; return integrationSettings(state);
     case 'testIntegrationConnection': throw new Error('Подключение Azure DevOps недоступно в демо. Данные проекта уже загружены.');
+    case 'writeBackOverview': return { settings: DEMO_WRITE_BACK, projects: [], errors: [] };
+    case 'saveWriteBackSettings': case 'checkWriteBack': case 'webhookSecret': case 'rotateWebhookSecret':
+    case 'previewAzurePush': case 'pushProjectToAzure': case 'pushAllocationToAzure':
+      throw new Error('Запись плана в Azure DevOps недоступна в демо.');
     case 'projects': return { data: clone(state.projects), source: 'cache' };
     case 'syncProject': return { projectId: PROJECT_ID, importedWorkItems: state.plan.workItems.length };
     case 'plan': return planOf(state);

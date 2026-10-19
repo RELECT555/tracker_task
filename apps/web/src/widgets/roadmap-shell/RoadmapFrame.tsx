@@ -4,12 +4,19 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
-import { ChartNoAxesCombined, Check, ChevronUp, GitBranch, LogIn, LogOut, Monitor, Moon, PanelsTopLeft, Rows3, Settings2, Sun, Users } from 'lucide-react';
+import { Cable, ChartNoAxesCombined, Check, ChevronUp, GitBranch, LogIn, LogOut, Monitor, Moon, PanelsTopLeft, Rows3, Settings2, Sun, UserRoundCog, Users } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { DEV_ACCOUNTS } from '@/features/auth/lib/dev-accounts';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
+
+const adminLinks = [
+  { href: routes.roadmapAdminHome, label: 'Обзор', icon: Settings2 },
+  { href: routes.roadmapAdmin, label: 'Интеграции', icon: Cable },
+  { href: routes.roadmapAdminUsers, label: 'Пользователи', icon: Users },
+  { href: routes.roadmapAdminRoles, label: 'Роли', icon: UserRoundCog },
+];
 
 function initials(fullName: string) {
   return fullName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
@@ -113,14 +120,20 @@ export function RoadmapFrame({ children }: { children: React.ReactNode }) {
           {isAdmin ? (
             <>
               <p className="mb-2 mt-7 px-3 text-[11px] font-medium uppercase tracking-wider text-sidebar-section">Администрирование</p>
-              <Link
-                href={routes.roadmapAdminHome}
-                aria-current={pathname.startsWith(routes.roadmapAdminHome) ? 'page' : undefined}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${pathname.startsWith(routes.roadmapAdminHome) ? 'bg-sidebar-accent font-medium text-sidebar-primary' : 'text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
-              >
-                <Settings2 className="h-[18px] w-[18px]" strokeWidth={1.5} />
-                Администрирование
-              </Link>
+              <div className="space-y-1">
+                {adminLinks.map(({ href, label, icon: Icon }) => {
+                  const active = pathname === href;
+                  return <Link
+                    key={href}
+                    href={href}
+                    aria-current={active ? 'page' : undefined}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${active ? 'bg-sidebar-accent font-medium text-sidebar-primary' : 'text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
+                  >
+                    <Icon className="h-[18px] w-[18px]" strokeWidth={1.5} />
+                    {label}
+                  </Link>;
+                })}
+              </div>
             </>
           ) : null}
         </nav>

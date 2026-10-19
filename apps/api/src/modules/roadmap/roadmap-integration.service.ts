@@ -5,9 +5,10 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
+import { normalizeWriteBackSettings, WriteBackSettings } from './roadmap-write-back.settings';
 
 export interface AzureDevOpsCredentials {
   organizationUrl: string;
@@ -16,7 +17,24 @@ export interface AzureDevOpsCredentials {
 }
 
 type EncryptedPat = { iv: string; authTag: string; cipherText: string };
-type StoredIntegration = { organizationUrl?: string; encryptedPat?: EncryptedPat };
+type StoredIntegration = {
+  organizationUrl?: string;
+  encryptedPat?: EncryptedPat;
+  /** First version of write-back: true meant automatic mode. Kept for stored settings. */
+  writeBackEnabled?: boolean;
+  writeBack?: Partial<WriteBackSettings>;
+  /** Shared secret that Azure DevOps service hooks send in the webhook header. */
+  encryptedWebhookSecret?: EncryptedPat;
+};
+
+export const AZURE_WEBHOOK_SECRET_HEADER = 'x-roadmap-webhook-secret';
+
+/** Azure DevOps answered with a non-success HTTP status. */
+export class AzureDevOpsHttpError extends BadGatewayException {
+  constructor(readonly httpStatus: number, details: string) {
+    super(`Azure DevOps returned ${status}: ${details.slice(0, 500)}`);
+  }
+}
 
 @Injectable()
 export class RoadmapIntegrationService {
@@ -37,8 +55,11 @@ export class RoadmapIntegrationService {
       organizationUrl,
       configured: Boolean(organizationUrl && (hasStoredPat || hasEnvironmentPat)),
       patConfigured: hasStoredPat || hasEnvironmentPat,
-      source: stored ? 'settings' : hasEnvironmentPat ? 'environment' : 'unconfigured',
+      source: hasStoredPat ? 'settings' : hasEnvironmentPat ? 'environment' : 'unconfigured',
       encryptionKeyConfigured: Boolean(this.encryptionKey()),
+      writeBackEnabled: this.writeBackOf(stored).mode !== 'off',
+      writeBack: this.writeBackOf(stored),
+      webhookConfigured: Boolean(stored?.encryptedWebhookSecret),
     };
   }
 
@@ -62,13 +83,36 @@ export class RoadmapIntegrationService {
     const pat = input.pat?.trim() || current;
     if (!pat) throw new BadRequestException('Enter an Azure DevOps PAT');
     const encryptedPat = this.encryptPat(pat);
-    const value: StoredIntegration = { organizationUrl, encryptedPat };
-    await this.prisma.systemSetting.upsert({
-      where: { key: this.settingKey },
-      create: { key: this.settingKey, value: value as Prisma.InputJsonValue },
-      update: { value: value as Prisma.InputJsonValue },
-    });
+    await this.writeStoredSettings({ ...(await this.readStoredSettings()), organizationUrl, encryptedPat });
     return this.getPublicSettings();
+  }
+
+  async getWriteBackSettings() {
+    return this.writeBackOf(await this.readStoredSettings());
+  }
+
+  async saveWriteBackSettings(input: WriteBackSettings) {
+    const stored = await this.readStoredSettings();
+    const { writeBackEnabled: _legacy, ...rest } = stored ?? {};
+    void _legacy;
+    await this.writeStoredSettings({ ...rest, writeBack: normalizeWriteBackSettings(input) });
+    return this.getPublicSettings();
+  }
+
+  /** Returns the webhook secret for administrators, creating it on first use. */
+  async getWebhookSecret(rotate = false) {
+    const stored = await this.readStoredSettings();
+    if (stored?.encryptedWebhookSecret && !rotate) return { secret: this.decryptPat(stored.encryptedWebhookSecret) };
+    const secret = randomBytes(24).toString('base64url');
+    await this.writeStoredSettings({ ...stored, encryptedWebhookSecret: this.encryptPat(secret) });
+    return { secret };
+  }
+
+  async verifyWebhookSecret(candidate: string | undefined) {
+    const stored = await this.readStoredSettings();
+    if (!candidate || !stored?.encryptedWebhookSecret) return false;
+    const expected = createHash('sha256').update(this.decryptPat(stored.encryptedWebhookSecret)).digest();
+    return timingSafeEqual(expected, createHash('sha256').update(candidate).digest());
   }
 
   async testConnection(input: { organizationUrl?: string; pat?: string }) {
@@ -93,12 +137,37 @@ export class RoadmapIntegrationService {
     });
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
-        throw new BadGatewayException('Azure DevOps rejected the PAT or its read permissions');
+        throw new BadGatewayException('Azure DevOps rejected the PAT or its permissions');
       }
       throw new BadGatewayException(`Azure DevOps connection failed (${response.status})`);
     }
     const result = (await response.json()) as { count?: number; value?: unknown[] };
     return { ok: true, projectCount: result.count ?? result.value?.length ?? 0 };
+  }
+
+  /** Calls the Azure DevOps REST API with the configured PAT and throws on non-success statuses. */
+  async request(url: string, init?: RequestInit, credentials?: { pat: string }) {
+    const { pat } = credentials ?? await this.getCredentials();
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...init,
+        headers: {
+          Authorization: `Basic ${Buffer.from(`:${pat}`).toString('base64')}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          ...init?.headers,
+        },
+      });
+    } catch {
+      throw new BadGatewayException('Could not reach Azure DevOps');
+    }
+    if (!response.ok) throw new AzureDevOpsHttpError(response.status, await response.text());
+    return response;
+  }
+
+  async requestJson<T>(url: string, init?: RequestInit, credentials?: { pat: string }): Promise<T> {
+    return (await (await this.request(url, init, credentials)).json()) as T;
   }
 
   private async currentPat(): Promise<string> {
@@ -112,6 +181,18 @@ export class RoadmapIntegrationService {
     return setting?.value && typeof setting.value === 'object' && !Array.isArray(setting.value)
       ? (setting.value as StoredIntegration)
       : null;
+  }
+
+  private writeBackOf(stored: StoredIntegration | null) {
+    return normalizeWriteBackSettings(stored?.writeBack, stored?.writeBackEnabled);
+  }
+
+  private async writeStoredSettings(value: StoredIntegration) {
+    await this.prisma.systemSetting.upsert({
+      where: { key: this.settingKey },
+      create: { key: this.settingKey, value: value as Prisma.InputJsonValue },
+      update: { value: value as Prisma.InputJsonValue },
+    });
   }
 
   private environmentUrl(): string {

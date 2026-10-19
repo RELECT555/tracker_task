@@ -3,11 +3,12 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { AlertCircle, ArrowDownToLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, Eye, EyeOff, Maximize2, Minimize2, Pencil, Plus, RefreshCw, Users, X } from 'lucide-react';
+import { AlertCircle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, ExternalLink, Eye, EyeOff, Maximize2, Minimize2, Pencil, Plus, RefreshCw, Users, X } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
 import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
+import { AzurePushPreview } from '@/entities/roadmap/ui/AzurePushPreview';
 import { Button } from '@/shared/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 import { SearchableSelect } from '@/shared/ui/searchable-select';
@@ -65,6 +66,39 @@ function NameColumnResizeHandle({ width, onChange }: { width: number; onChange: 
     <span className="relative z-10 h-8 w-1 rounded-full bg-border transition-colors group-hover:bg-primary group-focus-visible:bg-primary" />
   </div>;
 }
+/** Allocations that still have to reach Azure DevOps (never sent, waiting, or failed). */
+function needsAzurePush(allocation: RoadmapAllocation) {
+  return allocation.azureSyncStatus !== 'synced' && allocation.azureSyncStatus !== 'skipped';
+}
+
+function AzureSyncMark({ allocation }: { allocation: RoadmapAllocation }) {
+  if (allocation.azureSyncStatus === 'pending') return <RefreshCw className="h-3 w-3 shrink-0 animate-spin text-amber-600 dark:text-amber-300" aria-label="Отправляется в Azure DevOps" />;
+  if (allocation.azureSyncStatus === 'error') return <AlertCircle className="h-3 w-3 shrink-0 text-destructive" aria-label="Ошибка отправки в Azure DevOps" />;
+  if (allocation.azureSyncStatus === 'synced') return null;
+  if (allocation.azureSyncStatus === 'skipped') return <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground/50" aria-label="Не отправляется в Azure DevOps" />;
+  return <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/40" aria-label="Ещё не отправлено в Azure DevOps" />;
+}
+
+function AzureTaskPanel({ allocation, onRetry, retrying }: { allocation: RoadmapAllocation; onRetry: () => void; retrying: boolean }) {
+  const status = allocation.azureSyncStatus;
+  const label = status === 'synced' ? 'Задача синхронизирована'
+    : status === 'pending' ? 'Отправляем в Azure DevOps…'
+      : status === 'error' ? 'Не удалось отправить'
+        : status === 'skipped' ? 'Не отправляется'
+          : 'Ещё не отправлено';
+  return <div className="space-y-2 rounded-lg border border-border px-3 py-2.5 text-xs">
+    <div className="flex items-center justify-between gap-2">
+      <span className="flex min-w-0 items-center gap-1.5 font-medium text-foreground"><AzureSyncMark allocation={allocation} />{label}</span>
+      {allocation.azureTaskUrl ? <a href={allocation.azureTaskUrl} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 text-primary hover:underline">Task #{allocation.azureTaskId}<ExternalLink className="h-3 w-3" /></a> : null}
+    </div>
+    <p className="text-muted-foreground">
+      План {Number(allocation.estimatedHours)} ч · факт {Number(allocation.actualHours ?? 0)} ч{allocation.azureTaskState ? ` · ${allocation.azureTaskState}` : ''}
+    </p>
+    {allocation.azureSyncError ? <p className="break-words text-destructive">{allocation.azureSyncError}</p> : null}
+    {status !== 'synced' && status !== 'pending' ? <Button type="button" size="sm" variant="outline" className="h-7 gap-1.5 text-xs" disabled={retrying} onClick={onRetry}><ArrowUpFromLine className="h-3.5 w-3.5" />{retrying ? 'Отправляем…' : 'Отправить снова'}</Button> : null}
+  </div>;
+}
+
 function ErrorMessage({ error }: { error: unknown }) {
   if (!error) return null;
   return (
@@ -449,16 +483,14 @@ function AllocationEditor({
   trigger,
   onSave,
   saving,
+  azure,
 }: {
   item: RoadmapWorkItem;
   role: RoadmapRole;
   people: { id: string; name: string; email: string | null; isMock?: boolean }[];
-  initial?: {
-    id: string;
-    personExternalId: string;
-    estimatedHours: number | string;
-    periods: RoadmapPeriod[];
-  };
+  initial?: RoadmapAllocation;
+  /** Shows the linked Azure DevOps Task when plan write-back is enabled. */
+  azure?: { onRetry: (allocationId: string) => void; retrying: boolean };
   defaultPersonExternalId?: string | null;
   triggerLabel?: string;
   triggerClassName?: string;
@@ -527,18 +559,8 @@ function AllocationEditor({
             <Button type="button" variant="ghost" size="icon" className="-mr-2 -mt-1 h-8 w-8" aria-label="Закрыть" onClick={() => setOpen(false)}><X className="h-4 w-4" /></Button>
           </div>
           <div className="space-y-4 p-4">
-            {initial ? (
-              <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 p-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{selectedPerson?.name.slice(0, 1) ?? 'У'}</div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{selectedPerson?.name ?? initial.personExternalId}</p>
-                  <p className="truncate text-xs text-muted-foreground">{selectedPerson?.email ?? 'Участник Azure DevOps'}</p>
-                </div>
-                {selectedPerson?.isMock ? <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-700 dark:text-amber-300">ДЕМО</span> : null}
-              </div>
-            ) : null}
             <label className="block space-y-1.5 text-xs font-medium text-muted-foreground">
-              {initial ? 'Изменить участника' : 'Участник'}
+              Участник
               <SearchableSelect
                 ariaLabel="Человек из Azure DevOps"
                 value={personId}
@@ -556,6 +578,7 @@ function AllocationEditor({
                 <span className="absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">часов</span>
               </div>
             </label>
+            {initial && azure ? <AzureTaskPanel allocation={initial} retrying={azure.retrying} onRetry={() => azure.onRetry(initial.id)} /> : null}
           </div>
           <div className="flex justify-end gap-2 border-t border-border bg-muted/20 px-4 py-3">
             <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>Отмена</Button>
@@ -640,9 +663,18 @@ export function RoadmapPage() {
     queryKey: ['roadmap', 'plan', roadmapProjectId],
     queryFn: () => roadmapApi.plan(roadmapProjectId),
     enabled: Boolean(roadmapProjectId),
+    // While allocations are being written to Azure DevOps, poll until every status settles.
+    refetchInterval: (query) => query.state.data?.azure?.writeBackEnabled
+      && query.state.data.workItems.some((item) => item.allocations.some((allocation) => allocation.azureSyncStatus === 'pending'))
+      ? 3000
+      : false,
   });
   const plan = planQuery.data;
   const roles = plan?.roles ?? [];
+  const writeBackEnabled = Boolean(plan?.azure?.writeBackEnabled);
+  const allAllocations = plan?.workItems.flatMap((item) => item.allocations) ?? [];
+  const azureUnsyncedCount = allAllocations.filter(needsAzurePush).length;
+  const azureErrorCount = allAllocations.filter((allocation) => allocation.azureSyncStatus === 'error').length;
 
   const syncMutation = useMutation({
     mutationFn: (project: AzureProject) => roadmapApi.syncProject(project),
@@ -660,6 +692,11 @@ export function RoadmapPage() {
   });
   const saveQuarterMutation = useMutation({
     mutationFn: ({ allocationId, quarterKey, months }: { allocationId: string; quarterKey: string; months: { monthKey: string; hours: number }[] }) => roadmapApi.saveAllocationQuarter(allocationId, quarterKey, months),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
+  });
+  const [pushPreviewOpen, setPushPreviewOpen] = useState(false);
+  const pushAllocationMutation = useMutation({
+    mutationFn: roadmapApi.pushAllocationToAzure,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
   });
   const addRoleMutation = useMutation({
@@ -780,19 +817,31 @@ export function RoadmapPage() {
           const featureAllocations = isEpic ? epicChildren.flatMap((feature) => feature.allocations.filter((allocation) => allocation.roleId === role.id)) : [];
           const canEdit = rolePeople.length > 0 && (!isEpic || showEpicAssignments);
           const sumHours = (list: RoadmapAllocation[]) => list.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0);
-          const editorProps = { item, role, people: rolePeople, quarterLabel: currentQuarterLabel, saving: saveMutation.isPending, onSave: saveAllocation };
-          const personLine = ({ name, email, hours, mock, placeholder }: { name: string; email?: string | null; hours: string; mock?: boolean; placeholder?: boolean }) => (
+          const editorProps = {
+            item, role, people: rolePeople, quarterLabel: currentQuarterLabel, saving: saveMutation.isPending, onSave: saveAllocation,
+            azure: writeBackEnabled ? { onRetry: (allocationId: string) => pushAllocationMutation.mutate(allocationId), retrying: pushAllocationMutation.isPending } : undefined,
+          };
+          const personLine = ({ name, email, hours, mock, placeholder, status }: { name: string; email?: string | null; hours: string; mock?: boolean; placeholder?: boolean; status?: React.ReactNode }) => (
             <span className="flex w-full min-w-0 items-center gap-2 px-1.5 py-1 text-left">
               <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${placeholder ? 'border border-dashed border-muted-foreground/40 text-muted-foreground' : 'bg-primary/10 text-primary'}`}>{name.slice(0, 1)}</span>
               <span title={email ?? undefined} className={`min-w-0 flex-1 truncate text-xs ${placeholder ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>{name}</span>
               {mock ? <span className="shrink-0 rounded bg-amber-500/10 px-1 py-px text-[9px] font-medium uppercase text-amber-700 dark:text-amber-300">демо</span> : null}
+              {status}
               <span className={`shrink-0 text-xs tabular-nums ${placeholder ? 'text-muted-foreground/60 group-hover/chip:text-primary' : 'font-medium text-foreground'}`}>{hours}</span>
             </span>
           );
           const chipClassName = 'group/chip block w-full rounded-md transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30';
           const assignmentList = <>
             {allocations.map((allocation) => {
-              const line = personLine({ name: allocation.personName, email: allocation.personEmail, hours: `${Number(allocation.estimatedHours)} ч`, mock: people.find((person) => person.id === allocation.personExternalId)?.isMock });
+              const actual = allocation.actualHours === null || allocation.actualHours === undefined ? null : Number(allocation.actualHours);
+              const line = personLine({
+                name: allocation.personName,
+                email: allocation.personEmail,
+                // Fact / plan once the linked Azure DevOps Task has Completed Work.
+                hours: actual !== null ? `${actual} / ${Number(allocation.estimatedHours)} ч` : `${Number(allocation.estimatedHours)} ч`,
+                mock: people.find((person) => person.id === allocation.personExternalId)?.isMock,
+                status: writeBackEnabled ? <AzureSyncMark allocation={allocation} /> : undefined,
+              });
               return canEdit
                 ? <AllocationEditor key={allocation.id} {...editorProps} initial={allocation} trigger={<button type="button" className={chipClassName} aria-label={`Изменить оценку: ${allocation.personName}`}>{line}</button>} />
                 : <div key={allocation.id}>{line}</div>;
@@ -839,7 +888,7 @@ export function RoadmapPage() {
     );
   }
 
-  const errors = [connectionQuery.error, projectsQuery.error, peopleQuery.error, planQuery.error, syncMutation.error, saveMutation.error, saveQuarterMutation.error, splitMutation.error, addRoleMutation.error, setRoleDefaultMutation.error, roleCatalogQuery.error];
+  const errors = [connectionQuery.error, projectsQuery.error, peopleQuery.error, planQuery.error, syncMutation.error, saveMutation.error, saveQuarterMutation.error, splitMutation.error, addRoleMutation.error, setRoleDefaultMutation.error, roleCatalogQuery.error, pushAllocationMutation.error];
 
   return (
     <main className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8">
@@ -927,9 +976,21 @@ export function RoadmapPage() {
                     <h2 className="font-medium text-foreground">{plan.name}</h2>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {plan.syncedAt ? `Синхронизировано ${new Date(plan.syncedAt).toLocaleString('ru-RU')}` : 'Данные ещё не синхронизированы'}
+                      {writeBackEnabled ? <> · Запись в Azure: {plan.azure?.mode === 'manual' ? 'по кнопке' : 'автоматически'}{azureErrorCount ? <span className="text-destructive"> · ошибок: {azureErrorCount}</span> : null}</> : null}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
+                    {writeBackEnabled ? <Popover open={pushPreviewOpen} onOpenChange={setPushPreviewOpen}>
+                      <PopoverTrigger asChild>
+                        <Button type="button" variant={plan.azure?.mode === 'manual' && azureUnsyncedCount ? 'default' : 'outline'} size="sm" className="h-9 gap-2" disabled={!azureUnsyncedCount} title="Посмотреть и отправить изменения плана в Azure DevOps">
+                          <ArrowUpFromLine className="h-4 w-4" />
+                          {azureUnsyncedCount ? `Отправить в Azure (${azureUnsyncedCount})` : 'Всё в Azure'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-xl p-0">
+                        {pushPreviewOpen ? <AzurePushPreview projectId={roadmapProjectId} onDone={() => setPushPreviewOpen(false)} /> : null}
+                      </PopoverContent>
+                    </Popover> : null}
                     {canConfigure ? <Link href={routes.roadmapAdminRoles} className="inline-flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm font-medium text-foreground hover:bg-muted"><Users className="h-4 w-4" />Управление ролями</Link> : null}
                     <Button type="button" variant={focusMode ? 'secondary' : 'outline'} size="sm" onClick={() => {
                       if (!focusMode && view === 'periods') setExpandedEpics(new Set(epics.map((epic) => epic.id)));

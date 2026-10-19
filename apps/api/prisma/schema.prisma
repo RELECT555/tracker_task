@@ -425,6 +425,14 @@ model RoadmapAllocation {
   personEmail      String?                   @map("person_email") @db.VarChar(255)
   quarterKey       String                    @map("quarter_key") @db.VarChar(7)
   estimatedHours   Decimal                   @map("estimated_hours") @db.Decimal(10, 2)
+  /// Azure DevOps Task that mirrors this allocation; Roadmap creates and updates it.
+  azureTaskId      String?                   @map("azure_task_id") @db.VarChar(100)
+  /// null = never sent, pending | synced | error | skipped.
+  azureSyncStatus  String?                   @map("azure_sync_status") @db.VarChar(20)
+  azureSyncError   String?                   @map("azure_sync_error") @db.VarChar(1000)
+  azureSyncedAt    DateTime?                 @map("azure_synced_at") @db.Timestamptz()
+  /// Estimate last written to the Azure DevOps Task, used to detect plan changes.
+  azurePushedHours Decimal?                  @map("azure_pushed_hours") @db.Decimal(10, 2)
   workItem         RoadmapWorkItem           @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   role             RoadmapRole               @relation(fields: [roleId], references: [id], onDelete: Restrict)
   periods          RoadmapPeriodAllocation[]
@@ -432,6 +440,8 @@ model RoadmapAllocation {
 
   @@unique([workItemId, roleId, personExternalId, quarterKey], map: "roadmap_allocations_person_quarter_key")
   @@index([workItemId])
+  @@index([azureSyncStatus])
+  @@index([azureTaskId])
   @@map("roadmap_allocations")
 }
 

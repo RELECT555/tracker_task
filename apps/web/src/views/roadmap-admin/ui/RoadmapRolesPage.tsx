@@ -3,23 +3,20 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Check, Loader2, Plus, Search, ShieldCheck, Users, X } from 'lucide-react';
+import { Check, Loader2, Plus, Search, ShieldCheck, X } from 'lucide-react';
 import { roadmapApi, type RoadmapRole } from '@/entities/roadmap/api/roadmapApi';
 import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
 import { routes } from '@/shared/config/routes';
 import { Button } from '@/shared/ui/button';
 import { RoleMark } from '@/shared/ui/color-mark';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
+import { AdminAlert, AdminPage, AdminPageHeader, personInitials } from './AdminLayout';
 
 function membersLabel(count: number) {
   const mod10 = count % 10;
   const mod100 = count % 100;
   const word = mod10 === 1 && mod100 !== 11 ? 'участник' : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? 'участника' : 'участников';
   return `${count} ${word}`;
-}
-
-function initials(name: string) {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toLocaleUpperCase('ru-RU');
 }
 
 const demoBadge = <span className="ml-2 rounded-full bg-amber-500/10 px-1.5 py-0.5 align-middle text-[10px] font-medium text-amber-700 dark:text-amber-300">демо</span>;
@@ -213,21 +210,18 @@ export function RoadmapRolesPage() {
   </Popover>;
 
   return (
-    <main className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto w-full space-y-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div><h1 className="text-2xl font-semibold tracking-tight text-foreground">Роли</h1><p className="mt-1 text-sm text-muted-foreground">Роли проекта и люди, которых можно на них назначать</p></div>
-          <div className="flex flex-wrap items-center gap-2">
-            <AzureProjectPicker projects={projects} value={selectedProjectId} onChange={setSelectedProjectId} disabled={projectsQuery.isLoading} placeholder="Выбрать проект" />
-            <Link href={routes.roadmapAdminUsers} className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"><Users className="h-4 w-4" />Пользователи</Link>
-          </div>
-        </div>
+    <AdminPage className="max-w-none">
+        <AdminPageHeader
+          title="Роли"
+          description="Роли проекта и люди, которых можно на них назначать. Каталог ролей общий для всех проектов."
+          actions={<AzureProjectPicker projects={projects} value={selectedProjectId} onChange={setSelectedProjectId} disabled={projectsQuery.isLoading} placeholder="Выбрать проект" />}
+        />
 
-        {error ? <div role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error instanceof Error ? error.message : 'Не удалось сохранить изменения'}</div> : null}
+        {error ? <AdminAlert tone="error">{error instanceof Error ? error.message : 'Не удалось сохранить изменения'}</AdminAlert> : null}
 
         {notice ? <div className="rounded-xl border border-border bg-card px-6 py-10 text-center">{notice}</div> : (
           <section className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
-            <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_hsl(var(--foreground)/0.04)] dark:shadow-none">
               <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
                 <h2 className="text-sm font-semibold text-foreground">Роли проекта <span className="ml-1 font-normal tabular-nums text-muted-foreground">{roles.length}</span></h2>
                 {roadmapProjectId ? addPopover : null}
@@ -263,7 +257,7 @@ export function RoadmapRolesPage() {
                 : <div className="px-4 py-10 text-center"><ShieldCheck className="mx-auto h-7 w-7 text-muted-foreground/60" /><p className="mt-2 text-sm text-muted-foreground">В проекте пока нет ролей.<br />Нажмите «Добавить».</p></div>}
             </div>
 
-            {selectedRole ? <div className="overflow-hidden rounded-xl border border-border bg-card">
+            {selectedRole ? <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_hsl(var(--foreground)/0.04)] dark:shadow-none">
               {pendingSwitchRole ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/5 px-4 py-2.5">
                 <p className="text-sm text-foreground">Сохранить изменения перед переходом к «{pendingSwitchRole.name}»?</p>
                 <div className="flex gap-1.5">
@@ -296,7 +290,7 @@ export function RoadmapRolesPage() {
                       return <label key={person.id} className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/30 ${checked ? 'border-primary/40 bg-primary/5' : 'border-border hover:border-primary/25 hover:bg-muted/40'}`}>
                         <input type="checkbox" checked={checked} onChange={() => togglePerson(person.id)} className="sr-only" />
                         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold transition-colors ${checked ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-                          {checked ? <Check className="h-4 w-4" /> : initials(person.name)}
+                          {checked ? <Check className="h-4 w-4" /> : personInitials(person.name)}
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-1.5"><span className={`truncate text-sm text-foreground ${checked ? 'font-medium' : ''}`}>{person.name}</span>{person.isMock ? <span className="shrink-0 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">демо</span> : null}</span>
@@ -319,7 +313,6 @@ export function RoadmapRolesPage() {
             </div> : null}
           </section>
         )}
-      </div>
-    </main>
+    </AdminPage>
   );
 }

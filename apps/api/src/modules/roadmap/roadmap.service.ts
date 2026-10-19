@@ -5,18 +5,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
+import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import { RoadmapIntegrationService } from './roadmap-integration.service';
+import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 
 type AzureProject = { id: string; name: string; url?: string; state?: string };
 type AzureWorkItemRef = { id: number; url: string };
-type AzureWorkItem = {
-  id: number;
-  url: string;
-  fields: Record<string, unknown>;
-};
-type AzureWorkItemField = { referenceName: string; name?: string; isCustom?: boolean };
 type AzurePerson = {
   descriptor: string;
   subjectKind?: string;
@@ -34,6 +29,8 @@ export class RoadmapService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly integration: RoadmapIntegrationService,
+    private readonly importer: RoadmapWorkItemImportService,
+    private readonly azureSync: RoadmapAzureSyncService,
   ) {}
 
   connectionStatus() {
@@ -45,8 +42,9 @@ export class RoadmapService {
     const savedIds = new Map(saved.map((project) => [project.externalId, project.id]));
     try {
       const credentials = await this.integration.getCredentials();
-      const data = await this.azureJson<{ value: AzureProject[] }>(
+      const data = await this.integration.requestJson<{ value: AzureProject[] }>(
         `${credentials.organizationUrl}/_apis/projects?stateFilter=wellFormed&$top=1000&api-version=${this.apiVersion}`,
+        undefined,
         credentials,
       );
       return {
@@ -84,73 +82,13 @@ export class RoadmapService {
     const wiql = {
       query: 'SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project ORDER BY [System.Id]',
     };
-    const result = await this.azureJson<{ workItems: AzureWorkItemRef[] }>(
+    const result = await this.integration.requestJson<{ workItems: AzureWorkItemRef[] }>(
       `${credentials.organizationUrl}/${encodeURIComponent(externalId)}/_apis/wit/wiql?$top=20000&api-version=${this.apiVersion}`,
-      credentials,
       { method: 'POST', body: JSON.stringify(wiql) },
-    );
-    const fieldCatalog = await this.azureJson<{ value: AzureWorkItemField[] }>(
-      `${credentials.organizationUrl}/_apis/wit/fields?api-version=${this.apiVersion}`,
       credentials,
     );
-    const customFieldNames = fieldCatalog.value
-      .filter((field) => (field.isCustom || field.referenceName.startsWith('Custom.'))
-        && /role|estimate/i.test(`${field.name ?? ''} ${field.referenceName}`))
-      .map((field) => field.referenceName);
-    const customFieldLabels = new Map(fieldCatalog.value.map((field) => [field.referenceName, field.name ?? field.referenceName]));
-    const imported: AzureWorkItem[] = [];
-    for (let offset = 0; offset < result.workItems.length; offset += 200) {
-      const ids = result.workItems.slice(offset, offset + 200).map((item) => item.id);
-      if (!ids.length) continue;
-      const fields = [
-        'System.Id', 'System.Title', 'System.WorkItemType', 'System.State', 'System.Parent',
-        'Microsoft.VSTS.Scheduling.CompletedWork',
-        ...customFieldNames,
-      ];
-      const batch = await this.azureJson<{ value: AzureWorkItem[] }>(
-        `${credentials.organizationUrl}/_apis/wit/workitemsbatch?api-version=${this.apiVersion}`,
-        credentials,
-        { method: 'POST', body: JSON.stringify({ ids, fields }) },
-      );
-      imported.push(...batch.value);
-    }
-
-    for (let offset = 0; offset < imported.length; offset += 200) {
-      const databaseBatch = imported.slice(offset, offset + 200).map((item) => {
-        const fields = item.fields;
-        const azureCustomFields = Object.fromEntries(customFieldNames
-          .filter((fieldName) => fields[fieldName] !== undefined)
-          .map((fieldName) => [customFieldLabels.get(fieldName) ?? fieldName, fields[fieldName]]));
-        const actualHoursValue = fields['Microsoft.VSTS.Scheduling.CompletedWork'];
-        const actualHours = typeof actualHoursValue === 'number' && Number.isFinite(actualHoursValue)
-          ? actualHoursValue
-          : null;
-        return this.prisma.roadmapWorkItem.upsert({
-          where: { projectId_externalId: { projectId: project.id, externalId: String(item.id) } },
-          create: {
-            projectId: project.id,
-            externalId: String(item.id),
-            parentExternalId: fields['System.Parent'] ? String(fields['System.Parent']) : null,
-            type: String(fields['System.WorkItemType'] ?? 'Feature'),
-            title: String(fields['System.Title'] ?? `Work item ${item.id}`),
-            state: fields['System.State'] ? String(fields['System.State']) : null,
-            url: item.url,
-            actualHours,
-            azureCustomFields: azureCustomFields as Prisma.InputJsonObject,
-          },
-          update: {
-            parentExternalId: fields['System.Parent'] ? String(fields['System.Parent']) : null,
-            type: String(fields['System.WorkItemType'] ?? 'Feature'),
-            title: String(fields['System.Title'] ?? `Work item ${item.id}`),
-            state: fields['System.State'] ? String(fields['System.State']) : null,
-            url: item.url,
-            actualHours,
-            azureCustomFields: azureCustomFields as Prisma.InputJsonObject,
-          },
-        });
-      });
-      await this.prisma.$transaction(databaseBatch);
-    }
+    this.importer.invalidateFieldCatalog();
+    const imported = await this.importer.importWorkItems(project, result.workItems.map((item) => item.id), credentials);
     await this.prisma.roadmapProject.update({
       where: { id: project.id },
       data: { syncedAt: new Date() },
@@ -192,10 +130,26 @@ export class RoadmapService {
         ancestor = ancestor.parentExternalId ? itemByExternalId.get(ancestor.parentExternalId) : undefined;
       }
     }
-    const workItems = project.workItems.map((item) => ['epic', 'feature'].includes(item.type.toLowerCase())
-      ? { ...item, actualHours: rolledUpActualHours.get(item.id) ?? 0 }
-      : item);
-    return { ...project, workItems, roles };
+    const settings = await this.integration.getPublicSettings();
+    const taskUrl = (taskId: string) => settings.organizationUrl
+      ? `${settings.organizationUrl}/${encodeURIComponent(project.name)}/_workitems/edit/${taskId}`
+      : null;
+    const workItems = project.workItems.map((item) => {
+      // Each allocation's fact is the Completed Work logged on the Azure DevOps Task that mirrors it.
+      const allocations = item.allocations.map((allocation) => {
+        const task = allocation.azureTaskId ? itemByExternalId.get(allocation.azureTaskId) : undefined;
+        return {
+          ...allocation,
+          actualHours: task?.actualHours ?? null,
+          azureTaskUrl: allocation.azureTaskId ? taskUrl(allocation.azureTaskId) : null,
+          azureTaskState: task?.state ?? null,
+        };
+      });
+      return ['epic', 'feature'].includes(item.type.toLowerCase())
+        ? { ...item, allocations, actualHours: rolledUpActualHours.get(item.id) ?? 0 }
+        : { ...item, allocations };
+    });
+    return { ...project, workItems, roles, azure: { writeBackEnabled: settings.writeBackEnabled, mode: settings.writeBack.mode } };
   }
 
   async listAzurePeople() {
@@ -214,8 +168,9 @@ export class RoadmapService {
     do {
       const query = new URLSearchParams({ 'api-version': '7.1-preview.1' });
       if (continuationToken) query.set('continuationToken', continuationToken);
-      const response = await this.azureResponse(
+      const response = await this.integration.request(
         `https://vssps.dev.azure.com/${credentials.organization}/_apis/graph/users?${query.toString()}`,
+        undefined,
         credentials,
       );
       const data = (await response.json()) as { value: AzurePerson[] };
@@ -487,7 +442,7 @@ export class RoadmapService {
       if (duplicate) throw new ConflictException('This person already has an estimate for this work item, role and quarter');
       allocation = await this.prisma.roadmapAllocation.update({
         where: { id: dto.allocationId },
-        data: { personExternalId: dto.personExternalId, personName: membership.person.name, personEmail: membership.person.email, quarterKey: dto.quarterKey, estimatedHours: dto.estimatedHours },
+        data: { personExternalId: dto.personExternalId, personName: membership.person.name, personEmail: membership.person.email, quarterKey: dto.quarterKey, estimatedHours: dto.estimatedHours, ...this.azureSync.pendingUpdate },
       });
     } else {
       allocation = await this.prisma.roadmapAllocation.upsert({
@@ -507,11 +462,13 @@ export class RoadmapService {
         personEmail: membership.person.email,
         quarterKey: dto.quarterKey,
         estimatedHours: dto.estimatedHours,
+        ...this.azureSync.pendingUpdate,
         },
         update: {
           personName: membership.person.name,
           personEmail: membership.person.email,
           estimatedHours: dto.estimatedHours,
+          ...this.azureSync.pendingUpdate,
         },
       });
     }
@@ -530,6 +487,7 @@ export class RoadmapService {
         }),
       ),
     ]);
+    await this.azureSync.onAllocationSaved(allocation.id);
     return { ...allocation, periods: dto.periods };
   }
 
@@ -592,40 +550,5 @@ export class RoadmapService {
       }
       throw error;
     }
-  }
-
-  private async azureJson<T>(
-    url: string,
-    credentials: { pat: string },
-    init?: RequestInit,
-  ): Promise<T> {
-    const response = await this.azureResponse(url, credentials, init);
-    return (await response.json()) as T;
-  }
-
-  private async azureResponse(
-    url: string,
-    credentials: { pat: string },
-    init?: RequestInit,
-  ) {
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        ...init,
-        headers: {
-          Authorization: `Basic ${Buffer.from(`:${credentials.pat}`).toString('base64')}`,
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          ...init?.headers,
-        },
-      });
-    } catch {
-      throw new BadGatewayException('Could not reach Azure DevOps');
-    }
-    if (!response.ok) {
-      const details = await response.text();
-      throw new BadGatewayException(`Azure DevOps returned ${response.status}: ${details.slice(0, 500)}`);
-    }
-    return response;
   }
 }

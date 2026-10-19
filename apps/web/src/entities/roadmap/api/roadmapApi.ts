@@ -51,7 +51,18 @@ export interface RoadmapAllocation {
   estimatedHours: number | string;
   role: RoadmapRole;
   periods: RoadmapPeriod[];
+  /** Azure DevOps Task that mirrors this allocation (plan is written there, fact is read from it). */
+  azureTaskId?: string | null;
+  azureTaskUrl?: string | null;
+  azureTaskState?: string | null;
+  azureSyncStatus?: RoadmapAzureSyncStatus | null;
+  azureSyncError?: string | null;
+  azureSyncedAt?: string | null;
+  /** Completed Work logged on the linked Azure DevOps Task. */
+  actualHours?: number | string | null;
 }
+
+export type RoadmapAzureSyncStatus = 'pending' | 'synced' | 'error' | 'skipped';
 
 export interface RoadmapWorkItem {
   id: string;
@@ -74,6 +85,7 @@ export interface RoadmapProjectPlan {
   syncedAt: string | null;
   workItems: RoadmapWorkItem[];
   roles: RoadmapRole[];
+  azure?: { writeBackEnabled: boolean; mode?: RoadmapWriteBackMode };
 }
 
 export interface RoadmapIntegrationSettings {
@@ -83,6 +95,89 @@ export interface RoadmapIntegrationSettings {
   patConfigured: boolean;
   source: 'settings' | 'environment' | 'unconfigured';
   encryptionKeyConfigured: boolean;
+  /** Allocations are written to Azure DevOps as work items. */
+  writeBackEnabled: boolean;
+  writeBack: RoadmapWriteBackSettings;
+  webhookConfigured: boolean;
+}
+
+/** off: nothing is written; manual: sent by the "Send to Azure" button; auto: sent on every save. */
+export type RoadmapWriteBackMode = 'off' | 'manual' | 'auto';
+
+export interface RoadmapWriteBackSettings {
+  mode: RoadmapWriteBackMode;
+  workItemType: string;
+  /** Tokens: {role} {title} {quarter} {quarterKey} {person} {id}. */
+  titleTemplate: string;
+  tagsTemplate: string;
+  fields: {
+    assignedTo: boolean;
+    originalEstimate: boolean;
+    remainingWork: boolean;
+    iteration: boolean;
+    areaPath: boolean;
+    description: boolean;
+  };
+  remainingWorkPolicy: 'recalculate' | 'create-only';
+  /** Roadmap project ids allowed for write-back; null = all imported projects. */
+  projectIds: string[] | null;
+}
+
+export interface RoadmapAzurePushPreview {
+  mode: RoadmapWriteBackMode;
+  workItemType: string;
+  projectAllowed: boolean;
+  counts: { create: number; update: number; skip: number };
+  items: {
+    allocationId: string;
+    workItemExternalId: string;
+    workItemTitle: string;
+    roleName: string;
+    personName: string;
+    assignee: string | null;
+    quarterKey: string;
+    estimatedHours: number;
+    pushedHours: number | null;
+    action: 'create' | 'update' | 'skip';
+    skipReason: string | null;
+    taskTitle: string | null;
+    azureTaskId: string | null;
+    status: RoadmapAzureSyncStatus | null;
+    error: string | null;
+  }[];
+}
+
+export interface RoadmapWriteBackOverview {
+  settings: RoadmapWriteBackSettings;
+  projects: {
+    id: string;
+    externalId: string;
+    name: string;
+    url: string | null;
+    syncedAt: string | null;
+    enabled: boolean;
+    total: number;
+    counts: { notSent: number; pending: number; synced: number; error: number; skipped: number };
+    lastPushedAt: string | null;
+  }[];
+  errors: {
+    allocationId: string;
+    projectId: string;
+    workItemExternalId: string;
+    workItemTitle: string;
+    roleName: string;
+    personName: string;
+    quarterKey: string;
+    error: string | null;
+    updatedAt: string;
+  }[];
+}
+
+export interface RoadmapReadinessCheck {
+  key: string;
+  label: string;
+  status: 'ok' | 'warning' | 'error';
+  detail: string;
 }
 
 const liveRoadmapApi = {
@@ -102,6 +197,17 @@ const liveRoadmapApi = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+  saveWriteBackSettings: (settings: RoadmapWriteBackSettings) =>
+    apiFetch<RoadmapIntegrationSettings>('/roadmap/settings/azure-devops/write-back', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
+  writeBackOverview: () => apiFetch<RoadmapWriteBackOverview>('/roadmap/settings/azure-devops/write-back/overview'),
+  checkWriteBack: (projectId: string) =>
+    apiFetch<{ checks: RoadmapReadinessCheck[] }>(`/roadmap/settings/azure-devops/write-back/check/${encodeURIComponent(projectId)}`, { method: 'POST', body: '{}' }),
+  webhookSecret: () => apiFetch<{ secret: string }>('/roadmap/settings/azure-devops/webhook-secret'),
+  rotateWebhookSecret: () =>
+    apiFetch<{ secret: string }>('/roadmap/settings/azure-devops/webhook-secret/rotate', { method: 'POST', body: '{}' }),
   projects: () => apiFetch<{ data: AzureProject[]; source?: 'azure' | 'cache' }>('/roadmap/projects'),
   syncProject: (project: AzureProject) =>
     apiFetch<{ projectId: string; importedWorkItems: number }>(
@@ -113,6 +219,12 @@ const liveRoadmapApi = {
     ),
   plan: (projectId: string) =>
     apiFetch<RoadmapProjectPlan>(`/roadmap/projects/${projectId}/plan`),
+  previewAzurePush: (projectId: string) =>
+    apiFetch<RoadmapAzurePushPreview>(`/roadmap/projects/${encodeURIComponent(projectId)}/azure-push/preview`),
+  pushProjectToAzure: (projectId: string, allocationIds?: string[]) =>
+    apiFetch<{ queued: number }>(`/roadmap/projects/${encodeURIComponent(projectId)}/azure-push`, { method: 'POST', body: JSON.stringify({ allocationIds }) }),
+  pushAllocationToAzure: (allocationId: string) =>
+    apiFetch<{ queued: number }>(`/roadmap/allocations/${encodeURIComponent(allocationId)}/azure-push`, { method: 'POST', body: '{}' }),
   people: () => apiFetch<{ data: RoadmapPerson[] }>('/roadmap/people'),
   roles: (projectId: string) => apiFetch<RoadmapRole[]>(`/roadmap/roles?projectId=${encodeURIComponent(projectId)}`),
   adminPeople: () => apiFetch<RoadmapPerson[]>('/roadmap/admin/users'),

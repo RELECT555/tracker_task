@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsDateString, IsNumber, IsOptional, IsString, Matches, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, ArrayUnique, IsDateString, IsNumber, IsOptional, IsString, Matches, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
+import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import { RoadmapService } from './roadmap.service';
 
 class PeriodDto {
@@ -33,9 +34,16 @@ class SaveAllocationDto {
   @IsArray() @ValidateNested({ each: true }) @Type(() => PeriodDto) periods!: PeriodDto[];
 }
 
+class PushToAzureDto {
+  @IsOptional() @IsArray() @ArrayUnique() @IsString({ each: true }) allocationIds?: string[];
+}
+
 @Controller('roadmap')
 export class RoadmapController {
-  constructor(private readonly roadmap: RoadmapService) {}
+  constructor(
+    private readonly roadmap: RoadmapService,
+    private readonly azureSync: RoadmapAzureSyncService,
+  ) {}
 
   @Get('connection')
   connection() {
@@ -50,6 +58,16 @@ export class RoadmapController {
   @Post('projects/:externalId/sync')
   syncProject(@Param('externalId') externalId: string, @Body() body: { name: string; url?: string }) {
     return this.roadmap.syncProject(externalId, body.name, body.url);
+  }
+
+  @Post('projects/:projectId/azure-push')
+  pushProjectToAzure(@Param('projectId') projectId: string, @Body() dto: PushToAzureDto) {
+    return this.azureSync.pushProject(projectId, dto.allocationIds);
+  }
+
+  @Get('projects/:projectId/azure-push/preview')
+  previewProjectPush(@Param('projectId') projectId: string) {
+    return this.azureSync.previewProject(projectId);
   }
 
   @Get('projects/:projectId/plan')
@@ -70,6 +88,11 @@ export class RoadmapController {
   @Put('allocations')
   saveAllocation(@Body() dto: SaveAllocationDto) {
     return this.roadmap.saveAllocation(dto);
+  }
+
+  @Post('allocations/:allocationId/azure-push')
+  pushAllocationToAzure(@Param('allocationId') allocationId: string) {
+    return this.azureSync.pushAllocation(allocationId);
   }
 
   @Put('allocations/:allocationId/quarters/:quarterKey')
