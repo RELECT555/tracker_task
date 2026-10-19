@@ -11,7 +11,7 @@ import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
 import { Button } from '@/shared/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 import { SearchableSelect } from '@/shared/ui/searchable-select';
-import { ColorMark } from '@/shared/ui/color-mark';
+import { ColorMark, RoleMark } from '@/shared/ui/color-mark';
 import {
   roadmapApi,
   type AzureProject,
@@ -446,6 +446,7 @@ function AllocationEditor({
   triggerLabel,
   triggerClassName,
   quarterLabel,
+  trigger,
   onSave,
   saving,
 }: {
@@ -462,6 +463,7 @@ function AllocationEditor({
   triggerLabel?: string;
   triggerClassName?: string;
   quarterLabel: string;
+  trigger?: React.ReactElement;
   onSave: (data: {
     allocationId?: string;
     workItemId: string;
@@ -510,10 +512,10 @@ function AllocationEditor({
   return (
     <Popover open={open} onOpenChange={(nextOpen) => { if (nextOpen) startEditing(); setOpen(nextOpen); }}>
       <PopoverTrigger asChild>
-        <Button type="button" variant={initial ? 'ghost' : 'outline'} size="sm" className={triggerClassName ?? (initial ? 'mt-1 h-7 gap-1 px-2 text-xs text-muted-foreground' : 'mt-2 h-8 gap-1.5 px-2.5 text-xs')} aria-label={initial ? `Изменить оценку: ${selectedPerson?.name ?? initial.personExternalId}` : triggerLabel ?? 'Назначить участника'}>
+        {trigger ?? <Button type="button" variant={initial ? 'ghost' : 'outline'} size="sm" className={triggerClassName ?? (initial ? 'mt-1 h-7 gap-1 px-2 text-xs text-muted-foreground' : 'mt-2 h-8 gap-1.5 px-2.5 text-xs')} aria-label={initial ? `Изменить оценку: ${selectedPerson?.name ?? initial.personExternalId}` : triggerLabel ?? 'Назначить участника'}>
           {initial ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
           {initial ? 'Изменить назначение' : triggerLabel ?? (defaultPersonExternalId ? 'Задать оценку' : 'Добавить участника')}
-        </Button>
+        </Button>}
       </PopoverTrigger>
       <PopoverContent align="start" side="bottom" sideOffset={8} collisionPadding={16} className="max-h-[min(80vh,680px)] w-[min(390px,calc(100vw-2rem))] overflow-y-auto rounded-xl p-0">
         <form onSubmit={submit}>
@@ -753,23 +755,22 @@ export function RoadmapPage() {
     const epicChildren = isEpic ? features.filter((feature) => feature.parentExternalId === item.externalId) : [];
     const itemAllocations = isEpic ? [...item.allocations, ...epicChildren.flatMap((feature) => feature.allocations)] : item.allocations;
     const itemHours = itemAllocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0);
-    const periods = itemAllocations.flatMap((allocation) => allocation.periods);
     return (
-      <tr key={item.id} className={`align-top hover:bg-muted/20 ${isEpic ? 'border-y border-border bg-muted/25' : 'border-b border-border/50'}`}>
-        <td className={`min-w-64 py-2 ${isEpic ? 'border-l-2 border-l-muted-foreground/40 px-4' : isChild ? 'px-0' : 'px-4'}`}>
+      <tr key={item.id} className={`group/row align-top transition-colors ${isEpic ? 'border-t border-border bg-muted/30 hover:bg-muted/45' : 'border-t border-border/50 hover:bg-muted/15'}`}>
+        <td className={`min-w-64 py-2 ${isEpic ? 'border-l-2 border-l-primary/40 px-4' : isChild ? 'px-0' : 'px-4'}`}>
           <div className={isEpic
             ? 'font-semibold text-foreground'
             : isChild
               ? `relative pl-7 before:absolute before:left-2 before:top-[-8px] before:border-l-2 before:border-border/80 after:absolute after:left-2 after:top-3 after:w-5 after:border-t-2 after:border-border/80 ${isLastChild ? 'before:h-5' : 'before:bottom-[-8px]'}`
               : 'pl-3'}>
             <div className="flex items-center gap-2">
-              {isEpic ? <button type="button" aria-expanded={!collapsed} aria-label={`${collapsed ? 'Развернуть' : 'Свернуть'} эпик ${item.title}`} disabled={!childCount} onClick={onToggle} className="-ml-1 inline-flex min-h-7 min-w-7 items-center justify-center rounded-md border border-border bg-background/70 text-muted-foreground shadow-sm transition-colors hover:bg-background hover:text-foreground disabled:cursor-default disabled:opacity-50">{collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button> : !isChild ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/35" /> : null}
+              {isEpic ? <button type="button" aria-expanded={!collapsed} aria-label={`${collapsed ? 'Развернуть' : 'Свернуть'} эпик ${item.title}`} disabled={!childCount} onClick={onToggle} className="-ml-1 inline-flex min-h-7 min-w-7 items-center justify-center rounded-md border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-50">{collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button> : !isChild ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/35" /> : null}
               <span className={`min-w-0 flex-1 break-words leading-snug ${isEpic ? 'text-[15px]' : 'text-sm'}`}>{item.title}</span>
-              {isEpic ? <span className="rounded-full border border-border/80 bg-background/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{childCount} фич</span> : null}
+              {isEpic ? <span className="rounded-full border border-border/80 bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{childCount} фич</span> : null}
             </div>
             <p className={`mt-0.5 text-[11px] text-muted-foreground ${isEpic ? 'pl-6' : isChild ? 'pl-7' : 'pl-3'}`}>
               <span className={isEpic ? 'mr-1 font-medium' : 'mr-1'}>{isEpic ? 'Epic' : 'Feature'}</span>
-              #{item.externalId}{item.state ? ` · ${item.state}` : ''}{` · План ${itemHours} ч · Факт ${Number(item.actualHours ?? 0)} ч`}
+              #{item.externalId}{item.state ? ` · ${item.state}` : ''}
             </p>
           </div>
         </td>
@@ -777,62 +778,61 @@ export function RoadmapPage() {
           const allocations = item.allocations.filter((allocation) => allocation.roleId === role.id);
           const rolePeople = people.filter((person) => role.members?.some((member) => member.personExternalId === person.id && member.personIsActive));
           const featureAllocations = isEpic ? epicChildren.flatMap((feature) => feature.allocations.filter((allocation) => allocation.roleId === role.id)) : [];
-          const renderAssignment = (allocation: typeof allocations[number]) => (
-            <div key={allocation.id}>
-              <div className="rounded-md border border-border/60 bg-background/90 px-2 py-1.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{allocation.personName.slice(0, 1)}</span>
-                    <div className="min-w-0">
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <p title={allocation.personEmail ?? undefined} className="truncate text-xs font-medium text-foreground">{allocation.personName}</p>
-                        {people.find((person) => person.id === allocation.personExternalId)?.isMock ? <span className="shrink-0 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">демо</span> : null}
-                      </div>
-                    </div>
-                  </div>
-                  <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-foreground">{view === 'roles' ? `${Number(allocation.estimatedHours)} ч` : `${allocation.periods.reduce((sum, period) => sum + Number(period.hours), 0)} ч`}</span>
-                </div>
-                {view === 'periods' && allocation.periods.length ? <div className="mt-2 space-y-1 border-t border-border/60 pt-1.5">{allocation.periods.map((period) => <div key={period.id ?? period.startsAt} className="flex justify-between gap-2 text-[10px] text-muted-foreground"><span>{period.label}</span><span className="tabular-nums">{Number(period.hours)} ч</span></div>)}</div> : null}
-              </div>
-              {(!isEpic || showEpicAssignments) && rolePeople.length ? <AllocationEditor item={item} role={role} people={rolePeople} initial={allocation} defaultPersonExternalId={role.defaultPersonExternalId} quarterLabel={currentQuarterLabel} saving={saveMutation.isPending} onSave={saveAllocation} /> : null}
-            </div>
+          const canEdit = rolePeople.length > 0 && (!isEpic || showEpicAssignments);
+          const sumHours = (list: RoadmapAllocation[]) => list.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0);
+          const editorProps = { item, role, people: rolePeople, quarterLabel: currentQuarterLabel, saving: saveMutation.isPending, onSave: saveAllocation };
+          const personLine = ({ name, email, hours, mock, placeholder }: { name: string; email?: string | null; hours: string; mock?: boolean; placeholder?: boolean }) => (
+            <span className="flex w-full min-w-0 items-center gap-2 px-1.5 py-1 text-left">
+              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${placeholder ? 'border border-dashed border-muted-foreground/40 text-muted-foreground' : 'bg-primary/10 text-primary'}`}>{name.slice(0, 1)}</span>
+              <span title={email ?? undefined} className={`min-w-0 flex-1 truncate text-xs ${placeholder ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>{name}</span>
+              {mock ? <span className="shrink-0 rounded bg-amber-500/10 px-1 py-px text-[9px] font-medium uppercase text-amber-700 dark:text-amber-300">демо</span> : null}
+              <span className={`shrink-0 text-xs tabular-nums ${placeholder ? 'text-muted-foreground/60 group-hover/chip:text-primary' : 'font-medium text-foreground'}`}>{hours}</span>
+            </span>
           );
-          const renderDefaultPerson = () => role.defaultPersonExternalId && role.defaultPersonName ? <div className="rounded-md border border-dashed border-border bg-muted/20 px-2 py-1.5"><div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">{role.defaultPersonName.slice(0, 1)}</span><p title={role.defaultPersonEmail ?? undefined} className="truncate text-xs font-medium text-foreground">{role.defaultPersonName}</p></div><span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">по умолчанию</span></div></div> : null;
+          const chipClassName = 'group/chip block w-full rounded-md transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30';
+          const assignmentList = <>
+            {allocations.map((allocation) => {
+              const line = personLine({ name: allocation.personName, email: allocation.personEmail, hours: `${Number(allocation.estimatedHours)} ч`, mock: people.find((person) => person.id === allocation.personExternalId)?.isMock });
+              return canEdit
+                ? <AllocationEditor key={allocation.id} {...editorProps} initial={allocation} trigger={<button type="button" className={chipClassName} aria-label={`Изменить оценку: ${allocation.personName}`}>{line}</button>} />
+                : <div key={allocation.id}>{line}</div>;
+            })}
+            {!isEpic && !allocations.length && role.defaultPersonExternalId && role.defaultPersonName ? (canEdit
+              ? <AllocationEditor {...editorProps} defaultPersonExternalId={role.defaultPersonExternalId} trigger={<button type="button" className={chipClassName} title="Человек по умолчанию для роли. Нажмите, чтобы задать оценку">{personLine({ name: role.defaultPersonName, email: role.defaultPersonEmail, hours: 'оценить', placeholder: true })}</button>} />
+              : personLine({ name: role.defaultPersonName, email: role.defaultPersonEmail, hours: '—', placeholder: true })) : null}
+          </>;
+          const hasContent = allocations.length > 0 || (!isEpic && Boolean(role.defaultPersonName));
+          const actions = canEdit ? <div className={`flex items-center gap-0.5 ${hasContent ? 'opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100 [@media(hover:none)]:opacity-100' : ''}`}>
+            <AllocationEditor {...editorProps} defaultPersonExternalId={null} trigger={<button type="button" className="inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"><Plus className="h-3 w-3" />{hasContent ? 'Участник' : isEpic ? 'Назначить на эпик' : 'Назначить'}</button>} />
+            {!isEpic && allocations.length > 1 ? <button type="button" disabled={saveMutation.isPending || splitMutation.isPending} title="Распределить часы поровну между участниками" onClick={() => splitEvenly(item.id, currentQuarterKey, allocations)} className="inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-50"><Equal className="h-3 w-3" />{splitMutation.isPending ? 'Делим…' : 'Поровну'}</button> : null}
+          </div> : null;
           return (
-            <td key={role.id} className={`min-w-52 px-2.5 py-2 ${isEpic ? 'bg-muted/10' : ''}`}>
-              {isEpic ? <div className="space-y-1 text-xs text-muted-foreground">
-                <p>{featureAllocations.length ? <><span className="font-medium text-foreground">{featureAllocations.length} назнач. в фичах</span><span className="ml-1 tabular-nums">· {featureAllocations.reduce((sum, allocation) => sum + Number(view === 'roles' ? allocation.estimatedHours : allocation.periods.reduce((periodSum, period) => periodSum + Number(period.hours), 0)), 0)} ч</span></> : 'Нет назначений в фичах'}</p>
-                {showEpicAssignments ? <div className="space-y-1.5 border-l border-border pl-2">
-                  {allocations.map(renderAssignment)}
-                  {rolePeople.length ? <AllocationEditor item={item} role={role} people={rolePeople} defaultPersonExternalId={role.defaultPersonExternalId} triggerLabel={allocations.length ? 'Добавить участника' : 'Назначить на эпик'} triggerClassName="mt-0 h-8 w-full justify-start gap-1.5 px-2 text-xs font-medium" quarterLabel={currentQuarterLabel} saving={saveMutation.isPending} onSave={saveAllocation} /> : <span className="text-[10px] text-muted-foreground">Добавьте участников в роль в администрировании.</span>}
-                </div> : allocations.length ? <p>{allocations.length} назнач. на эпике · {allocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0)} ч</p> : null}
-              </div> : <div className="space-y-1">
-                {allocations.length > 1 ? (
-                  <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" disabled={saveMutation.isPending || splitMutation.isPending} title="Распределить общий объём часов и часы периодов поровну между участниками" onClick={() => splitEvenly(item.id, currentQuarterKey, allocations)}>
-                    <Equal className="h-3.5 w-3.5" />{splitMutation.isPending ? 'Делим часы…' : 'Разделить поровну'}
-                  </Button>
-                ) : null}
-                {!allocations.length ? renderDefaultPerson() : null}
-                {allocations.map(renderAssignment)}
-                {!isEpic ? rolePeople.length ? (
-                  <AllocationEditor item={item} role={role} people={rolePeople} defaultPersonExternalId={role.defaultPersonExternalId} quarterLabel={currentQuarterLabel} saving={saveMutation.isPending} onSave={saveAllocation} />
-                ) : (
-                  <div className="px-1 pt-1 text-[11px] text-muted-foreground">
-                    <p>{people.length ? 'К роли не добавлены участники' : 'Список участников Azure DevOps не синхронизирован'}</p>
-                    {canConfigure ? <Link href={people.length ? routes.roadmapAdminRoles : routes.roadmapAdminUsers} className="mt-1 inline-flex text-primary hover:underline">{people.length ? 'Добавить людей в роль' : 'Синхронизировать пользователей'}</Link> : <p className="mt-1">Попросите администратора настроить участников роли.</p>}
-                  </div>
-                ) : null}
+            <td key={role.id} className="min-w-52 border-l border-border/40 px-1.5 py-1.5">
+              {isEpic ? <div className="space-y-1">
+                <p className="px-1.5 py-1 text-xs">{featureAllocations.length
+                  ? <><span className="font-medium tabular-nums text-foreground">{sumHours(featureAllocations)} ч</span><span className="text-muted-foreground"> · {featureAllocations.length} назн. в фичах</span></>
+                  : <span className="text-muted-foreground/50">—</span>}</p>
+                {showEpicAssignments ? <div className="ml-1.5 space-y-0.5 border-l-2 border-border pl-1">
+                  {assignmentList}
+                  {actions ?? (!rolePeople.length ? <p className="px-1.5 py-1 text-[11px] text-muted-foreground">Нет участников роли</p> : null)}
+                </div> : allocations.length ? <p className="px-1.5 text-[11px] text-muted-foreground">+ {sumHours(allocations)} ч на эпике</p> : null}
+              </div> : <div className="space-y-0.5">
+                {assignmentList}
+                {rolePeople.length ? actions : (
+                  <p className="px-1.5 py-1 text-[11px] text-muted-foreground">
+                    {people.length ? 'Нет участников роли' : 'Пользователи не синхронизированы'}
+                    {canConfigure ? <> · <Link href={people.length ? routes.roadmapAdminRoles : routes.roadmapAdminUsers} className="text-primary hover:underline">{people.length ? 'добавить' : 'синхронизировать'}</Link></> : null}
+                  </p>
+                )}
               </div>}
             </td>
           );
         })}
-        {!roles.length ? <td className="min-w-52 px-3 py-3 text-xs text-muted-foreground">Роль не настроена</td> : null}
-      <td className={`whitespace-nowrap px-4 py-3 text-right text-sm font-medium tabular-nums text-foreground ${isEpic ? 'bg-muted/30' : ''}`}>
-          {view === 'roles'
-            ? `${itemHours} ч`
-            : `${periods.reduce((sum, period) => sum + Number(period.hours), 0)} ч`}
+        {!roles.length ? <td className="min-w-52 border-l border-border/40 px-3 py-3 text-xs text-muted-foreground">Роль не настроена</td> : null}
+        <td className={`whitespace-nowrap border-l border-border/60 px-4 py-3 text-right text-sm tabular-nums ${itemHours ? 'font-medium text-foreground' : 'text-muted-foreground/50'}`}>
+          {itemHours} ч
         </td>
-        <td className={`whitespace-nowrap px-4 py-3 text-right text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-300 ${isEpic ? 'bg-muted/30' : ''}`}>
+        <td className={`whitespace-nowrap px-4 py-3 text-right text-sm tabular-nums ${Number(item.actualHours ?? 0) ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground/50'}`}>
           {Number(item.actualHours ?? 0)} ч
         </td>
       </tr>
@@ -1004,8 +1004,8 @@ export function RoadmapPage() {
                         <col style={{ width: '120px' }} />
                         <col style={{ width: '120px' }} />
                       </colgroup>
-                      <thead className="sticky top-0 z-[1] bg-muted/95 backdrop-blur">
-                        <tr className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      <thead className="sticky top-0 z-[1] bg-card">
+                        <tr className="border-b border-border bg-muted/40 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                           <th className="relative min-w-72 px-4 py-2.5 pr-5"><div className="flex items-center justify-between gap-3"><span>Эпик / фича</span>{canConfigure ? <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
                             <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-8 shrink-0 gap-1 px-2.5 text-xs" disabled={!roadmapProjectId || addRoleMutation.isPending}><Plus className="h-3.5 w-3.5" />Добавить роль</Button></PopoverTrigger>
                             <PopoverContent align="start" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(320px,calc(100vw-2rem))] rounded-xl p-2">
@@ -1013,11 +1013,11 @@ export function RoadmapPage() {
                               {roleCatalogQuery.isLoading ? <p className="px-2 py-4 text-center text-sm text-muted-foreground">Загружаем каталог…</p> : (roleCatalogQuery.data ?? []).filter((template) => !roles.some((role) => role.name === template.name)).length ? (roleCatalogQuery.data ?? []).filter((template) => !roles.some((role) => role.name === template.name)).map((template) => <button key={template.id} type="button" disabled={addRoleMutation.isPending} onClick={() => addRoleMutation.mutate(template.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-foreground hover:bg-muted disabled:opacity-50"><ColorMark color={template.color} size="md" /><span className="min-w-0 flex-1 truncate">{template.name}</span>{template.isMock ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-amber-700 dark:text-amber-300">демо</span> : null}<Plus className="h-3.5 w-3.5 text-muted-foreground" /></button>) : <div className="px-2 py-3 text-sm text-muted-foreground">{(roleCatalogQuery.data ?? []).length ? 'Все роли из каталога уже добавлены.' : 'Каталог ролей пуст.'}{!(roleCatalogQuery.data ?? []).length ? <Link href={routes.roadmapAdminRoles} className="mt-1 block text-primary hover:underline">Создать роли в администрировании</Link> : null}</div>}
                             </PopoverContent>
                           </Popover> : null}</div><NameColumnResizeHandle width={nameColumnWidth} onChange={setNameColumnWidth} /></th>
-                          {roles.map((role) => <th key={role.id} className="min-w-52 px-3 py-2.5">
+                          {roles.map((role) => <th key={role.id} className="min-w-52 border-l border-border/40 px-3 py-2.5">
                             <div className="space-y-1.5">
-                              <div className="flex items-center gap-2"><ColorMark color={role.color} size="md" /><span>{role.name}</span>{role.isMock ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium normal-case text-amber-700 dark:text-amber-300">демо</span> : null}</div>
+                              <div className="flex items-center gap-2 normal-case tracking-normal"><RoleMark name={role.name} color={role.color} size="sm" /><span className="min-w-0 truncate text-[13px] font-semibold text-foreground" title={role.name}>{role.name}</span>{role.isMock && !/демо/i.test(role.name) ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium normal-case text-amber-700 dark:text-amber-300">демо</span> : null}</div>
                               {canConfigure ? <Popover open={defaultRolePickerId === role.id} onOpenChange={(open) => setDefaultRolePickerId(open ? role.id : null)}>
-                                <PopoverTrigger asChild><button type="button" className="flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[10px] font-medium normal-case text-muted-foreground transition-colors hover:bg-background hover:text-foreground"><Users className="h-3 w-3 shrink-0" /><span className="truncate">{role.defaultPersonName ? `По умолчанию: ${role.defaultPersonName}` : 'Закрепить человека по умолчанию'}</span></button></PopoverTrigger>
+                                <PopoverTrigger asChild><button type="button" className="flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[10px] font-medium normal-case text-muted-foreground transition-colors hover:bg-card hover:text-foreground"><Users className="h-3 w-3 shrink-0" /><span className="truncate">{role.defaultPersonName ? `По умолчанию: ${role.defaultPersonName}` : 'Закрепить человека по умолчанию'}</span></button></PopoverTrigger>
                                 <PopoverContent align="start" side="bottom" sideOffset={6} collisionPadding={16} className="w-[min(300px,calc(100vw-2rem))] rounded-xl p-2">
                                   <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Человек по умолчанию · {role.name}</p>
                                   {(role.members ?? []).filter((member) => member.personIsActive).map((member) => <button key={member.personExternalId} type="button" disabled={setRoleDefaultMutation.isPending || role.defaultPersonExternalId === member.personExternalId} onClick={() => setRoleDefaultMutation.mutate({ roleId: role.id, personExternalId: member.personExternalId })} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-foreground hover:bg-muted disabled:opacity-60"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{member.personName.slice(0, 1)}</span><span className="min-w-0 flex-1"><span className="block truncate">{member.personName}</span><span className="block truncate text-[10px] text-muted-foreground">{member.personEmail}</span></span>{role.defaultPersonExternalId === member.personExternalId ? <Check className="h-4 w-4 text-primary" /> : null}</button>)}
@@ -1027,8 +1027,8 @@ export function RoadmapPage() {
                               </Popover> : role.defaultPersonName ? <span className="block truncate text-[10px] font-medium normal-case text-muted-foreground">По умолчанию: {role.defaultPersonName}</span> : null}
                             </div>
                           </th>)}
-                          {!roles.length ? <th className="min-w-52 px-3 py-3">Роль / участник</th> : null}
-                          <th className="min-w-24 px-4 py-3 text-right">План</th>
+                          {!roles.length ? <th className="min-w-52 border-l border-border/40 px-3 py-3">Роль / участник</th> : null}
+                          <th className="min-w-24 border-l border-border/60 px-4 py-3 text-right">План</th>
                           <th className="min-w-24 px-4 py-3 text-right">Факт</th>
                         </tr>
                       </thead>
@@ -1048,18 +1048,18 @@ export function RoadmapPage() {
                         })}
                         {features.filter((feature) => !feature.parentExternalId || !epics.some((epic) => epic.externalId === feature.parentExternalId)).map((feature) => renderItemRow(feature))}
                       </tbody>
-                      <tfoot className="sticky bottom-0 z-[1] border-t-2 border-border bg-muted/95 backdrop-blur">
-                        <tr className="text-sm font-semibold text-foreground">
+                      <tfoot className="sticky bottom-0 z-[1] bg-card">
+                        <tr className="border-t-2 border-border bg-muted/40 text-sm font-semibold text-foreground">
                           <th scope="row" className="px-4 py-3">Итого по проекту</th>
                           {roles.map((role) => {
                             const roleAllocations = plannedItems.flatMap((item) => item.allocations.filter((allocation) => allocation.roleId === role.id));
                             const hours = roleAllocations.reduce((sum, allocation) => sum + (view === 'roles'
                               ? Number(allocation.estimatedHours)
                               : allocation.periods.reduce((periodSum, period) => periodSum + Number(period.hours), 0)), 0);
-                            return <td key={role.id} className="px-3 py-3 tabular-nums">{hours} ч</td>;
+                            return <td key={role.id} className={`border-l border-border/40 px-3 py-3 tabular-nums ${hours ? '' : 'text-muted-foreground/50'}`}>{hours} ч</td>;
                           })}
-                          {!roles.length ? <td className="px-3 py-3 text-muted-foreground">—</td> : null}
-                          <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">{view === 'roles' ? totalHours : plannedItems
+                          {!roles.length ? <td className="border-l border-border/40 px-3 py-3 text-muted-foreground">—</td> : null}
+                          <td className="whitespace-nowrap border-l border-border/60 px-4 py-3 text-right tabular-nums">{view === 'roles' ? totalHours : plannedItems
                             .flatMap((item) => item.allocations)
                             .reduce((sum, allocation) => sum + allocation.periods.reduce((periodSum, period) => periodSum + Number(period.hours), 0), 0)} ч</td>
                           <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-300">{[...epics, ...features.filter((feature) => !feature.parentExternalId || !epics.some((epic) => epic.externalId === feature.parentExternalId))].reduce((sum, item) => sum + Number(item.actualHours ?? 0), 0)} ч</td>
