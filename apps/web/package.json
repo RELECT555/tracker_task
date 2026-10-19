@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack --port 3000",
     "dev:clean": "npm run clean && next dev --turbopack --port 3000",
-    "clean": "node -e \"require('node:fs').rmSync('.next',{recursive:true,force:true})\"",
+    "clean": "node -e \"for(const d of ['.next','.next-dev'])require('node:fs').rmSync(d,{recursive:true,force:true})\"",
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "eslint"

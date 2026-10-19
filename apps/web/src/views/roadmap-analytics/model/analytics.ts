@@ -224,6 +224,8 @@ const numberFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }
 export const formatNumber = (value: number) => numberFormat.format(value);
 export const formatHours = (value: number) => `${numberFormat.format(value)} ч`;
 export const percent = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
+/** Процент для подписи: ненулевая доля меньше 1% не показывается как «0%». */
+export const formatPercent = (part: number, whole: number) => (part > 0 && whole > 0 && percent(part, whole) === 0 ? '<1%' : `${percent(part, whole)}%`);
 
 export function niceMax(value: number) {
   if (value <= 0) return 4;
