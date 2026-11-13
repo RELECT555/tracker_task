@@ -19,8 +19,8 @@ export const roadmapAdminSections = [
   {
     id: 'roles',
     href: routes.roadmapAdminRoles,
-    title: 'Роли',
-    description: 'Каталог ролей и их назначение в командах проектов.',
+    title: 'Роли и участники',
+    description: 'Участники и исполнители по умолчанию для ролей проекта.',
     icon: UserRoundCog,
   },
 ] as const;

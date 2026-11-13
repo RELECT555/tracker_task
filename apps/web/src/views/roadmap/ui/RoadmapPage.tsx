@@ -219,11 +219,11 @@ function QuarterHoursCell({ hours, label, disabled, allocationId, rowIndex, mont
   />;
 }
 
-function QuarterAssignmentButton({ item, roles, saving, canConfigure, onSave }: {
+function QuarterAssignmentButton({ item, roles, saving, roleSettingsHref, onSave }: {
   item: RoadmapWorkItem;
   roles: RoadmapRole[];
   saving: boolean;
-  canConfigure: boolean;
+  roleSettingsHref?: string;
   onSave: (data: AllocationInput) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -299,7 +299,7 @@ function QuarterAssignmentButton({ item, roles, saving, canConfigure, onSave }: 
           {!members.length ? <p className="text-xs text-muted-foreground">Все участники этой роли уже назначены.</p> : null}
         </div>
         <div className="flex justify-end border-t border-border bg-muted/20 p-2.5"><Button type="submit" size="sm" disabled={!personId || saving}>{saving ? 'Сохраняем…' : 'Добавить назначение'}</Button></div>
-      </form> : <div className="space-y-2 p-3 text-sm"><p className="font-medium">Нет доступных участников</p><p className="text-xs text-muted-foreground">Добавьте участников в роли проекта, чтобы назначить их на работу.</p>{canConfigure ? <Link href={routes.roadmapAdminRoles} className="inline-flex text-xs font-medium text-primary hover:underline">Настроить роли и участников</Link> : <p className="text-xs text-muted-foreground">Попросите администратора добавить участников в роли.</p>}</div>}
+      </form> : <div className="space-y-2 p-3 text-sm"><p className="font-medium">Нет доступных участников</p><p className="text-xs text-muted-foreground">Добавьте участников в роли проекта, чтобы назначить их на работу.</p>{roleSettingsHref ? <Link href={roleSettingsHref} className="inline-flex text-xs font-medium text-primary hover:underline">Настроить роли и участников</Link> : <p className="text-xs text-muted-foreground">Попросите администратора добавить участников в роли.</p>}</div>}
     </PopoverContent>
   </Popover>;
 }
@@ -309,7 +309,7 @@ function QuarterPlanningGrid({
   features,
   months,
   roles,
-  canConfigure,
+  roleSettingsHref,
   saving,
   focusMode,
   nameColumnWidth,
@@ -325,7 +325,7 @@ function QuarterPlanningGrid({
   features: RoadmapWorkItem[];
   months: QuarterMonth[];
   roles: RoadmapRole[];
-  canConfigure: boolean;
+  roleSettingsHref?: string;
   saving: boolean;
   focusMode: boolean;
   nameColumnWidth: number;
@@ -358,7 +358,7 @@ function QuarterPlanningGrid({
             return hours !== null ? <span key={role.id} className="max-w-44 shrink-0 truncate rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-sky-700 dark:text-sky-300" title={`План Azure · ${role.name}: ${hours} ч`}>{role.name}: {hours} ч</span> : null;
           })}
           <span className="shrink-0 rounded-full bg-background/70 px-2 py-0.5 text-[10px] font-normal text-muted-foreground">{itemAllocations.length} назн.</span>
-          {!epic || showEpicAssignments ? <QuarterAssignmentButton item={item} roles={roles} saving={saving} canConfigure={canConfigure} onSave={onAddAssignment} /> : null}
+          {!epic || showEpicAssignments ? <QuarterAssignmentButton item={item} roles={roles} saving={saving} roleSettingsHref={roleSettingsHref} onSave={onAddAssignment} /> : null}
         </div>
       </th>
       {months.map((month) => <td key={month.monthKey} className="border-b border-border/50 px-3 py-2.5 text-right text-sm tabular-nums text-foreground/80">{monthHours(itemAllocations, month.monthKey) || <span className="text-muted-foreground">—</span>}</td>)}
@@ -699,6 +699,7 @@ export function RoadmapPage() {
     ?? projects[0];
   const activeAzureProjectId = selectedProject?.id ?? '';
   const roadmapProjectId = selectedProject?.roadmapId ?? '';
+  const roleSettingsHref = roadmapProjectId ? `${routes.roadmapAdminRoles}?projectId=${encodeURIComponent(roadmapProjectId)}` : routes.roadmapAdminRoles;
 
   useEffect(() => {
     if (activeAzureProjectId) setSelectedAzureProjectId(activeAzureProjectId);
@@ -929,7 +930,7 @@ export function RoadmapPage() {
                 {selectedMonth ? !allocations.length && <span className="px-1.5 text-xs text-muted-foreground/50">—</span> : rolePeople.length ? actions : (
                   <p className="px-1.5 py-1 text-[11px] text-muted-foreground">
                     {people.length ? 'Нет участников роли' : 'Пользователи не синхронизированы'}
-                    {canConfigure ? <> · <Link href={people.length ? routes.roadmapAdminRoles : routes.roadmapAdminUsers} className="text-primary hover:underline">{people.length ? 'добавить' : 'синхронизировать'}</Link></> : null}
+                    {canConfigure ? <> · <Link href={people.length ? roleSettingsHref : routes.roadmapAdminUsers} className="text-primary hover:underline">{people.length ? 'добавить' : 'синхронизировать'}</Link></> : null}
                   </p>
                 )}
               </div>}
@@ -1092,7 +1093,7 @@ export function RoadmapPage() {
                         {pushPreviewOpen ? <AzurePushPreview projectId={roadmapProjectId} onDone={() => setPushPreviewOpen(false)} /> : null}
                       </PopoverContent>
                     </Popover> : null}
-                    {canConfigure ? <Link href={routes.roadmapAdminRoles} className="inline-flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm font-medium text-foreground hover:bg-muted"><Users className="h-4 w-4" />Управление ролями</Link> : null}
+                    {canConfigure ? <Link href={roleSettingsHref} className="inline-flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm font-medium text-foreground hover:bg-muted"><Users aria-hidden="true" className="h-4 w-4" />Роли и участники</Link> : null}
                     <Button type="button" variant={focusMode ? 'secondary' : 'outline'} size="sm" onClick={() => {
                       if (!focusMode && view === 'periods') setExpandedEpics(new Set(epics.map((epic) => epic.id)));
                       setFocusMode((current) => !current);
@@ -1165,7 +1166,7 @@ export function RoadmapPage() {
                           <p className="text-sm font-medium text-foreground">Эпики и связанные фичи загружены</p>
                           <p className="mt-0.5 text-xs text-muted-foreground">Добавьте роли и закрепите за ними сотрудников, чтобы распределять часы по фичам.</p>
                         </div>
-                        {canConfigure ? <Link href={routes.roadmapAdminRoles} className="inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground hover:bg-muted"><Users className="h-4 w-4" />Настроить роли</Link> : null}
+                        {canConfigure ? <Link href={roleSettingsHref} className="inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground hover:bg-muted"><Users aria-hidden="true" className="h-4 w-4" />Настроить роли</Link> : null}
                       </div>
                     ) : null}
                     {view === 'roles' && activeRolesOnly && roles.length > 0 && visibleRoles.length === 0 ? (
@@ -1178,7 +1179,7 @@ export function RoadmapPage() {
                       features={features}
                       months={currentQuarterMonths}
                       roles={roles}
-                      canConfigure={canConfigure}
+                      roleSettingsHref={canConfigure ? roleSettingsHref : undefined}
                       saving={saveQuarterMutation.isPending || saveMutation.isPending}
                       focusMode={focusMode}
                       nameColumnWidth={nameColumnWidth}

@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDownToLine, Building2, ChevronDown, ChevronRight, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
-import { roadmapApi, type RoadmapPerson, type RoadmapRole, type RoadmapRoleTemplate } from '@/entities/roadmap/api/roadmapApi';
+import { Building2, ChevronDown, ChevronRight, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { roadmapApi, type RoadmapPerson, type RoadmapRole } from '@/entities/roadmap/api/roadmapApi';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
@@ -12,15 +12,8 @@ import { RoleMark } from '@/shared/ui/color-mark';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 import { SearchableSelect } from '@/shared/ui/searchable-select';
 import { AdminAlert, AdminPage, AdminPageHeader } from './AdminLayout';
-import { ProjectCatalogPanel } from './integrations/ProjectCatalogPanel';
 
-type RoleGroup = {
-  key: string;
-  label: RoadmapRoleTemplate;
-  template?: RoadmapRoleTemplate;
-  roles: RoadmapRole[];
-};
-type Selection = { groupKey: string; projectId: string };
+type Selection = { projectId: string; roleId?: string };
 type RoleDraft = { name: string; color: string; personId: string; memberIds: string[] };
 
 const fieldClass = 'min-h-10 w-full min-w-0 rounded-lg border border-input bg-field px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
@@ -28,33 +21,18 @@ const labelClass = 'mb-1.5 block text-sm font-medium text-foreground';
 const colorFieldClass = 'h-10 w-12 cursor-pointer rounded-lg border border-input bg-field p-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
 const newRoleKey = '__new_role__';
 const noPersonValue = '__no_person__';
-const noProjectValue = '__no_project__';
 const defaultColor = '#6366f1';
 const plurals = new Intl.PluralRules('ru-RU');
+const adminRolesQueryKey = ['roadmap', 'admin', 'roles'] as const;
 
-function projectCount(count: number) {
-  if (!count) return 'Без проекта';
+function memberCount(count: number) {
+  if (!count) return 'Нет участников';
   const form = plurals.select(count);
-  return `${count} ${form === 'one' ? 'проект' : form === 'few' ? 'проекта' : 'проектов'}`;
+  return `${count} ${form === 'one' ? 'участник' : form === 'few' ? 'участника' : 'участников'}`;
 }
 
 function roleKey(name: string) {
   return name.trim().toLocaleLowerCase('ru-RU');
-}
-
-function groupRoles(catalog: RoadmapRoleTemplate[], projectRoles: RoadmapRole[]) {
-  const groups = new Map<string, RoleGroup>();
-  for (const template of catalog) {
-    const key = roleKey(template.name);
-    groups.set(key, { key, label: template, template, roles: [] });
-  }
-  for (const role of projectRoles) {
-    const key = roleKey(role.name);
-    const group = groups.get(key);
-    if (group) group.roles.push(role);
-    else groups.set(key, { key, label: role, roles: [role] });
-  }
-  return [...groups.values()].sort((a, b) => a.label.name.localeCompare(b.label.name, 'ru-RU'));
 }
 
 function AzureRoleMark() {
@@ -171,23 +149,21 @@ function RoleMembersPicker({ people, memberIds, defaultPersonId, role, disabled,
   );
 }
 
-export function RoadmapRolesPage() {
+export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: string }) {
   const client = useQueryClient();
   const fieldId = useId();
   const projectsQuery = useQuery({ queryKey: ['roadmap', 'azure-projects'], queryFn: roadmapApi.projects });
   const catalogQuery = useQuery({ queryKey: ['roadmap', 'admin', 'role-catalog'], queryFn: roadmapApi.roleCatalog });
-  const rolesQuery = useQuery({ queryKey: ['roadmap', 'admin', 'roles'], queryFn: () => roadmapApi.adminRoles() });
+  const rolesQuery = useQuery({ queryKey: adminRolesQueryKey, queryFn: () => roadmapApi.adminRoles() });
   const peopleQuery = useQuery({ queryKey: ['roadmap', 'admin', 'users'], queryFn: roadmapApi.adminPeople });
 
   const [search, setSearch] = useState('');
-  const [selection, setSelection] = useState<Selection>();
+  const [selection, setSelection] = useState<Selection>(() => ({ projectId: initialProjectId ?? '' }));
   const [pendingSelection, setPendingSelection] = useState<Selection>();
   const [draft, setDraft] = useState<Partial<RoleDraft>>({});
-  const [importOpen, setImportOpen] = useState<boolean | null>(null);
   const [focusEditor, setFocusEditor] = useState(false);
   const [confirmRemoval, setConfirmRemoval] = useState(false);
   const [status, setStatus] = useState('');
-  const importButton = useRef<HTMLButtonElement>(null);
   const createButton = useRef<HTMLButtonElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const nameInput = useRef<HTMLInputElement>(null);
@@ -205,45 +181,40 @@ export function RoadmapRolesPage() {
   }
   const people = peopleQuery.data ?? [];
   const activePeople = people.filter((person) => person.isActive !== false);
-  const groups = groupRoles(catalogQuery.data ?? [], rolesQuery.data ?? []);
-  const visibleGroups = groups.filter((group) => group.key.includes(roleKey(search)));
-  const creating = selection?.groupKey === newRoleKey;
-  const group = creating ? undefined : groups.find((entry) => entry.key === selection?.groupKey) ?? groups[0];
-  const allowedProjects = (group && !group.template
-    ? [...projects].filter(([id]) => group.roles.some((role) => role.projectId === id))
-    : [...projects]).sort(([, left], [, right]) => left.localeCompare(right, 'ru-RU'));
-  const linkedProjectIds = new Set(group?.roles.map((item) => item.projectId));
-  const projectOptions = [
-    ...(creating && allowedProjects.length ? [{ value: noProjectValue, label: 'Без проекта' }] : []),
-    ...allowedProjects.map(([value, label]) => ({
+  const projectOptions = [...projects]
+    .sort(([, left], [, right]) => left.localeCompare(right, 'ru-RU'))
+    .map(([value, label]) => ({
       value,
       label,
-      group: group?.template && group.roles.length ? linkedProjectIds.has(value) ? 'Роль уже добавлена' : 'Можно добавить' : undefined,
       leading: <Building2 aria-hidden="true" className="size-4" />,
-    })).sort((left, right) => Number(linkedProjectIds.has(right.value)) - Number(linkedProjectIds.has(left.value))),
-  ];
-  const projectId = selection?.projectId || '';
-  const selectedProjectId = creating && projectId === noProjectValue ? '' : allowedProjects.some(([id]) => id === projectId)
-    ? projectId
-    : group?.roles.find((role) => role.projectId && projects.has(role.projectId))?.projectId
-      ?? (allowedProjects.length === 1 ? allowedProjects[0][0] : '');
-  const role = group?.roles.find((entry) => entry.projectId === selectedProjectId);
-  const roleName = role?.name ?? group?.label.name ?? '';
+    }));
+  const selectedProjectId = projects.has(selection.projectId) ? selection.projectId : '';
+  const projectRoles = (rolesQuery.data ?? [])
+    .filter((entry) => entry.projectId === selectedProjectId)
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru-RU'));
+  const visibleRoles = projectRoles.filter((entry) => roleKey(entry.name).includes(roleKey(search)));
+  const projectRoleNames = new Set(projectRoles.map((entry) => roleKey(entry.name)));
+  const catalog = catalogQuery.data ?? [];
+  const availableTemplates = catalog.filter((entry) => !projectRoleNames.has(roleKey(entry.name)));
+  const creating = selection.roleId === newRoleKey;
+  const template = availableTemplates.find((entry) => entry.id === selection.roleId);
+  const role = creating || template ? undefined : projectRoles.find((entry) => entry.id === selection.roleId) ?? projectRoles[0];
+  const roleName = role?.name ?? template?.name ?? '';
   const memberIds = role?.members?.map((member) => member.personExternalId) ?? [];
   const defaults: RoleDraft = {
     name: roleName,
-    color: role?.color ?? group?.label.color ?? defaultColor,
+    color: role?.color ?? template?.color ?? defaultColor,
     personId: role?.defaultPersonExternalId ?? '',
     memberIds,
   };
   const form = { ...defaults, ...draft };
   const dirty = form.name !== defaults.name || form.color !== defaults.color || form.personId !== defaults.personId
     || form.memberIds.length !== memberIds.length || form.memberIds.some((id) => !memberIds.includes(id));
-  const nameTaken = creating && groups.some((entry) => entry.key === roleKey(form.name));
+  const nameTaken = creating && (projectRoleNames.has(roleKey(form.name)) || catalog.some((entry) => roleKey(entry.name) === roleKey(form.name)));
 
   const refresh = () => Promise.all([
     client.invalidateQueries({ queryKey: ['roadmap', 'admin', 'role-catalog'] }),
-    client.invalidateQueries({ queryKey: ['roadmap', 'admin', 'roles'] }),
+    client.invalidateQueries({ queryKey: adminRolesQueryKey }),
     client.invalidateQueries({ queryKey: ['roadmap', 'admin', 'users'] }),
     client.invalidateQueries({ queryKey: ['roadmap', 'roles'] }),
     client.invalidateQueries({ queryKey: ['roadmap', 'plan'] }),
@@ -258,7 +229,7 @@ export function RoadmapRolesPage() {
         ...(draft.memberIds && { personExternalIds: [...new Set([...form.memberIds, ...(defaultIsMember ? [form.personId] : [])])] }),
       };
       if (creating) {
-        await roadmapApi.createRoleTemplate(name, form.color, selectedProjectId ? { projectId: selectedProjectId, ...assignment } : undefined);
+        await roadmapApi.createRoleTemplate(name, form.color, { projectId: selectedProjectId, ...assignment });
         return;
       }
       if (role) {
@@ -267,14 +238,17 @@ export function RoadmapRolesPage() {
           ...(form.color !== role.color && { color: form.color }),
           ...assignment,
         });
-        return;
+        return role.id;
       }
-      if (group?.template) await roadmapApi.addRoleFromCatalog(selectedProjectId, group.template.id, assignment);
+      if (template) return (await roadmapApi.addRoleFromCatalog(selectedProjectId, template.id, assignment)).id;
     },
-    onSuccess: async () => {
+    onSuccess: async (savedRoleId) => {
       await refresh();
       if (creating) setSearch('');
-      setSelection({ groupKey: roleKey(form.name), projectId: selectedProjectId });
+      const createdRole = creating && client.getQueryData<RoadmapRole[]>(adminRolesQueryKey)?.find(
+        (entry) => entry.projectId === selectedProjectId && entry.name === form.name.trim(),
+      );
+      setSelection({ projectId: selectedProjectId, roleId: savedRoleId ?? (createdRole ? createdRole.id : undefined) });
       setDraft({});
       setPendingSelection(undefined);
       setStatus(creating ? 'Роль создана.' : 'Изменения сохранены.');
@@ -294,23 +268,11 @@ export function RoadmapRolesPage() {
   });
 
   const pending = save.isPending || remove.isPending;
-  const loading = catalogQuery.isLoading || rolesQuery.isLoading;
-  const error = catalogQuery.error ?? rolesQuery.error;
+  const loading = rolesQuery.isLoading || (projectsQuery.isLoading && !projectOptions.length);
   const mutationError = save.error ?? remove.error;
-  const canSave = !pending && Boolean(form.name.trim()) && !nameTaken
-    && (creating || (Boolean(selectedProjectId) && (role ? dirty : Boolean(group?.template))));
-  const showFormActions = creating || (role ? dirty || save.isPending : Boolean(selectedProjectId));
-
-  useEffect(() => {
-    const showImport = () => {
-      if (window.location.hash !== '#azure-role-import') return;
-      setImportOpen(true);
-      importButton.current?.focus();
-    };
-    showImport();
-    window.addEventListener('hashchange', showImport);
-    return () => window.removeEventListener('hashchange', showImport);
-  }, []);
+  const canSave = !pending && Boolean(selectedProjectId && form.name.trim()) && !nameTaken
+    && (creating || Boolean(template) || Boolean(role && dirty));
+  const showFormActions = creating || Boolean(template) || dirty || save.isPending;
 
   useEffect(() => {
     if (!focusEditor || loading || pending) return;
@@ -324,7 +286,9 @@ export function RoadmapRolesPage() {
 
   function select(next: Selection) {
     if (dirty) {
-      navigationTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      navigationTrigger.current = next.projectId !== selectedProjectId
+        ? document.getElementById(`${fieldId}-project`)
+        : document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setPendingSelection(next);
       return;
     }
@@ -332,6 +296,7 @@ export function RoadmapRolesPage() {
   }
 
   function applySelection(next: Selection) {
+    if (next.projectId !== selectedProjectId || next.roleId === newRoleKey) setSearch('');
     setDraft({});
     setPendingSelection(undefined);
     setConfirmRemoval(false);
@@ -339,12 +304,9 @@ export function RoadmapRolesPage() {
     remove.reset();
     setStatus('');
     setSelection(next);
-    setFocusEditor(true);
-  }
-
-  function openImport() {
-    setImportOpen(true);
-    importButton.current?.focus();
+    const switchingProject = next.projectId !== selectedProjectId;
+    setFocusEditor(!switchingProject);
+    if (switchingProject && pendingSelection) document.getElementById(`${fieldId}-project`)?.focus();
   }
 
   const activePersonId = form.personId && !activePeople.some((person) => person.id === form.personId)
@@ -359,83 +321,119 @@ export function RoadmapRolesPage() {
     }] : []),
     ...activePeople.map((person) => ({ value: person.id, label: person.name, description: person.email, badge: person.isMock ? 'демо' : undefined })),
   ];
-  const showEditor = creating || Boolean(group);
+  const showEditor = creating || Boolean(role || template);
 
   return (
     <AdminPage>
       <AdminPageHeader
-        title="Роли"
-        description="Назначайте сотрудников на роли в проектах Roadmap."
-        actions={<>
-          <Button ref={importButton} type="button" variant="outline" aria-expanded={importOpen === true} aria-controls="role-import-panel" onClick={() => setImportOpen((open) => !open)}>
-            <ArrowDownToLine aria-hidden="true" className="size-4" /> Импорт из Azure
-          </Button>
-          <Button ref={createButton} type="button" disabled={pending || creating || loading || Boolean(error && !catalogQuery.data)} onClick={() => select({ groupKey: newRoleKey, projectId: selectedProjectId || noProjectValue })}>
-            <Plus aria-hidden="true" className="size-4" /> Новая роль
-          </Button>
-        </>}
+        title="Роли и участники"
+        description="Выберите проект и настройте состав команды по ролям."
       />
 
-      <div id="role-import-panel" hidden={!importOpen}>
-        {importOpen !== null && <ProjectCatalogPanel inRoles onRolesImported={() => setSearch('')} />}
-      </div>
-
-      {error && <AdminAlert tone="error">
-        <p>Не удалось загрузить роли. {error instanceof Error ? error.message : ''}</p>
-        <Button type="button" variant="outline" size="sm" className="mt-2" disabled={catalogQuery.isFetching || rolesQuery.isFetching} onClick={() => void Promise.all([catalogQuery.refetch(), rolesQuery.refetch()])}>Повторить</Button>
+      {rolesQuery.isError && <AdminAlert tone="error">
+        <p>Не удалось загрузить роли. {rolesQuery.error instanceof Error ? rolesQuery.error.message : ''}</p>
+        <Button type="button" variant="outline" size="sm" className="mt-2" disabled={rolesQuery.isFetching} onClick={() => void rolesQuery.refetch()}>Повторить</Button>
+      </AdminAlert>}
+      {projectsQuery.isError && !projectOptions.length && <AdminAlert tone="error">
+        <p>Не удалось загрузить проекты.</p>
+        <Button type="button" variant="outline" size="sm" className="mt-2" disabled={projectsQuery.isFetching} onClick={() => void projectsQuery.refetch()}>Повторить</Button>
+      </AdminAlert>}
+      {loading ? <p role="status" className="text-sm text-muted-foreground">Загружаем проекты и роли…</p> : projectOptions.length > 0 ? (
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-full min-w-0 sm:max-w-sm">
+            <label htmlFor={`${fieldId}-project`} className={labelClass}>Проект</label>
+            <SearchableSelect
+              id={`${fieldId}-project`}
+              ariaLabel="Проект"
+              value={selectedProjectId}
+              onChange={(projectId) => { if (projectId !== selectedProjectId) select({ projectId }); }}
+              options={projectOptions}
+              disabled={pending}
+              placeholder="Выберите проект"
+              searchPlaceholder="Найти проект"
+            />
+          </div>
+          {selectedProjectId && (
+            <Button ref={createButton} type="button" variant="outline" className="min-h-10" disabled={pending || creating || rolesQuery.isError || !catalogQuery.data} onClick={() => select({ projectId: selectedProjectId, roleId: newRoleKey })}>
+              <Plus aria-hidden="true" className="size-4" /> Новая роль
+            </Button>
+          )}
+        </div>
+      ) : !projectsQuery.isError && !rolesQuery.isError && (
+        <section className="rounded-xl border border-border bg-card px-5 py-6">
+          <h2 className="text-base font-semibold">Пока нет загруженных проектов</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Загрузите проект из Azure DevOps на странице плана. Его роли появятся здесь.</p>
+          <Link href={routes.roadmap} className="mt-3 inline-block rounded text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Перейти к плану проекта</Link>
+        </section>
+      )}
+      {selectedProjectId && catalogQuery.isError && <AdminAlert tone="error">
+        <p>Не удалось загрузить каталог ролей.</p>
+        <Button type="button" variant="outline" size="sm" className="mt-2" disabled={catalogQuery.isFetching} onClick={() => void catalogQuery.refetch()}>Повторить</Button>
       </AdminAlert>}
       {status && <AdminAlert tone="success">{status}</AdminAlert>}
 
-      {loading ? <p role="status" className="text-sm text-muted-foreground">Загружаем роли…</p> : (groups.length > 0 || showEditor || !error) && (
-        <section aria-label="Справочник ролей" className="grid gap-4 md:grid-cols-[minmax(215px,28%)_minmax(0,1fr)] md:items-start">
+      {!loading && selectedProjectId && (!rolesQuery.isError || rolesQuery.data) && (
+        <section aria-label="Роли проекта" className="grid gap-4 md:grid-cols-[minmax(215px,28%)_minmax(0,1fr)] md:items-start">
           <div className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
             <div className="space-y-2.5 border-b border-border p-3">
               <div className="flex items-center justify-between gap-2 px-0.5">
-                <h2 className="text-sm font-semibold">Справочник</h2>
-                <span className="text-xs tabular-nums text-muted-foreground" aria-label={`Ролей: ${visibleGroups.length}`}>{visibleGroups.length}</span>
+                <h2 className="text-sm font-semibold">Роли проекта</h2>
+                <span className="text-xs tabular-nums text-muted-foreground" aria-label={`Ролей: ${visibleRoles.length}`}>{visibleRoles.length}</span>
               </div>
-              <label className="relative block">
+              {projectRoles.length > 0 && <label className="relative block">
                 <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <input type="search" aria-label="Поиск по ролям" placeholder="Найти роль" value={search} onChange={(event) => setSearch(event.target.value)} className={cn(fieldClass, 'pl-9')} />
-              </label>
+              </label>}
             </div>
-            {visibleGroups.length ? (
+            {visibleRoles.length ? (
               <ul aria-label="Роли" className="roadmap-scrollbar max-h-52 overflow-auto p-1.5 md:max-h-[60vh]">
-                {visibleGroups.map((entry) => (
-                  <li key={entry.key}>
+                {visibleRoles.map((entry) => (
+                  <li key={entry.id}>
                     <button
                       type="button"
-                      aria-current={entry.key === group?.key ? 'true' : undefined}
+                      aria-current={entry.id === role?.id ? 'true' : undefined}
                       disabled={pending}
                       onClick={() => {
-                        if (entry.key === group?.key) {
+                        if (entry.id === role?.id) {
                           setFocusEditor(true);
                           return;
                         }
-                        const useCurrentProject = !entry.roles.length || entry.roles.some((item) => item.projectId === selectedProjectId);
-                        select({ groupKey: entry.key, projectId: useCurrentProject ? selectedProjectId : '' });
+                        select({ projectId: selectedProjectId, roleId: entry.id });
                       }}
-                      className={cn('flex min-h-12 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring', entry.key === group?.key && 'bg-primary/10 hover:bg-primary/15')}
+                      className={cn('flex min-h-12 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring', entry.id === role?.id && 'bg-primary/10 hover:bg-primary/15')}
                     >
-                      <RoleMark name={entry.label.name} color={entry.label.color} size="sm" />
+                      <RoleMark name={entry.name} color={entry.color} size="sm" />
                       <span className="min-w-0 flex-1">
-                        <span className="block break-words font-medium">{entry.label.name}</span>
-                        <span className="mt-0.5 block text-xs text-muted-foreground">{projectCount(entry.roles.length)}</span>
+                        <span className="block break-words font-medium">{entry.name}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">{memberCount(entry.members?.length ?? 0)}</span>
                       </span>
-                      {entry.roles.some((item) => item.azureEstimateField) && (
+                      {entry.azureEstimateField && (
                         <span role="img" aria-label="Роль из Azure DevOps" className="shrink-0 text-primary" title="Роль из Azure DevOps">
                           <RefreshCw aria-hidden="true" className="size-3.5" />
                         </span>
                       )}
-                      {entry.key === group?.key && <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-primary" />}
+                      {entry.id === role?.id && <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-primary" />}
                     </button>
                   </li>
                 ))}
               </ul>
             ) : (
               <div className="px-4 py-6 text-center">
-                <p role="status" className="text-sm text-muted-foreground">{search.trim() ? 'Роли не найдены.' : 'В справочнике пока нет ролей.'}</p>
+                <p role="status" className="text-sm text-muted-foreground">{search.trim() && projectRoles.length ? 'Роли не найдены.' : 'В проекте пока нет ролей.'}</p>
                 {search.trim() && <Button type="button" variant="ghost" size="sm" className="mt-1" onClick={() => setSearch('')}>Очистить поиск</Button>}
+              </div>
+            )}
+            {availableTemplates.length > 0 && (
+              <div className="border-t border-border p-3">
+                <SearchableSelect
+                  ariaLabel="Добавить роль из каталога"
+                  value={template?.id ?? ''}
+                  onChange={(roleId) => { if (roleId !== template?.id) select({ projectId: selectedProjectId, roleId }); }}
+                  options={availableTemplates.map((entry) => ({ value: entry.id, label: entry.name, color: entry.color }))}
+                  disabled={pending}
+                  placeholder="Добавить из каталога"
+                  searchPlaceholder="Найти роль в каталоге"
+                />
               </div>
             )}
           </div>
@@ -446,7 +444,7 @@ export function RoadmapRolesPage() {
               aria-busy={pending}
               noValidate
               onSubmit={(event) => { event.preventDefault(); if (canSave) save.mutate(); }}
-              className="@container min-w-0 rounded-xl border border-border bg-card"
+              className="min-w-0 rounded-xl border border-border bg-card"
             >
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-4 sm:px-5">
                 <div className="flex min-w-0 items-center gap-3">
@@ -486,50 +484,19 @@ export function RoadmapRolesPage() {
                   </div>
                 )}
 
-                <div className={cn('grid gap-3', selectedProjectId && '@min-[36rem]:grid-cols-2 @min-[36rem]:gap-x-4')}>
-                  <div className="min-w-0">
-                    <label htmlFor={`${fieldId}-project`} className={labelClass}>{creating ? 'Проект (необязательно)' : 'Проект'}</label>
-                    <SearchableSelect
-                      id={`${fieldId}-project`}
-                      ariaLabel={creating ? 'Проект (необязательно)' : 'Проект'}
-                      value={selectedProjectId || (creating ? noProjectValue : '')}
-                      onChange={(value) => {
-                        if (value === selectedProjectId) return;
-                        if (creating) {
-                          setSelection({ groupKey: newRoleKey, projectId: value });
-                          if (value === noProjectValue) setDraft(({ name, color }) => ({ name, color }));
-                        } else if (group) {
-                          select({ groupKey: group.key, projectId: value });
-                        }
-                      }}
-                      options={projectOptions}
-                      disabled={pending || !allowedProjects.length}
-                      placeholder={creating ? 'Без проекта' : 'Выберите проект'}
-                      searchPlaceholder="Найти проект"
-                      className="border-border bg-transparent shadow-none"
-                    />
-                    {projectsQuery.isLoading && !allowedProjects.length ? <p role="status" className="mt-1.5 text-sm text-muted-foreground">Загружаем проекты…</p> : null}
-                    {!projectsQuery.isLoading && !allowedProjects.length ? (
-                      <Button type="button" variant="link" size="sm" className="-ml-3" onClick={openImport}>Загрузить проекты из Azure DevOps</Button>
-                    ) : null}
-                  </div>
-
-                  {selectedProjectId && (
-                    <div className="min-w-0">
-                      <label htmlFor={`${fieldId}-person`} className={labelClass}>Сотрудник по умолчанию</label>
-                      <SearchableSelect
-                        id={`${fieldId}-person`}
-                        ariaLabel="Сотрудник по умолчанию"
-                        value={form.personId}
-                        onChange={(value) => setDraft((current) => ({ ...current, personId: value === noPersonValue ? '' : value }))}
-                        options={options}
-                        disabled={pending || peopleQuery.isLoading || (!activePeople.length && !form.personId)}
-                        placeholder="Не назначен"
-                        searchPlaceholder="Найти по ФИО или почте"
-                        className="border-border bg-transparent shadow-none"
-                      />
-                    </div>
-                  )}
+                <div className="max-w-sm">
+                  <label htmlFor={`${fieldId}-person`} className={labelClass}>Сотрудник по умолчанию</label>
+                  <SearchableSelect
+                    id={`${fieldId}-person`}
+                    ariaLabel="Сотрудник по умолчанию"
+                    value={form.personId}
+                    onChange={(value) => setDraft((current) => ({ ...current, personId: value === noPersonValue ? '' : value }))}
+                    options={options}
+                    disabled={pending || peopleQuery.isLoading || (!activePeople.length && !form.personId)}
+                    placeholder="Не назначен"
+                    searchPlaceholder="Найти по ФИО или почте"
+                    className="border-border bg-transparent shadow-none"
+                  />
                 </div>
 
                 {selectedProjectId && (peopleQuery.isError ? <AdminAlert tone="error">
@@ -538,7 +505,7 @@ export function RoadmapRolesPage() {
                   </AdminAlert> : peopleQuery.isLoading ? <p role="status" className="text-sm text-muted-foreground">Загружаем сотрудников…</p>
                     : !activePeople.length && !form.memberIds.length && !form.personId ? <Link className="inline-block rounded text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" href={routes.roadmapAdminUsers}>Загрузить сотрудников</Link>
                     : <RoleMembersPicker
-                      key={`${selection?.groupKey ?? group?.key}:${selectedProjectId}`}
+                      key={`${selectedProjectId}:${role?.id ?? template?.id ?? newRoleKey}`}
                       people={people}
                       memberIds={form.memberIds}
                       defaultPersonId={form.personId}
@@ -581,18 +548,14 @@ export function RoadmapRolesPage() {
               </div>
 
               {showFormActions && <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border px-4 py-3 sm:px-5">
-                {creating ? <Button type="button" variant="ghost" disabled={pending} onClick={() => applySelection({ groupKey: groups[0]?.key ?? '', projectId: '' })}>Отмена</Button>
+                {creating || template ? <Button type="button" variant="ghost" disabled={pending} onClick={() => applySelection({ projectId: selectedProjectId })}>Отмена</Button>
                   : dirty ? <Button type="button" variant="ghost" disabled={pending} onClick={() => { setDraft({}); heading.current?.focus(); }}>Сбросить</Button> : null}
                 <Button type="submit" disabled={!canSave}>
                   {save.isPending ? 'Сохраняем…' : creating ? 'Создать роль' : role ? 'Сохранить' : 'Добавить в проект'}
                 </Button>
               </div>}
             </form>
-          ) : (
-            <div className="rounded-xl border border-dashed border-border px-5 py-8 text-center">
-              <Button type="button" variant="outline" size="sm" onClick={openImport}>Загрузить роли из Azure DevOps</Button>
-            </div>
-          )}
+          ) : null}
         </section>
       )}
     </AdminPage>
