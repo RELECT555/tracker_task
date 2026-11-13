@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useId, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useTheme } from 'next-themes';
 import { ChartNoAxesCombined, Check, ChevronDown, ChevronUp, GitBranch, LogIn, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Settings2, Sun, Users, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
@@ -14,6 +15,7 @@ import { cn } from '@/shared/lib/utils';
 
 const SIDEBAR_STORAGE_KEY = 'roadmap:sidebar-collapsed';
 const ADMIN_LABEL = 'Администрирование';
+const RoadmapTopbarContext = createContext<HTMLDivElement | null>(null);
 
 const roadmapLinks = [
   { href: routes.roadmap, label: 'План проекта', icon: Rows3 },
@@ -111,12 +113,19 @@ function RoadmapNavLink({ href, label, icon: Icon, active, collapsed, className 
   );
 }
 
-export function RoadmapFrame({ children }: { children: React.ReactNode }) {
+export function RoadmapTopbar({ children }: { children: ReactNode }) {
+  const container = useContext(RoadmapTopbarContext);
+  return container ? createPortal(children, container) : null;
+}
+
+export function RoadmapFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const auth = useAuth();
   const { theme, setTheme } = useTheme();
   const [themeMounted, setThemeMounted] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [topbarContent, setTopbarContent] = useState<HTMLDivElement | null>(null);
+  const isPlanPage = pathname === routes.roadmap;
   const isAdmin = isAdminUser(auth.user);
   const isAdminHome = pathname === routes.roadmapAdminHome;
   const activeAdminSection = roadmapAdminSections.find(({ href }) => pathname === href);
@@ -235,7 +244,7 @@ export function RoadmapFrame({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="relative flex min-w-0 flex-1 flex-col overflow-clip bg-background md:rounded-tl-2xl md:border-l md:border-t md:border-border">
-        <header className="flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 sm:gap-4 sm:px-6">
+        <header className={cn('flex min-h-16 shrink-0 items-center justify-between gap-x-2 gap-y-2 border-b border-border bg-card px-3 py-3 sm:gap-x-4 sm:px-6', isPlanPage && 'flex-wrap')}>
           <div className="flex min-w-0 items-center gap-3">
             <span className="hidden size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary sm:flex md:hidden">
               <GitBranch className="size-5" strokeWidth={1.7} aria-hidden="true" />
@@ -249,6 +258,7 @@ export function RoadmapFrame({ children }: { children: React.ReactNode }) {
               </ol>
             </nav>
           </div>
+          {isPlanPage ? <div ref={setTopbarContent} className="order-last w-full empty:hidden lg:order-none lg:w-auto" /> : null}
           <div className="flex shrink-0 items-center gap-2">
             {isAdmin && !isAdminSection ? (
               <Link href={routes.roadmapAdminHome} aria-label={ADMIN_LABEL} title={ADMIN_LABEL} className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring md:hidden">
@@ -261,7 +271,9 @@ export function RoadmapFrame({ children }: { children: React.ReactNode }) {
             <ProfileMenu auth={auth} mobile />
           </div>
         </header>
-        {children}
+        <RoadmapTopbarContext.Provider value={topbarContent}>
+          {children}
+        </RoadmapTopbarContext.Provider>
       </div>
     </div>
   );

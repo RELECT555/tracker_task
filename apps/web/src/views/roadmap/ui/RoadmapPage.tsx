@@ -1,13 +1,14 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, ExternalLink, Eye, EyeOff, Maximize2, Minimize2, Pencil, Plus, RefreshCw, Users, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, ExternalLink, Eye, EyeOff, Maximize2, Minus, Minimize2, Pencil, Plus, RefreshCw, Users, X } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
+import { RoadmapTopbar } from '@/widgets/roadmap-shell/RoadmapFrame';
 import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
 import { AzurePushPreview } from '@/entities/roadmap/ui/AzurePushPreview';
 import { AzureWorkItemIcon } from '@/entities/roadmap/ui/AzureWorkItemIcon';
@@ -27,6 +28,7 @@ import {
   type RoadmapWorkItem,
 } from '@/entities/roadmap/api/roadmapApi';
 import { isRoadmapDemoMode } from '@/entities/roadmap/api/roadmapDemo';
+import { getRoadmapRoleFact } from '../model/roadmap-role-fact';
 import { CreateAzureWorkItem } from './CreateAzureWorkItem';
 
 const NAME_COLUMN_STORAGE_KEY = 'roadmap-name-column-width';
@@ -169,6 +171,35 @@ const hoursFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2, u
 
 function displayHours(hours: number | string | null) {
   return hours === null ? '—' : `${hoursFormat.format(Number(hours))} ч`;
+}
+
+function unattributedFact(total: number, byRole?: Map<string, number>) {
+  let attributed = 0;
+  for (const hours of byRole?.values() ?? []) attributed += hours;
+  return Number((total - attributed).toFixed(2));
+}
+
+function BreakdownHeading({ label, kind, expanded, onToggle }: {
+  label: string;
+  kind: 'plan' | 'fact';
+  expanded: boolean;
+  onToggle?: () => void;
+}) {
+  return onToggle ? (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-auto min-h-8 max-w-full gap-1 whitespace-normal px-1.5 py-1 text-right text-[11px] font-semibold uppercase leading-tight tracking-wide"
+      aria-label={`${label} по ролям`}
+      aria-expanded={expanded}
+      aria-controls={expanded ? `roadmap-${kind}-roles` : undefined}
+      onClick={onToggle}
+    >
+      {label}
+      {expanded ? <Minus aria-hidden="true" className="size-3.5 shrink-0" /> : <Plus aria-hidden="true" className="size-3.5 shrink-0" />}
+    </Button>
+  ) : label;
 }
 
 function QuarterHoursCell({ hours, label, disabled, allocationId, rowIndex, monthIndex, onSave }: {
@@ -650,7 +681,8 @@ export function RoadmapPage() {
   const [nameColumnWidthReady, setNameColumnWidthReady] = useState(false);
   const [showUnassignedPeriods, setShowUnassignedPeriods] = useState(false);
   const [showEpicAssignments, setShowEpicAssignments] = useState(false);
-  const [activeRolesOnlyByProject, setActiveRolesOnlyByProject] = useState<Record<string, boolean>>({});
+  const [roleBreakdowns, setRoleBreakdowns] = useState<Partial<Record<string, { plan?: boolean; fact?: boolean }>>>({});
+  const [plannedRolesOnlyByProject, setPlannedRolesOnlyByProject] = useState<Partial<Record<string, boolean>>>({});
   const [quarterSelection, setQuarterSelection] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), quarter: Math.floor(now.getMonth() / 3) + 1 };
@@ -700,6 +732,13 @@ export function RoadmapPage() {
     ?? projects[0];
   const activeAzureProjectId = selectedProject?.id ?? '';
   const roadmapProjectId = selectedProject?.roadmapId ?? '';
+  const {
+    plan: showPlanRoles = true,
+    fact: showFactRoles = false,
+  } = roleBreakdowns[roadmapProjectId] ?? {};
+  const setRoleBreakdown = (kind: 'plan' | 'fact', expanded: boolean, projectId = roadmapProjectId) => {
+    setRoleBreakdowns((current) => ({ ...current, [projectId]: { ...current[projectId], [kind]: expanded } }));
+  };
   const projectIsSynced = Boolean(selectedProject?.imported && selectedProject.planSynced !== false);
   const canImportProject = Boolean(!demoMode && configured && selectedProject && !usingCachedProjects && !projectIsSynced);
   const roleSettingsHref = roadmapProjectId ? `${routes.roadmapAdminRoles}?projectId=${encodeURIComponent(roadmapProjectId)}` : routes.roadmapAdminRoles;
@@ -744,21 +783,7 @@ export function RoadmapPage() {
   });
   const monthlyFact = monthlyFactQuery.data;
   const roles = plan?.roles ?? [];
-  const activeRolesOnly = activeRolesOnlyByProject[roadmapProjectId] === true;
-  const activeRoles = useMemo(() => {
-    if (!plan) return [];
-    const plannedRoleIds = new Set<string>();
-    for (const item of plan.workItems) {
-      for (const allocation of item.allocations) {
-        if (Number(allocation.estimatedHours) > 0 || allocation.periods.some((period) => Number(period.hours) > 0)) {
-          plannedRoleIds.add(allocation.roleId);
-        }
-      }
-    }
-    return plan.roles.filter((role) => plannedRoleIds.has(role.id)
-      || (role.azureEstimateField && plan.workItems.some((item) => (azureRoleEstimate(item, role) ?? 0) > 0)));
-  }, [plan]);
-  const visibleRoles = activeRolesOnly ? activeRoles : roles;
+  const plannedRolesOnly = plannedRolesOnlyByProject[roadmapProjectId] ?? true;
   const availableRoleTemplates = (roleCatalogQuery.data ?? []).filter((template) => !roles.some((role) => role.name === template.name));
   const writeBackEnabled = Boolean(plan?.azure?.writeBackEnabled);
   const canPushToAzure = plan?.azure?.canPush === true;
@@ -804,7 +829,8 @@ export function RoadmapPage() {
     mutationFn: ({ projectId, templateId }: { projectId: string; templateId: string }) => roadmapApi.addRoleFromCatalog(projectId, templateId),
     onSuccess: async (_, { projectId }) => {
       setRolePickerOpen(false);
-      setActiveRolesOnlyByProject((current) => ({ ...current, [projectId]: false }));
+      setPlannedRolesOnlyByProject((current) => ({ ...current, [projectId]: false }));
+      setRoleBreakdown('plan', true, projectId);
       await queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', projectId] });
     },
   });
@@ -827,13 +853,51 @@ export function RoadmapPage() {
   const epics = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'epic'), [plannedItems]);
   const features = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'feature'), [plannedItems]);
   const standaloneFeatures = features.filter((feature) => !epics.some((epic) => epic.externalId === feature.parentExternalId));
+  const visibleRoles = useMemo(() => {
+    if (!plan) return [];
+    if (!plannedRolesOnly) return plan.roles;
+    const planItems = [...epics, ...features];
+    const plannedRoleIds = new Set(planItems.flatMap((item) => item.allocations)
+      .filter((allocation) => Number(allocation.estimatedHours) > 0)
+      .map((allocation) => allocation.roleId));
+    return plan.roles.filter((role) => plannedRoleIds.has(role.id)
+      || (role.azureEstimateField && planItems.some((item) => (azureRoleEstimate(item, role) ?? 0) > 0)));
+  }, [plan, plannedRolesOnly, epics, features]);
   const displayedAllocations = (selectedMonth ? [...epics, ...features] : plannedItems).flatMap((item) => item.allocations);
   const assignedPeopleCount = new Set([
     ...displayedAllocations.filter((allocation) => !selectedMonth || Number(allocation.estimatedHours) > 0).map((allocation) => allocation.personExternalId),
     ...(!selectedMonth ? roles.flatMap((role) => role.defaultPersonExternalId ? [role.defaultPersonExternalId] : []) : []),
   ]).size;
   const totalHours = displayedAllocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0);
-  const totalActualHours = selectedMonth ? monthlyFact?.totalHours ?? null : [...epics, ...standaloneFeatures].reduce((sum, item) => sum + Number(item.actualHours ?? 0), 0);
+  const factRoots = [...epics, ...standaloneFeatures];
+  const totalActualHours = selectedMonth ? monthlyFact?.totalHours ?? null : factRoots.reduce((sum, item) => sum + Number(item.actualHours ?? 0), 0);
+  const roleFact = useMemo(() => plan && (!monthKey || monthlyFact)
+    ? getRoadmapRoleFact(plan.workItems, plan.roles, monthKey ? monthlyFact : undefined)
+    : undefined, [plan, monthKey, monthlyFact]);
+  const projectRoleFact = new Map<string, number>(selectedMonth ? roleFact?.byProject : undefined);
+  if (!selectedMonth) {
+    for (const item of factRoots) {
+      for (const [roleId, hours] of roleFact?.byItem.get(item.id) ?? []) {
+        projectRoleFact.set(roleId, (projectRoleFact.get(roleId) ?? 0) + hours);
+      }
+    }
+  }
+  const projectUnattributedFact = totalActualHours === null ? 0 : unattributedFact(totalActualHours, projectRoleFact);
+  const factRoleIds = new Set(projectRoleFact.keys());
+  let hasUnattributedFact = projectUnattributedFact !== 0;
+  for (const item of [...epics, ...features]) {
+    const byRole = roleFact?.byItem.get(item.id);
+    for (const [roleId, hours] of byRole ?? []) {
+      if (hours) factRoleIds.add(roleId);
+    }
+    if (item.actualHours !== null && unattributedFact(Number(item.actualHours), byRole)) hasUnattributedFact = true;
+  }
+  const factRoles = roles.filter((role) => factRoleIds.has(role.id));
+  const planColumns = showPlanRoles ? visibleRoles : [];
+  const factColumns = showFactRoles ? factRoles : [];
+  const showUnattributedFact = showFactRoles && hasUnattributedFact;
+  const factColumnCount = factColumns.length + Number(showUnattributedFact);
+  const headerRowSpan = planColumns.length || factColumnCount ? 2 : 1;
   const allEpicsExpanded = epics.length > 0 && epics.every((epic) => expandedEpics.has(epic.id));
   const quarterTotalHours = plannedItems
     .filter((item) => item.type.toLowerCase() === 'feature' || item.type.toLowerCase() === 'epic')
@@ -857,14 +921,22 @@ export function RoadmapPage() {
     }
   };
 
+  const renderFactCell = (hours: number | null, key: string) => (
+    <td key={key} className={cn(
+      'whitespace-nowrap border-l border-border/40 px-3 py-2.5 text-right text-sm tabular-nums',
+      hours ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground',
+    )}>{displayHours(hours)}</td>
+  );
+
   function renderItemRow(item: RoadmapWorkItem, isEpic = false, childCount = 0, collapsed = false, onToggle?: () => void, isChild = false, isLastChild = false) {
     const epicChildren = isEpic ? features.filter((feature) => feature.parentExternalId === item.externalId) : [];
     const itemAllocations = isEpic ? [...item.allocations, ...epicChildren.flatMap((feature) => feature.allocations)] : item.allocations;
     const itemHours = itemAllocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0);
     const actualHours = selectedMonth ? item.actualHours : Number(item.actualHours ?? 0);
+    const actualByRole = roleFact?.byItem.get(item.id);
     return (
       <tr key={item.id} className={`group/row align-top transition-colors ${isEpic ? 'border-t border-border bg-muted/30 hover:bg-muted/45' : 'border-t border-border/50 hover:bg-muted/15'}`}>
-        <td className={`min-w-64 py-2 ${isEpic ? 'border-l-2 border-l-primary/40 px-4' : isChild ? 'px-0' : 'px-4'}`}>
+        <th scope="row" className={`py-2 text-left font-normal ${isEpic ? 'border-l-2 border-l-primary/40 px-3 sm:px-4' : isChild ? 'px-0' : 'px-3 sm:px-4'}`}>
           <div className={isEpic
             ? 'font-semibold text-foreground'
             : isChild
@@ -874,17 +946,23 @@ export function RoadmapPage() {
               {isEpic ? <button type="button" aria-expanded={!collapsed} aria-label={`${collapsed ? 'Развернуть' : 'Свернуть'} эпик ${item.title}`} disabled={!childCount} onClick={onToggle} className="-ml-1 inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-50">{collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button> : null}
               <div className="flex min-w-0 flex-1 items-start gap-2">
                 <AzureWorkItemIcon type={item.type} className="mt-0.5" />
-                <span className={`min-w-0 break-words leading-snug ${isEpic ? 'text-[15px]' : 'text-sm'}`}>{item.title}</span>
+                <span className={`min-w-0 [overflow-wrap:anywhere] leading-snug ${isEpic ? 'text-[15px]' : 'text-sm'}`}>{item.title}</span>
               </div>
-              {isEpic ? <span className="shrink-0 rounded-full border border-border/80 bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{childCount} фич</span> : null}
+              {isEpic ? <span className="hidden shrink-0 rounded-full border border-border/80 bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline">{childCount} фич</span> : null}
             </div>
             <p className={`mt-0.5 text-[11px] text-muted-foreground ${isEpic ? 'pl-14' : 'pl-6'}`}>
               <span className={isEpic ? 'mr-1 font-medium' : 'mr-1'}>{isEpic ? 'Epic' : 'Feature'}</span>
               #{item.externalId}{item.state ? ` · ${item.state}` : ''}
             </p>
           </div>
+        </th>
+        <td className={`whitespace-nowrap border-l border-border/60 px-3 py-2.5 text-right text-sm tabular-nums ${itemHours ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>
+          {displayHours(itemHours)}
         </td>
-        {visibleRoles.map((role) => {
+        <td className={`whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums ${Number(actualHours) ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground'}`}>
+          {displayHours(actualHours)}
+        </td>
+        {planColumns.map((role) => {
           const sourceEstimate = azureRoleEstimate(item, role);
           const allocations = item.allocations.filter((allocation) => allocation.roleId === role.id);
           const rolePeople = people.filter((person) => role.members?.some((member) => member.personExternalId === person.id && member.personIsActive));
@@ -907,12 +985,10 @@ export function RoadmapPage() {
           const chipClassName = 'group/chip block w-full rounded-md transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30';
           const assignmentList = <>
             {allocations.map((allocation) => {
-              const actual = allocation.actualHours === null || allocation.actualHours === undefined ? null : Number(allocation.actualHours);
               const line = personLine({
                 name: allocation.personName,
                 email: allocation.personEmail,
-                // Fact / plan once the linked Azure DevOps Task has Completed Work.
-                hours: actual !== null ? `${hoursFormat.format(actual)} / ${displayHours(allocation.estimatedHours)}` : displayHours(allocation.estimatedHours),
+                hours: displayHours(allocation.estimatedHours),
                 mock: people.find((person) => person.id === allocation.personExternalId)?.isMock,
                 status: writeBackEnabled ? <AzureSyncMark allocation={allocation} /> : undefined,
               });
@@ -952,13 +1028,8 @@ export function RoadmapPage() {
             </td>
           );
         })}
-        {!roles.length ? <td className="min-w-52 border-l border-border/40 px-3 py-3 text-xs text-muted-foreground">Роль не настроена</td> : null}
-        <td className={`whitespace-nowrap border-l border-border/60 px-4 py-3 text-right text-sm tabular-nums ${itemHours ? 'font-medium text-foreground' : 'text-muted-foreground/50'}`}>
-          {displayHours(itemHours)}
-        </td>
-        <td className={`whitespace-nowrap px-4 py-3 text-right text-sm tabular-nums ${Number(actualHours) ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground/50'}`}>
-          {displayHours(actualHours)}
-        </td>
+        {factColumns.map((role) => renderFactCell(actualHours === null ? null : actualByRole?.get(role.id) ?? 0, role.id))}
+        {showUnattributedFact ? renderFactCell(actualHours === null ? null : unattributedFact(Number(actualHours), actualByRole), 'unattributed') : null}
       </tr>
     );
   }
@@ -1036,20 +1107,22 @@ export function RoadmapPage() {
 
           {plan ? (
             <>
-              <section className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border border-border bg-card px-4 py-3">
-                  <p className="text-xs text-muted-foreground">Эпики и фичи</p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{epics.length + features.length}</p>
-                </div>
-                <div className="rounded-xl border border-border bg-card px-4 py-3">
-                  <p className="text-xs text-muted-foreground">План на {selectedMonth ? monthOptionLabel(selectedMonth) : currentQuarterLabel}</p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{hoursFormat.format(view === 'periods' ? quarterTotalHours : totalHours)} <span className="text-sm font-normal text-muted-foreground">часов</span></p>
-                </div>
-                <div className="rounded-xl border border-border bg-card px-4 py-3">
-                  <p className="text-xs text-muted-foreground">Участники в плане</p>
-                  <p className="mt-1 flex items-center gap-2 text-xl font-semibold tabular-nums text-foreground"><Users className="h-4 w-4 text-muted-foreground" />{assignedPeopleCount}</p>
-                </div>
-              </section>
+              <RoadmapTopbar>
+                <dl className="grid grid-cols-3 divide-x divide-border border-t border-border pt-2 lg:flex lg:border-t-0 lg:pt-0">
+                  <div className="flex flex-col justify-between gap-0.5 pr-2 lg:px-4">
+                    <dt className="text-xs leading-tight text-muted-foreground">Эпики и фичи</dt>
+                    <dd className="text-sm font-semibold tabular-nums text-foreground">{epics.length + features.length}</dd>
+                  </div>
+                  <div className="flex flex-col justify-between gap-0.5 px-2 lg:px-4">
+                    <dt className="text-xs leading-tight text-muted-foreground">План на {selectedMonth ? monthOptionLabel(selectedMonth) : currentQuarterLabel}</dt>
+                    <dd className="text-sm font-semibold tabular-nums text-foreground">{hoursFormat.format(view === 'periods' ? quarterTotalHours : totalHours)} <span className="text-xs font-normal text-muted-foreground">часов</span></dd>
+                  </div>
+                  <div className="flex flex-col justify-between gap-0.5 pl-2 lg:px-4">
+                    <dt className="text-xs leading-tight text-muted-foreground">Участники в плане</dt>
+                    <dd className="flex items-center gap-1.5 text-sm font-semibold tabular-nums text-foreground"><Users aria-hidden="true" className="size-3.5 text-muted-foreground" />{assignedPeopleCount}</dd>
+                  </div>
+                </dl>
+              </RoadmapTopbar>
 
               {createdTasks.length > 0 && (
                 <details className="rounded-xl border border-border bg-card">
@@ -1117,37 +1190,43 @@ export function RoadmapPage() {
                       <Button type="button" size="sm" variant={view === 'roles' ? 'secondary' : 'ghost'} onClick={() => setView('roles')} className="h-8 gap-1.5"><Users className="h-3.5 w-3.5" />По ролям</Button>
                       <Button type="button" size="sm" variant={view === 'periods' ? 'secondary' : 'ghost'} onClick={() => setView('periods')} className="h-8 gap-1.5"><Clock3 className="h-3.5 w-3.5" />По периодам</Button>
                     </> : null}
-                    {epics.length ? <Button type="button" size="sm" variant={showEpicAssignments ? 'secondary' : 'ghost'} onClick={() => setShowEpicAssignments((value) => !value)} aria-pressed={showEpicAssignments} className="h-8 gap-1.5">{showEpicAssignments ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}{showEpicAssignments ? 'Скрыть назначения эпиков' : 'Показать назначения эпиков'}</Button> : null}
-                    {view === 'roles' && roles.length > 0 && plan.workItems.length > 0 ? <>
+                    {epics.length ? <Button type="button" size="sm" variant={showEpicAssignments ? 'secondary' : 'ghost'} onClick={() => {
+                      if (view === 'roles' && !showEpicAssignments && roles.length) setRoleBreakdown('plan', true);
+                      setShowEpicAssignments((value) => !value);
+                    }} aria-pressed={showEpicAssignments} className="h-8 gap-1.5">{showEpicAssignments ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}{showEpicAssignments ? 'Скрыть назначения эпиков' : 'Показать назначения эпиков'}</Button> : null}
+                    {view === 'roles' && showPlanRoles && roles.length > 0 && plan.workItems.length > 0 ? <>
                       <label className="relative inline-flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 text-xs font-medium text-foreground hover:bg-muted">
                         <input
                           type="checkbox"
                           role="switch"
-                          checked={activeRolesOnly}
-                          aria-describedby="roadmap-active-roles-description"
+                          checked={plannedRolesOnly}
+                          aria-describedby="roadmap-planned-roles-description"
                           onChange={(event) => {
                             const checked = event.target.checked;
-                            setActiveRolesOnlyByProject((current) => ({ ...current, [roadmapProjectId]: checked }));
+                            setPlannedRolesOnlyByProject((current) => ({ ...current, [roadmapProjectId]: checked }));
                           }}
                           className="peer sr-only"
                         />
                         <span aria-hidden="true" className="relative h-[18px] w-8 shrink-0 rounded-full bg-muted-foreground peer-checked:bg-primary peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring after:absolute after:left-0.5 after:top-0.5 after:size-3.5 after:rounded-full after:bg-background after:content-[''] peer-checked:after:translate-x-3.5 motion-safe:after:transition-transform forced-colors:border forced-colors:border-[ButtonText] forced-colors:after:bg-[ButtonText]" />
-                        <span>Только активные роли</span>
+                        <span>Только роли с планом</span>
                       </label>
-                      <span id="roadmap-active-roles-description" hidden>Роли с запланированными часами в любом квартале или с оценкой из Azure DevOps.</span>
+                      <span id="roadmap-planned-roles-description" hidden>Роли с запланированными часами в выбранном периоде или с оценкой Azure DevOps на эпике или фиче. Оценка Azure относится ко всей карточке.</span>
                     </> : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {view === 'periods' && focusMode ? <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setExpandedEpics(allEpicsExpanded ? new Set() : new Set(epics.map((epic) => epic.id)))}>{allEpicsExpanded ? 'Свернуть всё' : 'Развернуть всё'}</Button> : null}
                     {view === 'periods' ? <Button type="button" variant={showUnassignedPeriods ? 'secondary' : 'outline'} size="sm" className="h-8" onClick={() => setShowUnassignedPeriods((value) => !value)}>{showUnassignedPeriods ? 'Скрыть без назначений' : 'Показать без назначений'}</Button> : null}
-                    {view === 'roles' ? <label className="relative inline-flex max-w-full items-center">
-                      <span className="sr-only">Период плана</span>
-                      <select value={selectedMonthKey} onChange={(event) => setSelectedMonthKey(event.target.value)} className="h-8 max-w-full appearance-none rounded-lg border border-border bg-background py-0 pl-2.5 pr-8 text-xs font-medium text-foreground shadow-xs hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-                        <option value="">Весь квартал</option>
-                        {currentQuarterMonths.map((month) => <option key={month.monthKey} value={month.monthKey}>{monthOptionLabel(month)}</option>)}
-                      </select>
-                      <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2.5 size-3.5 text-muted-foreground" />
-                    </label> : null}
+                    {view === 'roles' ? <SearchableSelect
+                      ariaLabel="Период плана"
+                      value={selectedMonthKey}
+                      onChange={setSelectedMonthKey}
+                      searchable={false}
+                      options={[
+                        { value: '', label: 'Весь квартал' },
+                        ...currentQuarterMonths.map((month) => ({ value: month.monthKey, label: monthOptionLabel(month) })),
+                      ]}
+                      className="h-8 min-h-8 w-auto max-w-full border-border bg-background px-2.5 py-0 text-xs font-medium shadow-xs hover:bg-muted"
+                    /> : null}
                     <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
                       <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Предыдущий квартал" onClick={() => shiftQuarter(-1)}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></Button>
                       <span aria-live="polite" className="min-w-20 text-center text-xs font-semibold tabular-nums">{currentQuarterLabel}</span>
@@ -1192,9 +1271,9 @@ export function RoadmapPage() {
                         {canConfigure ? <Link href={roleSettingsHref} className="inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground hover:bg-muted"><Users aria-hidden="true" className="h-4 w-4" />Настроить роли</Link> : null}
                       </div>
                     ) : null}
-                    {view === 'roles' && activeRolesOnly && roles.length > 0 && visibleRoles.length === 0 ? (
-                      <p role="status" className="border-b border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-                        По ролям этого проекта пока нет запланированных часов или оценок из Azure DevOps.
+                    {view === 'roles' && showPlanRoles && plannedRolesOnly && roles.length > 0 && visibleRoles.length === 0 ? (
+                      <p id="roadmap-plan-roles" role="status" className="border-b border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                        В выбранном периоде нет оценок по ролям. Выключите фильтр «Только роли с планом», чтобы увидеть все роли.
                       </p>
                     ) : null}
                     {view === 'periods' ? <QuarterPlanningGrid
@@ -1218,24 +1297,46 @@ export function RoadmapPage() {
                       onSaveQuarter={saveQuarter}
                       onAddAssignment={saveAllocation}
                       showEpicAssignments={showEpicAssignments}
-                    /> : <div className={cn('roadmap-scrollbar flex-1 overflow-auto', focusMode ? 'min-h-0' : 'max-h-[calc(100dvh-7rem)]')}><table className="w-full min-w-max table-fixed border-collapse text-left">
+                    /> : <div
+                      role={headerRowSpan === 2 ? 'region' : undefined}
+                      aria-label={headerRowSpan === 2 ? 'Таблица плана и факта по ролям' : undefined}
+                      tabIndex={headerRowSpan === 2 ? 0 : undefined}
+                      className={cn('@container roadmap-scrollbar min-w-0 flex-1 overflow-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring', focusMode ? 'min-h-0' : 'max-h-[calc(100dvh-7rem)]')}
+                    >
+                      <table
+                        className="w-full table-fixed border-collapse text-left [--summary-width:5rem] @lg:[--summary-width:7.5rem]"
+                        style={{
+                          '--name-width': `min(${nameColumnWidth}px, max(0px, calc(100cqw - 2 * var(--summary-width))))`,
+                          minWidth: `calc(var(--name-width) + 2 * var(--summary-width) + ${260 * planColumns.length + 128 * factColumnCount}px)`,
+                        } as CSSProperties}
+                      >
                       <colgroup>
-                        <col style={{ width: `${nameColumnWidth}px` }} />
-                        {visibleRoles.map((role) => <col key={role.id} style={{ width: '260px' }} />)}
-                        {!roles.length ? <col style={{ width: '240px' }} /> : null}
-                        <col style={{ width: '120px' }} />
-                        <col style={{ width: '120px' }} />
+                        <col className="w-[var(--name-width)]" />
+                        <col className="w-[var(--summary-width)]" />
+                        <col className="w-[var(--summary-width)]" />
                       </colgroup>
+                      {planColumns.length ? <colgroup>{planColumns.map((role) => <col key={role.id} className="w-[260px]" />)}</colgroup> : null}
+                      {factColumnCount ? <colgroup span={factColumnCount} className="w-32" /> : null}
                       <thead className="sticky top-0 z-[1] bg-card">
                         <tr className="border-b border-border bg-muted/40 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          <th className="relative min-w-72 px-4 py-2.5 pr-5"><div className="flex items-center justify-between gap-3"><span>Эпик / фича</span>{canConfigure ? <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
-                            <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-8 shrink-0 gap-1 px-2.5 text-xs" disabled={!roadmapProjectId || addRoleMutation.isPending}><Plus className="h-3.5 w-3.5" />Добавить роль</Button></PopoverTrigger>
+                          <th scope="col" rowSpan={headerRowSpan} className="relative px-3 py-2.5 @lg:px-4 @lg:pr-5"><div className="flex items-center justify-between gap-1 @lg:gap-3"><span>Эпик / фича</span>{canConfigure ? <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
+                            <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-8 shrink-0 gap-1 px-2 text-xs @lg:px-2.5" aria-label="Добавить роль" title="Добавить роль" disabled={!roadmapProjectId || addRoleMutation.isPending}><Plus aria-hidden="true" className="size-3.5" /><span className="hidden @lg:inline">Добавить роль</span></Button></PopoverTrigger>
                             <PopoverContent align="start" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(320px,calc(100vw-2rem))] rounded-xl p-2">
                               <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Роли из каталога</p>
                               {roleCatalogQuery.isLoading ? <p className="px-2 py-4 text-center text-sm text-muted-foreground">Загружаем каталог…</p> : availableRoleTemplates.length ? availableRoleTemplates.map((template) => <button key={template.id} type="button" disabled={addRoleMutation.isPending} onClick={() => addRoleMutation.mutate({ projectId: roadmapProjectId, templateId: template.id })} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-foreground hover:bg-muted disabled:opacity-50"><ColorMark color={template.color} size="md" /><span className="min-w-0 flex-1 truncate">{template.name}</span>{template.isMock ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-amber-700 dark:text-amber-300">демо</span> : null}<Plus className="h-3.5 w-3.5 text-muted-foreground" /></button>) : <div className="px-2 py-3 text-sm text-muted-foreground">{(roleCatalogQuery.data ?? []).length ? 'Все роли из каталога уже добавлены.' : 'Каталог ролей пуст.'}{!(roleCatalogQuery.data ?? []).length ? <Link href={routes.roadmapAdminRoles} className="mt-1 block text-primary hover:underline">Создать роли в администрировании</Link> : null}</div>}
                             </PopoverContent>
-                          </Popover> : null}</div><NameColumnResizeHandle width={nameColumnWidth} onChange={setNameColumnWidth} /></th>
-                          {visibleRoles.map((role) => <th key={role.id} className="min-w-52 border-l border-border/40 px-3 py-2.5">
+                          </Popover> : null}</div><div className="hidden @lg:block"><NameColumnResizeHandle width={nameColumnWidth} onChange={setNameColumnWidth} /></div></th>
+                          <th scope="col" rowSpan={headerRowSpan} className="border-l border-border/60 px-1 py-1.5 text-right @lg:px-2">
+                            <BreakdownHeading label="План" kind="plan" expanded={showPlanRoles} onToggle={roles.length ? () => setRoleBreakdown('plan', !showPlanRoles) : undefined} />
+                          </th>
+                          <th scope="col" rowSpan={headerRowSpan} className="px-1 py-1.5 text-right @lg:px-2" title={selectedMonth ? 'Изменение Completed Work за выбранный календарный месяц (UTC)' : undefined}>
+                            <BreakdownHeading label={selectedMonth ? 'Факт за месяц' : 'Факт всего'} kind="fact" expanded={showFactRoles} onToggle={factRoles.length || hasUnattributedFact ? () => setRoleBreakdown('fact', !showFactRoles) : undefined} />
+                          </th>
+                          {planColumns.length ? <th scope="colgroup" id="roadmap-plan-roles" colSpan={planColumns.length} className="border-l border-border/60 px-3 py-1.5">План по ролям</th> : null}
+                          {factColumnCount ? <th scope="colgroup" id="roadmap-fact-roles" colSpan={factColumnCount} className="border-l border-border/60 px-3 py-1.5">{selectedMonth ? 'Факт за месяц по ролям' : 'Факт по ролям'}</th> : null}
+                        </tr>
+                        {headerRowSpan === 2 ? <tr className="border-b border-border bg-muted/25">
+                          {planColumns.map((role) => <th scope="col" key={role.id} className="border-l border-border/40 px-3 py-2.5">
                             <div className="space-y-1.5">
                               <div className="flex items-center gap-2 normal-case tracking-normal">
                                 <RoleMark name={role.name} color={role.color} size="sm" />
@@ -1254,10 +1355,11 @@ export function RoadmapPage() {
                               </Popover> : role.defaultPersonName ? <span className="block truncate text-[10px] font-medium normal-case text-muted-foreground">По умолчанию: {role.defaultPersonName}</span> : null}
                             </div>
                           </th>)}
-                          {!roles.length ? <th className="min-w-52 border-l border-border/40 px-3 py-3">Роль / участник</th> : null}
-                          <th className="min-w-24 border-l border-border/60 px-4 py-3 text-right">План</th>
-                          <th className="min-w-24 px-4 py-3 text-right" title={selectedMonth ? 'Изменение Completed Work за выбранный календарный месяц (UTC)' : undefined}>{selectedMonth ? 'Факт за месяц' : 'Факт всего'}</th>
-                        </tr>
+                          {factColumns.map((role) => <th scope="col" key={role.id} className="border-l border-border/40 px-3 py-2.5 text-right text-xs font-semibold">
+                            <span className="flex items-center justify-end gap-1.5"><RoleMark name={role.name} color={role.color} size="sm" /><span className="min-w-0 [overflow-wrap:anywhere]">{role.name}</span></span>
+                          </th>)}
+                          {showUnattributedFact ? <th scope="col" className="border-l border-border/40 px-3 py-2.5 text-right text-xs font-semibold">Без роли</th> : null}
+                        </tr> : null}
                       </thead>
                       <tbody>
                         {epics.map((epic) => {
@@ -1277,14 +1379,15 @@ export function RoadmapPage() {
                       </tbody>
                       <tfoot className="sticky bottom-0 z-[1] bg-card">
                         <tr className="border-t-2 border-border bg-muted/40 text-sm font-semibold text-foreground">
-                          <th scope="row" className="px-4 py-3">Итого по проекту</th>
-                          {visibleRoles.map((role) => {
+                          <th scope="row" className="px-3 py-3 @lg:px-4">Итого по проекту</th>
+                          <td className="whitespace-nowrap border-l border-border/60 px-3 py-3 text-right tabular-nums">{displayHours(totalHours)}</td>
+                          <td className={`whitespace-nowrap px-3 py-3 text-right tabular-nums ${totalActualHours === null ? 'text-muted-foreground' : 'text-emerald-700 dark:text-emerald-300'}`}>{displayHours(totalActualHours)}</td>
+                          {planColumns.map((role) => {
                             const hours = displayedAllocations.reduce((sum, allocation) => sum + (allocation.roleId === role.id ? Number(allocation.estimatedHours) : 0), 0);
                             return <td key={role.id} className={`border-l border-border/40 px-3 py-3 tabular-nums ${hours ? '' : 'text-muted-foreground/50'}`}>{displayHours(hours)}</td>;
                           })}
-                          {!roles.length ? <td className="border-l border-border/40 px-3 py-3 text-muted-foreground">—</td> : null}
-                          <td className="whitespace-nowrap border-l border-border/60 px-4 py-3 text-right tabular-nums">{displayHours(totalHours)}</td>
-                          <td className={`whitespace-nowrap px-4 py-3 text-right tabular-nums ${totalActualHours === null ? 'text-muted-foreground' : 'text-emerald-700 dark:text-emerald-300'}`}>{displayHours(totalActualHours)}</td>
+                          {factColumns.map((role) => renderFactCell(totalActualHours === null ? null : projectRoleFact.get(role.id) ?? 0, role.id))}
+                          {showUnattributedFact ? renderFactCell(projectUnattributedFact, 'unattributed') : null}
                         </tr>
                       </tfoot>
                     </table></div>}
