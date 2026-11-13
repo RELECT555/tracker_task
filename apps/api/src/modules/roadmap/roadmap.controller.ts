@@ -78,12 +78,6 @@ export class RoadmapController {
     return this.roadmap.syncProject(externalId);
   }
 
-  @Post('projects/:externalId/sync-catalog')
-  @UseGuards(AdminRoleGuard)
-  syncProjectCatalog(@Param('externalId', ParseUUIDPipe) externalId: string) {
-    return this.roadmap.syncProjectCatalog(externalId);
-  }
-
   @Post('projects/:projectId/azure-push')
   pushProjectToAzure(@CurrentUser() actor: DevUserPayload, @Param('projectId') projectId: string, @Body() dto: PushToAzureDto) {
     return this.azureSync.pushProject(actor.id, projectId, dto.allocationIds);

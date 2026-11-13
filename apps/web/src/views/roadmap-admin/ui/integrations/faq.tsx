@@ -15,7 +15,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     id: 'import-roles',
     question: 'Откуда берутся роли и плановые часы?',
-    answer: <>Роли берутся из вкладки Roles Estimate в формах задач выбранного проекта. После загрузки задач в плане Roadmap видны часы по роли на всю задачу. Квартальные оценки участников сохраняются отдельно.</>,
+    answer: <>На странице «План проекта» кнопка «Загрузить проект из Azure» загружает задачи и роли из вкладки Roles Estimate. В плане Roadmap видны оценки по роли на всю задачу. Участников настраивают в разделе «Роли и участники», а их квартальные часы сохраняются в плане.</>,
   },
   {
     id: 'what-is-two-way-sync',
@@ -40,7 +40,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     id: 'fact-source',
     question: 'Откуда факт и когда обновляется?',
-    answer: <>По умолчанию фактические часы берутся из Completed Work. С webhook они обновляются автоматически. Для ручного обновления откройте вкладку «Проекты», найдите «Синхронизация задач» и нажмите «Обновить задачи из Azure».</>,
+    answer: <>По умолчанию фактические часы берутся из Completed Work. После первой загрузки Roadmap проверяет изменения в Azure каждые 5 минут. Чтобы обновить проект сразу, нажмите «Обновить проект из Azure» во вкладке «Проекты».</>,
   },
   {
     id: 'manual-changes',
@@ -70,7 +70,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     id: 'webhook-needed',
     question: 'Нужен ли webhook?',
-    answer: <>Webhook не обязателен, но без него факт и конфликты видны только после ручной загрузки. API должен быть доступен из интернета.</>,
+    answer: <>Webhook нужен, чтобы быстрее получать изменения, а также обрабатывать удаления и конфликты. Для обновления по расписанию webhook не требуется. Чтобы подключить его, откройте Azure DevOps доступ к API Roadmap.</>,
   },
   {
     id: 'pat-permissions',
@@ -114,7 +114,7 @@ export function FaqAccordion({ connected }: { connected: boolean }) {
             {item.answer}
             {item.id === 'fact-source' ? (
               <a href={connected ? '#azure-task-sync' : '#azure-connection'} className="mt-2 block w-fit rounded font-medium text-primary underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring">
-                {connected ? 'К синхронизации задач' : 'Подключить Azure DevOps'}
+                {connected ? 'К синхронизации проектов' : 'Подключить Azure DevOps'}
               </a>
             ) : null}
           </div>

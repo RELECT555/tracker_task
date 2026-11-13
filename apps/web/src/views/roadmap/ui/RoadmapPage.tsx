@@ -33,6 +33,7 @@ const NAME_COLUMN_STORAGE_KEY = 'roadmap-name-column-width';
 const NAME_COLUMN_MIN_WIDTH = 280;
 const NAME_COLUMN_MAX_WIDTH = 900;
 const DEFAULT_NAME_COLUMN_WIDTH = 440;
+const PLAN_REFRESH_INTERVAL = 60_000;
 // Monthly (period) planning is temporarily disabled; stored month values are kept untouched.
 const PERIOD_PLANNING_ENABLED = false;
 
@@ -699,6 +700,8 @@ export function RoadmapPage() {
     ?? projects[0];
   const activeAzureProjectId = selectedProject?.id ?? '';
   const roadmapProjectId = selectedProject?.roadmapId ?? '';
+  const projectIsSynced = Boolean(selectedProject?.imported && selectedProject.planSynced !== false);
+  const canImportProject = Boolean(!demoMode && configured && selectedProject && !usingCachedProjects && !projectIsSynced);
   const roleSettingsHref = roadmapProjectId ? `${routes.roadmapAdminRoles}?projectId=${encodeURIComponent(roadmapProjectId)}` : routes.roadmapAdminRoles;
 
   useEffect(() => {
@@ -709,13 +712,22 @@ export function RoadmapPage() {
     queryKey: ['roadmap', 'plan', roadmapProjectId],
     queryFn: () => roadmapApi.plan(roadmapProjectId),
     enabled: Boolean(roadmapProjectId),
-    // While allocations are being written to Azure DevOps, poll until every status settles.
+    // The server pulls Azure changes. An open plan periodically reads the latest local data.
     refetchInterval: (query) => query.state.data?.azure?.writeBackEnabled
       && query.state.data.workItems.some((item) => item.allocations.some((allocation) => allocation.azureSyncStatus === 'pending' || allocation.azureSyncStatus === 'sending'))
       ? 3000
-      : false,
+      : !demoMode && projectIsSynced ? PLAN_REFRESH_INTERVAL : false,
   });
   const plan = planQuery.data;
+  const lastPlanImport = useRef<{ projectId: string; syncedAt: string } | null>(null);
+  const syncedAt = plan?.syncedAt;
+  useEffect(() => {
+    const previous = lastPlanImport.current;
+    lastPlanImport.current = syncedAt ? { projectId: roadmapProjectId, syncedAt } : null;
+    if (!demoMode && syncedAt && previous?.projectId === roadmapProjectId && previous.syncedAt !== syncedAt) {
+      void queryClient.invalidateQueries({ queryKey: ['roadmap', 'monthly-fact', roadmapProjectId] });
+    }
+  }, [demoMode, queryClient, roadmapProjectId, syncedAt]);
   const createdTaskIds = new Set(plan?.azure?.createdTaskIds);
   const createdTasks = plan?.workItems.filter((item) => createdTaskIds.has(item.externalId)) ?? [];
   const createProject = canConfigure && configured && !demoMode ? selectedProject : undefined;
@@ -769,9 +781,12 @@ export function RoadmapPage() {
         queryClient.invalidateQueries({ queryKey: ['roadmap', 'roles', result.projectId] }),
         queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', result.projectId] }),
         queryClient.invalidateQueries({ queryKey: ['roadmap', 'monthly-fact', result.projectId] }),
+        queryClient.invalidateQueries({ queryKey: ['roadmap', 'write-back-overview'] }),
       ]);
     },
   });
+  const isSelectedProjectSync = syncMutation.variables?.id === activeAzureProjectId;
+  const syncResult = isSelectedProjectSync ? syncMutation.data : undefined;
   const saveMutation = useMutation({
     mutationFn: roadmapApi.saveAllocation,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
@@ -948,7 +963,7 @@ export function RoadmapPage() {
     );
   }
 
-  const errors = [connectionQuery.error, projectsQuery.error, peopleQuery.error, planQuery.error, syncMutation.error, saveMutation.error, saveQuarterMutation.error, splitMutation.error, addRoleMutation.error, setRoleDefaultMutation.error, roleCatalogQuery.error, pushAllocationMutation.error];
+  const errors = [connectionQuery.error, projectsQuery.error, peopleQuery.error, planQuery.error, isSelectedProjectSync ? syncMutation.error : null, saveMutation.error, saveQuarterMutation.error, splitMutation.error, addRoleMutation.error, setRoleDefaultMutation.error, roleCatalogQuery.error, pushAllocationMutation.error];
   const loadingMessage = projectsQuery.isLoading
     ? 'Загружаем проекты Azure DevOps…'
     : planQuery.isLoading
@@ -958,45 +973,41 @@ export function RoadmapPage() {
         : null;
   const emptyPlanMessage = configured && !projectsQuery.isError && !roadmapProjectId
     ? selectedProject
-      ? 'Импортируйте выбранный проект, чтобы создать план.'
+      ? 'Загрузите выбранный проект, чтобы получить задачи, роли и оценки из Azure DevOps.'
       : 'Выберите проект Azure DevOps выше.'
     : null;
 
   return (
     <main className="roadmap-scrollbar relative min-h-0 flex-1 overflow-auto overscroll-none px-4 py-5 sm:px-6 lg:px-8">
         <div className="mx-auto flex min-h-full w-full flex-col gap-5">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Планирование ресурсов</p>
-              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">План проекта</h1>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <AzureProjectPicker
-                projects={projects}
-                value={activeAzureProjectId}
-                onChange={setSelectedAzureProjectId}
-                disabled={projectsQuery.isLoading}
-                placeholder={demoMode ? 'Демо-проект' : configured ? 'Выбрать проект Azure DevOps' : 'Выбрать локальный проект'}
+          <h1 className="sr-only">План проекта</h1>
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+            <AzureProjectPicker
+              projects={projects}
+              value={activeAzureProjectId}
+              onChange={setSelectedAzureProjectId}
+              disabled={projectsQuery.isLoading}
+              placeholder={demoMode ? 'Демо-проект' : configured ? 'Выбрать проект Azure DevOps' : 'Выбрать локальный проект'}
+            />
+            {canImportProject && <Button
+              type="button"
+              onClick={() => selectedProject && syncMutation.mutate(selectedProject)}
+              disabled={syncMutation.isPending}
+              className="gap-2"
+            >
+              {syncMutation.isPending ? <RefreshCw aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" /> : <ArrowDownToLine aria-hidden="true" className="h-4 w-4" />}
+              {syncMutation.isPending ? 'Загружаем проект…' : 'Загрузить проект из Azure'}
+            </Button>}
+            {createProject && (
+              <CreateAzureWorkItem
+                key={createProject.id}
+                externalProjectId={createProject.id}
+                projectName={createProject.name}
+                items={plan?.externalId === createProject.id ? plan.workItems : []}
+                people={people}
+                available={projectsQuery.data?.source === 'azure'}
               />
-              <Button
-                onClick={() => selectedProject && syncMutation.mutate(selectedProject)}
-                disabled={!selectedProject || syncMutation.isPending || usingCachedProjects}
-                className="gap-2"
-              >
-                {syncMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ArrowDownToLine className="h-4 w-4" />}
-                {demoMode ? 'Демо-данные загружены' : usingCachedProjects ? 'Azure недоступен' : selectedProject?.imported && selectedProject.planSynced !== false ? 'Обновить задачи' : 'Загрузить задачи'}
-              </Button>
-              {createProject && (
-                <CreateAzureWorkItem
-                  key={createProject.id}
-                  externalProjectId={createProject.id}
-                  projectName={createProject.name}
-                  items={plan?.externalId === createProject.id ? plan.workItems : []}
-                  people={people}
-                  available={projectsQuery.data?.source === 'azure'}
-                />
-              )}
-            </div>
+            )}
           </div>
 
           {demoMode ? (
@@ -1026,7 +1037,12 @@ export function RoadmapPage() {
           ) : null}
           {!demoMode && usingCachedProjects ? <div role="status" className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">Azure DevOps временно недоступен. Показаны ранее импортированные проекты из локальной базы; планирование и демо-назначения доступны.</div> : null}
           {errors.map((error, index) => error ? <ErrorMessage key={index} error={error} /> : null)}
-          {syncMutation.data?.roleSyncWarning && syncMutation.variables?.id === activeAzureProjectId ? <p role="status" className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">{syncMutation.data.roleSyncWarning}</p> : null}
+          {syncResult ? (
+            <div role="status" className="space-y-1 rounded-lg border border-border bg-card px-4 py-3 text-sm">
+              <p>Задач из Azure DevOps: {syncResult.importedWorkItems}.{!syncResult.roleSyncWarning && syncResult.importedRoles !== undefined ? ` Ролей из Azure DevOps: ${syncResult.importedRoles}.` : null}</p>
+              {syncResult.roleSyncWarning ? <p className="text-amber-800 dark:text-amber-200">{syncResult.roleSyncWarning}</p> : null}
+            </div>
+          ) : null}
 
           {plan ? (
             <>
@@ -1077,7 +1093,8 @@ export function RoadmapPage() {
                   <div>
                     <h2 className="font-medium text-foreground">{plan.name}</h2>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {plan.syncedAt ? `Синхронизировано ${new Date(plan.syncedAt).toLocaleString('ru-RU')}` : 'Данные ещё не синхронизированы'}
+                      {!demoMode && configured && !usingCachedProjects && projectIsSynced ? <>Автообновление каждые 5 мин · </> : null}
+                      {plan.syncedAt ? <>Последний импорт: <time dateTime={plan.syncedAt}>{new Date(plan.syncedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</time></> : 'Данные ещё не синхронизированы'}
                       {writeBackEnabled ? <> · Запись в Azure: {plan.azure?.mode === 'manual' ? 'по кнопке' : 'автоматически'}{azureErrorCount ? <span className="text-destructive"> · ошибок: {azureErrorCount}</span> : null}</> : null}
                     </p>
                   </div>

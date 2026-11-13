@@ -210,7 +210,6 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
     case 'previewAzurePush': case 'pushProjectToAzure': case 'pushAllocationToAzure':
       throw new Error('Запись плана в Azure DevOps недоступна в демо.');
     case 'projects': return { data: clone(state.projects), source: 'cache' };
-    case 'syncProjectCatalog': throw new Error('Импорт из Azure DevOps недоступен в демо.');
     case 'syncProject': return { projectId: PROJECT_ID, importedWorkItems: state.plan.workItems.length };
     case 'plan': return planOf(state);
     case 'people': return { data: peopleWithRoles(state) };

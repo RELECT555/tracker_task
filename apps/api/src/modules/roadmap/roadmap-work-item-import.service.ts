@@ -11,6 +11,7 @@ export type AzureWorkItem = {
 };
 type AzureWorkItemField = { referenceName: string; name?: string; isCustom?: boolean; isDeleted?: boolean };
 type CustomFieldCatalog = { names: string[]; available: Set<string>; organizationUrl: string; loadedAt: number };
+type ImportOptions = { requestTimeoutMs?: number; requireAll?: boolean };
 
 const FIELD_CATALOG_TTL_MS = 10 * 60 * 1000;
 const WORK_ITEM_BATCH_SIZE = 200;
@@ -39,7 +40,7 @@ export class RoadmapWorkItemImportService {
   ) {}
 
   /** Downloads the given work items and upserts them into the Roadmap project. */
-  async importWorkItems(project: { id: string }, ids: number[], credentials: AzureDevOpsCredentials) {
+  async importWorkItems(project: { id: string }, ids: number[], credentials: AzureDevOpsCredentials, { requestTimeoutMs, requireAll }: ImportOptions = {}) {
     if (!ids.length) return [];
     const [settings, roles] = await Promise.all([
       this.integration.getSyncSettings(),
@@ -48,7 +49,7 @@ export class RoadmapWorkItemImportService {
         select: { azureEstimateField: true },
       }),
     ]);
-    const catalog = await this.customFields(credentials, settings);
+    const catalog = await this.customFields(credentials, settings, requestTimeoutMs ? AbortSignal.timeout(requestTimeoutMs) : undefined);
     const names = new Set(catalog.names);
     for (const { azureEstimateField } of roles) {
       if (azureEstimateField && catalog.available.has(azureEstimateField)) names.add(azureEstimateField);
@@ -63,10 +64,21 @@ export class RoadmapWorkItemImportService {
       const batchIds = ids.slice(offset, offset + WORK_ITEM_BATCH_SIZE);
       const batch = await this.integration.requestJson<{ value: AzureWorkItem[] }>(
         `${credentials.organizationUrl}/_apis/wit/workitemsbatch?api-version=${this.apiVersion}`,
-        { method: 'POST', body: JSON.stringify({ ids: batchIds, fields, errorPolicy: 'omit' }) },
+        {
+          method: 'POST',
+          body: JSON.stringify({ ids: batchIds, fields, errorPolicy: requireAll ? 'fail' : 'omit' }),
+          signal: requestTimeoutMs ? AbortSignal.timeout(requestTimeoutMs) : undefined,
+        },
         credentials,
       );
-      imported.push(...batch.value.filter(Boolean));
+      const items = batch.value.filter(Boolean);
+      if (requireAll) {
+        const receivedIds = new Set(items.map((item) => item.id));
+        if (items.length !== batchIds.length || batchIds.some((id) => !receivedIds.has(id))) {
+          throw new BadGatewayException('Azure DevOps returned an incomplete work item import');
+        }
+      }
+      imported.push(...items);
     }
 
     for (let offset = 0; offset < imported.length; offset += WORK_ITEM_BATCH_SIZE) {
@@ -168,11 +180,11 @@ export class RoadmapWorkItemImportService {
   }
 
   /** Custom role/estimate fields shown in the plan; cached because the catalog is organization-wide. */
-  private async customFields(credentials: AzureDevOpsCredentials, settings: Awaited<ReturnType<RoadmapIntegrationService['getSyncSettings']>>): Promise<CustomFieldCatalog> {
+  private async customFields(credentials: AzureDevOpsCredentials, settings: Awaited<ReturnType<RoadmapIntegrationService['getSyncSettings']>>, signal?: AbortSignal): Promise<CustomFieldCatalog> {
     if (this.fieldCatalog?.organizationUrl === credentials.organizationUrl && Date.now() - this.fieldCatalog.loadedAt < FIELD_CATALOG_TTL_MS) return this.fieldCatalog;
     const fieldCatalog = await this.integration.requestJson<{ value: AzureWorkItemField[] }>(
       `${credentials.organizationUrl}/_apis/wit/fields?api-version=${this.apiVersion}`,
-      undefined,
+      signal ? { signal } : undefined,
       credentials,
     );
     const explicit = new Set([

@@ -3,19 +3,24 @@ import {
   BadGatewayException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import type { Prisma } from '@prisma/client';
 import { rebalanceAllocations } from '@tracker/shared';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
-import { AzureDevOpsHttpError, RoadmapIntegrationService } from './roadmap-integration.service';
+import { AzureDevOpsHttpError, RoadmapIntegrationService, type AzureDevOpsCredentials } from './roadmap-integration.service';
 import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import { azureOrganizationName, canCreateRoadmapWorkItems, roadmapCreatedWorkItemUrl } from './roadmap-work-item-create.service';
 
 type AzureProject = { id: string; name: string; url?: string; state?: string };
 type AzureWorkItemRef = { id: number; url: string };
+const WORK_ITEM_QUERY_PAGE_SIZE = 1_000;
+const WORK_ITEM_QUERY_OVERLAP_MS = 60_000;
+const AZURE_IMPORT_REQUEST_TIMEOUT_MS = 30_000;
 type AzurePerson = {
   descriptor: string;
   subjectKind?: string;
@@ -79,6 +84,8 @@ function rollUpActualHours<T extends RoadmapHierarchyItem>(
 @Injectable()
 export class RoadmapService {
   private readonly apiVersion = '7.1';
+  private readonly logger = new Logger(RoadmapService.name);
+  private readonly projectImports = new Map<string, Promise<unknown>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -149,32 +156,88 @@ export class RoadmapService {
     }
   }
 
-  async syncProjectCatalog(externalId: string) {
-    const credentials = await this.integration.getCredentials();
-    const catalog = await this.catalog.syncProject(externalId, credentials);
-    this.importer.invalidateFieldCatalog();
-    return catalog;
+  syncProject(externalId: string) {
+    return this.runProjectImport(externalId, async () => {
+      const credentials = await this.integration.getCredentials();
+      const catalog = await this.catalog.syncProject(externalId, credentials);
+      this.importer.invalidateFieldCatalog();
+      const importedWorkItems = await this.importProjectWorkItems({ id: catalog.projectId, externalId }, credentials);
+      return { ...catalog, importedWorkItems };
+    });
   }
 
-  async syncProject(externalId: string) {
-    const credentials = await this.integration.getCredentials();
-    const catalog = await this.catalog.syncProject(externalId, credentials);
-
-    const wiql = {
-      query: 'SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project ORDER BY [System.Id]',
-    };
-    const result = await this.integration.requestJson<{ workItems: AzureWorkItemRef[] }>(
-      `${credentials.organizationUrl}/${encodeURIComponent(externalId)}/_apis/wit/wiql?$top=20000&api-version=${this.apiVersion}`,
-      { method: 'POST', body: JSON.stringify(wiql) },
-      credentials,
-    );
-    this.importer.invalidateFieldCatalog();
-    const imported = await this.importer.importWorkItems({ id: catalog.projectId }, result.workItems.map((item) => item.id), credentials);
-    await this.prisma.roadmapProject.update({
-      where: { id: catalog.projectId },
-      data: { syncedAt: new Date() },
+  @Cron('*/5 * * * *', { waitForCompletion: true })
+  async refreshImportedProjects() {
+    const projects = await this.prisma.roadmapProject.findMany({
+      where: { syncedAt: { not: null } },
+      select: { id: true, externalId: true, syncedAt: true, url: true },
     });
-    return { ...catalog, importedWorkItems: imported.length };
+    if (!projects.length || !(await this.integration.getPublicSettings()).configured) return;
+
+    const credentials = await this.integration.getCredentials();
+    const organization = azureOrganizationName(credentials.organizationUrl);
+    for (const project of projects) {
+      const projectOrganization = azureOrganizationName(project.url);
+      if (this.projectImports.has(project.externalId) || (projectOrganization && projectOrganization !== organization)) continue;
+      try {
+        await this.runProjectImport(project.externalId, () => this.importProjectWorkItems(project, credentials));
+      } catch (error) {
+        const status = error instanceof AzureDevOpsHttpError ? ` (HTTP ${error.httpStatus})` : '';
+        this.logger.warn(`Scheduled Azure DevOps import failed for project ${project.id}${status}`);
+      }
+    }
+  }
+
+  private runProjectImport<T>(externalId: string, run: () => Promise<T>): Promise<T> {
+    const previous = this.projectImports.get(externalId);
+    const pending = (previous ? previous.catch(() => undefined).then(run) : run()).finally(() => {
+      if (this.projectImports.get(externalId) === pending) this.projectImports.delete(externalId);
+    });
+    this.projectImports.set(externalId, pending);
+    return pending;
+  }
+
+  private async importProjectWorkItems(
+    project: { id: string; externalId: string; syncedAt?: Date | null },
+    credentials: AzureDevOpsCredentials,
+  ) {
+    const startedAt = new Date();
+    const changedSince = project.syncedAt && new Date(project.syncedAt.getTime() - WORK_ITEM_QUERY_OVERLAP_MS);
+    const changedFilter = changedSince
+      ? ` AND [System.ChangedDate] >= '${changedSince.toISOString()}' AND [System.ChangedDate] < '${startedAt.toISOString()}'`
+      : '';
+    const endpoint = `${credentials.organizationUrl}/${encodeURIComponent(project.externalId)}/_apis/wit/wiql`;
+    let importedCount = 0;
+    let lastId = 0;
+
+    while (true) {
+      const query = 'SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project'
+        + changedFilter + ` AND [System.Id] > ${lastId} ORDER BY [System.Id]`;
+      const { workItems } = await this.integration.requestJson<{ workItems: AzureWorkItemRef[] }>(
+        `${endpoint}?timePrecision=true&$top=${WORK_ITEM_QUERY_PAGE_SIZE}&api-version=${this.apiVersion}`,
+        { method: 'POST', body: JSON.stringify({ query }), signal: AbortSignal.timeout(AZURE_IMPORT_REQUEST_TIMEOUT_MS) },
+        credentials,
+      );
+      const ids = workItems.map((item) => item.id);
+      if (ids.some((id, index) => !Number.isSafeInteger(id) || id <= (ids[index - 1] ?? lastId))) {
+        throw new BadGatewayException('Azure DevOps returned out-of-order work item IDs');
+      }
+      const imported = await this.importer.importWorkItems(project, ids, credentials, {
+        requestTimeoutMs: AZURE_IMPORT_REQUEST_TIMEOUT_MS,
+        requireAll: Boolean(changedSince),
+      });
+      importedCount += imported.length;
+      if (ids.length < WORK_ITEM_QUERY_PAGE_SIZE) break;
+      lastId = ids[ids.length - 1];
+    }
+
+    // Advance only after all pages are saved. Use the start of the run so changes
+    // arriving during the import are picked up by the next scheduled run.
+    await this.prisma.roadmapProject.updateMany({
+      where: { id: project.id, OR: [{ syncedAt: null }, { syncedAt: { lt: startedAt } }] },
+      data: { syncedAt: startedAt },
+    });
+    return importedCount;
   }
 
   async getProjectPlan(projectId: string, actorId: string) {

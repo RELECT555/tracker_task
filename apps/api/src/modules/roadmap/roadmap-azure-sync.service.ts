@@ -395,7 +395,7 @@ export class RoadmapAzureSyncService {
     const publicSettings = await this.integration.getPublicSettings();
     checks.push(publicSettings.webhookConfigured
       ? { key: 'webhook', label: 'Webhook для факта', status: 'ok', detail: 'Секрет создан. Убедитесь, что подписка в Azure DevOps активна.' }
-      : { key: 'webhook', label: 'Webhook для факта', status: 'warning', detail: 'Не настроен — факт обновляется только кнопкой «Загрузить из Azure»' });
+      : { key: 'webhook', label: 'Webhook для факта', status: 'warning', detail: 'Без webhook задачи и факт обновляются каждые 5 минут. Для обработки удалений подключите webhook.' });
     await this.persistCheckResult(projectId, checks);
     return { checks };
   }

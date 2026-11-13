@@ -134,7 +134,7 @@ export class RoadmapAzureCatalogService {
         roles: [],
         roleSyncWarning: forbidden
           ? 'Azure DevOps не дал доступ к вкладке Roles Estimate. Проверьте права токена на чтение рабочих элементов.'
-          : 'Не удалось прочитать вкладку Roles Estimate. Попробуйте загрузить роли ещё раз.',
+          : 'Не удалось прочитать вкладку Roles Estimate. Загрузите проект ещё раз, чтобы получить роли.',
       };
     }
   }

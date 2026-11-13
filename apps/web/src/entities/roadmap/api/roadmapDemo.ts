@@ -2,7 +2,6 @@ import type {
   AzureProject,
   CreatedAzureWorkItem,
   RoadmapAllocation,
-  RoadmapCatalogSyncResult,
   RoadmapAzurePushPreview,
   RoadmapReadinessCheck,
   RoadmapWriteBackOverview,
@@ -12,6 +11,7 @@ import type {
   RoadmapPerson,
   RoadmapProjectsResult,
   RoadmapProjectPlan,
+  RoadmapProjectSyncResult,
   RoadmapRole,
   RoadmapRoleAssignment,
   RoadmapRoleTemplate,
@@ -23,7 +23,7 @@ import type { SyncSettingsV2 } from '@tracker/shared';
 
 type DemoMethod =
   | 'connection' | 'integrationSettings' | 'saveIntegrationSettings' | 'testIntegrationConnection'
-  | 'projects' | 'syncProject' | 'syncProjectCatalog' | 'plan' | 'people' | 'roles' | 'adminPeople' | 'syncAdminPeople'
+  | 'projects' | 'syncProject' | 'plan' | 'people' | 'roles' | 'adminPeople' | 'syncAdminPeople'
   | 'adminRoles' | 'roleCatalog' | 'createRoleTemplate' | 'addRoleFromCatalog' | 'createRole'
   | 'updateRole' | 'setRoleMembers' | 'setRoleDefaultPerson' | 'deleteRole' | 'saveAllocation'
   | 'saveAllocationQuarter' | 'rebalanceAllocations' | 'saveWriteBackSettings' | 'writeBackOverview' | 'checkWriteBack'
@@ -61,8 +61,7 @@ export const roadmapDemoApi = {
   webhookSecret: () => call<{ secret: string }>('webhookSecret'),
   rotateWebhookSecret: () => call<{ secret: string }>('rotateWebhookSecret'),
   projects: () => call<RoadmapProjectsResult>('projects'),
-  syncProjectCatalog: (project: AzureProject) => call<RoadmapCatalogSyncResult>('syncProjectCatalog', [project]),
-  syncProject: (project: AzureProject) => call<{ projectId: string; importedWorkItems: number }>('syncProject', [project]),
+  syncProject: (project: AzureProject) => call<RoadmapProjectSyncResult>('syncProject', [project]),
   plan: (projectId: string) => call<RoadmapProjectPlan>('plan', [projectId]),
   createWorkItem: (): Promise<CreatedAzureWorkItem> =>
     Promise.reject(new Error('Создание карточек в Azure DevOps недоступно в демо.')),

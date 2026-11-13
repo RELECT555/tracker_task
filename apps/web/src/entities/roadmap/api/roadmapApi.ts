@@ -11,9 +11,10 @@ export interface AzureProject {
   roadmapId?: string;
 }
 
-export interface RoadmapCatalogSyncResult {
+export interface RoadmapProjectSyncResult {
   projectId: string;
-  importedRoles: number;
+  importedWorkItems: number;
+  importedRoles?: number;
   roleSyncWarning?: string;
 }
 
@@ -268,13 +269,8 @@ const liveRoadmapApi = {
   rotateWebhookSecret: () =>
     apiFetch<{ secret: string }>('/roadmap/settings/azure-devops/webhook-secret/rotate', { method: 'POST', body: '{}' }),
   projects: () => apiFetch<RoadmapProjectsResult>('/roadmap/projects'),
-  syncProjectCatalog: (project: AzureProject) =>
-    apiFetch<RoadmapCatalogSyncResult>(`/roadmap/projects/${encodeURIComponent(project.id)}/sync-catalog`, {
-      method: 'POST',
-      body: '{}',
-    }),
   syncProject: (project: AzureProject) =>
-    apiFetch<{ projectId: string; importedWorkItems: number; importedRoles?: number; roleSyncWarning?: string }>(
+    apiFetch<RoadmapProjectSyncResult>(
       `/roadmap/projects/${encodeURIComponent(project.id)}/sync`,
       {
         method: 'POST',

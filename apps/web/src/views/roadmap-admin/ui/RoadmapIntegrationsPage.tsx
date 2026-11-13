@@ -12,7 +12,6 @@ import { AzureSyncGuide } from './integrations/AzureSyncGuide';
 import { FaqAccordion } from './integrations/faq';
 import { FieldMappingPanel } from './integrations/FieldMappingPanel';
 import { errorText, integrationColors } from './integrations/parts';
-import { ProjectCatalogPanel } from './integrations/ProjectCatalogPanel';
 import { SyncProjectsPanel } from './integrations/SyncProjectsPanel';
 import { WebhookPanel } from './integrations/WebhookPanel';
 import { WriteBackSettingsPanel } from './integrations/WriteBackSettingsPanel';
@@ -94,7 +93,7 @@ export function RoadmapIntegrationsPage() {
     if (!heading) return;
     heading.focus();
     setFocusProjects(false);
-  }, [configured, focusProjects, section]);
+  }, [configured, focusProjects, section, overviewReady]);
 
   const loadingOverview = needsOverview && overviewQuery.isLoading;
   const overviewFeedback = loadingOverview
@@ -163,7 +162,6 @@ export function RoadmapIntegrationsPage() {
 
       {settings && (configured || section === 'azure-help') ? (
         <div id={section} ref={contentRef} tabIndex={-1} className="scroll-mt-4 space-y-4 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
-          {section === 'azure-projects' ? <ProjectCatalogPanel /> : null}
           {overviewFeedback}
           {section === 'azure-projects' && overview ? <SyncProjectsPanel overview={overview} /> : null}
           {configured && overview && (visitedEditors.writeBack || section === 'azure-write-back') ? (
