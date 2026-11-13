@@ -36,6 +36,7 @@ const NAME_COLUMN_MIN_WIDTH = 280;
 const NAME_COLUMN_MAX_WIDTH = 900;
 const DEFAULT_NAME_COLUMN_WIDTH = 440;
 const PLAN_REFRESH_INTERVAL = 60_000;
+const FEATURE_COUNT_PLURALS = new Intl.PluralRules('ru-RU');
 // Monthly (period) planning is temporarily disabled; stored month values are kept untouched.
 const PERIOD_PLANNING_ENABLED = false;
 
@@ -934,27 +935,49 @@ export function RoadmapPage() {
     const itemHours = itemAllocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0);
     const actualHours = selectedMonth ? item.actualHours : Number(item.actualHours ?? 0);
     const actualByRole = roleFact?.byItem.get(item.id);
+    const featureCountForm = isEpic ? FEATURE_COUNT_PLURALS.select(childCount) : null;
     return (
       <tr key={item.id} className={`group/row align-top transition-colors ${isEpic ? 'border-t border-border bg-muted/30 hover:bg-muted/45' : 'border-t border-border/50 hover:bg-muted/15'}`}>
         <th scope="row" className={`py-2 text-left font-normal ${isEpic ? 'border-l-2 border-l-primary/40 px-3 sm:px-4' : isChild ? 'px-0' : 'px-3 sm:px-4'}`}>
-          <div className={isEpic
-            ? 'font-semibold text-foreground'
-            : isChild
+          {isEpic ? (
+            <div className="-ml-1 grid grid-cols-[1.75rem_1rem_minmax(0,1fr)] items-start gap-x-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-expanded={!collapsed}
+                aria-label={`${collapsed ? 'Развернуть' : 'Свернуть'} эпик ${item.title}`}
+                disabled={!childCount}
+                onClick={onToggle}
+                className="-mt-1 size-7 text-muted-foreground hover:text-foreground focus-visible:ring-ring motion-reduce:transition-none motion-reduce:active:scale-100"
+              >
+                {collapsed ? <ChevronRight aria-hidden="true" className="size-4" /> : <ChevronDown aria-hidden="true" className="size-4" />}
+              </Button>
+              <AzureWorkItemIcon type={item.type} className="mt-0.5" />
+              <div className="col-start-3 min-w-0">
+                <div className="text-sm leading-5 font-semibold text-foreground [overflow-wrap:anywhere]">{item.title}</div>
+                <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs leading-4 text-muted-foreground">
+                  <span className="min-w-0 tabular-nums [overflow-wrap:anywhere]">Epic #{item.externalId}{item.state ? ` · ${item.state}` : ''}</span>
+                  <span className="rounded bg-muted/70 px-1.5 whitespace-nowrap font-medium tabular-nums">
+                    {childCount} {featureCountForm === 'one' ? 'фича' : featureCountForm === 'few' ? 'фичи' : 'фич'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className={isChild
               ? `relative pl-7 before:absolute before:left-2 before:top-[-8px] before:border-l-2 before:border-border/80 after:absolute after:left-2 after:top-3 after:w-5 after:border-t-2 after:border-border/80 ${isLastChild ? 'before:h-5' : 'before:bottom-[-8px]'}`
               : 'pl-3'}>
-            <div className="flex items-center gap-2">
-              {isEpic ? <button type="button" aria-expanded={!collapsed} aria-label={`${collapsed ? 'Развернуть' : 'Свернуть'} эпик ${item.title}`} disabled={!childCount} onClick={onToggle} className="-ml-1 inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-50">{collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button> : null}
-              <div className="flex min-w-0 flex-1 items-start gap-2">
+              <div className="flex min-w-0 items-start gap-2">
                 <AzureWorkItemIcon type={item.type} className="mt-0.5" />
-                <span className={`min-w-0 [overflow-wrap:anywhere] leading-snug ${isEpic ? 'text-[15px]' : 'text-sm'}`}>{item.title}</span>
+                <span className="min-w-0 text-sm leading-snug [overflow-wrap:anywhere]">{item.title}</span>
               </div>
-              {isEpic ? <span className="hidden shrink-0 rounded-full border border-border/80 bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline">{childCount} фич</span> : null}
+              <p className="mt-0.5 pl-6 text-[11px] text-muted-foreground">
+                <span className="mr-1">Feature</span>
+                #{item.externalId}{item.state ? ` · ${item.state}` : ''}
+              </p>
             </div>
-            <p className={`mt-0.5 text-[11px] text-muted-foreground ${isEpic ? 'pl-14' : 'pl-6'}`}>
-              <span className={isEpic ? 'mr-1 font-medium' : 'mr-1'}>{isEpic ? 'Epic' : 'Feature'}</span>
-              #{item.externalId}{item.state ? ` · ${item.state}` : ''}
-            </p>
-          </div>
+          )}
         </th>
         <td className={`whitespace-nowrap border-l border-border/60 px-3 py-2.5 text-right text-sm tabular-nums ${itemHours ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>
           {displayHours(itemHours)}
