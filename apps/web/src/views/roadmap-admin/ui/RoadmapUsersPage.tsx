@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, Search, Users, X } from 'lucide-react';
 import { roadmapApi, type RoadmapPerson } from '@/entities/roadmap/api/roadmapApi';
@@ -76,21 +77,59 @@ function UserRoles({ person }: { person: RoadmapPerson }) {
   );
 }
 
+function UserAvatar({ person }: { person: RoadmapPerson }) {
+  const element = useRef<HTMLSpanElement>(null);
+  const [visible, setVisible] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string>();
+  const { data } = useQuery({
+    queryKey: ['roadmap', 'admin', 'user-avatar', person.id],
+    queryFn: ({ signal }) => roadmapApi.adminPersonAvatar(person.id, signal),
+    enabled: visible && !person.isMock,
+    staleTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (visible || person.isMock || !element.current) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      setVisible(true);
+      observer.disconnect();
+    });
+    observer.observe(element.current);
+    return () => observer.disconnect();
+  }, [visible, person.isMock]);
+
+  const src = data?.avatar;
+  return (
+    <span
+      ref={element}
+      aria-hidden="true"
+      className={cn(
+        'relative flex size-9 shrink-0 select-none items-center justify-center overflow-hidden rounded-full text-xs font-semibold sm:size-10',
+        person.isActive !== false ? 'bg-status-progress-bg text-status-progress-fg' : 'bg-muted text-muted-foreground',
+      )}
+    >
+      {personInitials(person.name)}
+      {src && src !== failedSrc ? (
+        <Image src={src} alt="" unoptimized width={44} height={44} className="absolute inset-0 size-full object-cover" onError={() => setFailedSrc(src)} />
+      ) : null}
+    </span>
+  );
+}
+
 function UserRow({ person }: { person: RoadmapPerson }) {
   const active = person.isActive !== false;
 
   return (
     <li className={cn('grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-2.5 px-3 py-3 hover:bg-muted/20 sm:px-5 @min-[42rem]:items-center @min-[42rem]:py-3.5', directoryColumns)}>
       <div className="flex min-w-0 items-start gap-2.5 sm:gap-3">
-        <span
-          aria-hidden="true"
-          className={cn(
-            'flex size-9 shrink-0 select-none items-center justify-center rounded-full text-xs font-semibold sm:size-10',
-            active ? 'bg-status-progress-bg text-status-progress-fg' : 'bg-muted text-muted-foreground',
-          )}
-        >
-          {personInitials(person.name)}
-        </span>
+        <UserAvatar person={person} />
         <div className="min-w-0 self-center">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <p className="min-w-0 text-sm font-semibold wrap-anywhere">{person.name}</p>
@@ -139,6 +178,7 @@ export function RoadmapUsersPage() {
     onSuccess: async () => {
       await Promise.all([
         client.invalidateQueries({ queryKey: ['roadmap', 'admin', 'users'] }),
+        client.invalidateQueries({ queryKey: ['roadmap', 'admin', 'user-avatar'] }),
         client.invalidateQueries({ queryKey: ['roadmap', 'people'] }),
         client.invalidateQueries({ queryKey: ['roadmap', 'roles'] }),
       ]);
