@@ -1,16 +1,34 @@
 import {
   evaluateWriteRules,
   migrateWriteBackSettingsV1,
+  normalizeSyncSettings,
   renderSyncTags,
   renderSyncTemplate,
   type TemplateContext,
 } from '@tracker/shared';
+import { mergeBasicWriteBackSettings, normalizeWriteBackSettings } from './roadmap-write-back.settings';
 
 const context: TemplateContext & { estimate: number; remaining: number; assignee: string } = {
   role: 'Backend', title: 'Заявки', quarterKey: '2026-Q4', person: 'Иван Петров', personEmail: 'ivan@example.test', id: '42', estimate: 40, remaining: 24, assignee: 'ivan@example.test',
 };
 
 describe('roadmap sync shared settings', () => {
+  it('preserves advanced rules and policy when the basic form changes the mode', () => {
+    const current = normalizeSyncSettings({
+      version: 2,
+      conflictPolicy: 'stop',
+      pushPermission: 'admins',
+      writeRules: [
+        { id: 'custom', targetField: 'Custom.Activity', source: { kind: 'constant', value: 'Development' }, apply: 'always', enabled: true },
+      ],
+    });
+    const next = mergeBasicWriteBackSettings(current, {
+      ...normalizeWriteBackSettings(current),
+      mode: 'manual',
+    });
+    expect(next).toEqual({ ...current, mode: 'manual' });
+  });
+
   it('migrates v1 fields to equivalent v2 rules', () => {
     const settings = migrateWriteBackSettingsV1({ fields: { assignedTo: true, originalEstimate: true, remainingWork: true, iteration: true, areaPath: true, description: true } });
     expect(settings.version).toBe(2);

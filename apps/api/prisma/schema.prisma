@@ -385,6 +385,7 @@ model RoadmapProject {
   createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz()
   workItems  RoadmapWorkItem[]
+  createRequests RoadmapWorkItemCreateRequest[]
   roles      RoadmapRole[]
   azureState RoadmapAzureProjectState?
 
@@ -424,9 +425,27 @@ model RoadmapWorkItem {
   @@map("roadmap_work_items")
 }
 
+model RoadmapWorkItemCreateRequest {
+  requestId   String         @id @map("request_id") @db.Uuid
+  projectId   String         @map("project_id") @db.Uuid
+  payloadHash String         @map("payload_hash") @db.VarChar(64)
+  type        String         @db.VarChar(10)
+  status      String         @db.VarChar(20)
+  azureOrganization String?  @map("azure_organization") @db.VarChar(255)
+  azureId     String?        @map("azure_id") @db.VarChar(100)
+  azureTitle  String?        @map("azure_title") @db.VarChar(255)
+  azureState  String?        @map("azure_state") @db.VarChar(100)
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz()
+  project     RoadmapProject @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  @@index([projectId, type, status])
+  @@map("roadmap_work_item_create_requests")
+}
+
 model RoadmapRole {
   id                      String              @id @default(uuid()) @db.Uuid
   projectId               String?             @map("project_id") @db.Uuid
+  azureEstimateField      String?             @map("azure_estimate_field") @db.VarChar(255)
   defaultPersonExternalId String?             @map("default_person_external_id") @db.VarChar(255)
   name                    String              @db.VarChar(100)
   color                   String              @default("#6366f1") @db.VarChar(20)
@@ -438,6 +457,7 @@ model RoadmapRole {
   members                 RoadmapRoleMember[]
 
   @@unique([projectId, name])
+  @@unique([projectId, azureEstimateField])
   @@map("roadmap_roles")
 }
 
@@ -452,8 +472,13 @@ model RoadmapAllocation {
   estimatedHours   Decimal                   @map("estimated_hours") @db.Decimal(10, 2)
   /// Azure DevOps Task that mirrors this allocation; Roadmap creates and updates it.
   azureTaskId      String?                   @map("azure_task_id") @db.VarChar(100)
-  /// null = never sent, pending | synced | error | skipped.
+  /// null = never sent, pending | sending | synced | error | skipped.
   azureSyncStatus  String?                   @map("azure_sync_status") @db.VarChar(20)
+  azureSyncClaimId String?                   @map("azure_sync_claim_id") @db.Uuid
+  azureSyncClaimedAt DateTime?                @map("azure_sync_claimed_at") @db.Timestamptz()
+  azureSyncRequested Boolean                 @default(false) @map("azure_sync_requested")
+  azureCreateAttemptId String?               @map("azure_create_attempt_id") @db.Uuid
+  azureCreateOrganization String?            @map("azure_create_organization") @db.VarChar(255)
   azureSyncError   String?                   @map("azure_sync_error") @db.VarChar(1000)
   azureSyncedAt    DateTime?                 @map("azure_synced_at") @db.Timestamptz()
   /// Estimate last written to the Azure DevOps Task, used to detect plan changes.
@@ -466,6 +491,7 @@ model RoadmapAllocation {
   @@unique([workItemId, roleId, personExternalId, quarterKey], map: "roadmap_allocations_person_quarter_key")
   @@index([workItemId])
   @@index([azureSyncStatus])
+  @@index([azureSyncClaimedAt])
   @@index([azureTaskId])
   @@map("roadmap_allocations")
 }

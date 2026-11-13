@@ -8,7 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { normalizeSyncSettings, syncSettingsV2Schema, type SyncSettingsV2 } from '@tracker/shared';
-import { normalizeWriteBackSettings, WriteBackSettings } from './roadmap-write-back.settings';
+import { mergeBasicWriteBackSettings, normalizeWriteBackSettings, WriteBackSettings } from './roadmap-write-back.settings';
 
 export interface AzureDevOpsCredentials {
   organizationUrl: string;
@@ -32,7 +32,7 @@ export const AZURE_WEBHOOK_SECRET_HEADER = 'x-roadmap-webhook-secret';
 /** Azure DevOps answered with a non-success HTTP status. */
 export class AzureDevOpsHttpError extends BadGatewayException {
   constructor(readonly httpStatus: number, details: string) {
-    super(`Azure DevOps returned ${status}: ${details.slice(0, 500)}`);
+    super(`Azure DevOps returned ${httpStatus}: ${details.slice(0, 500)}`);
   }
 }
 
@@ -100,7 +100,11 @@ export class RoadmapIntegrationService {
     const stored = await this.readStoredSettings();
     const { writeBackEnabled: _legacy, ...rest } = stored ?? {};
     void _legacy;
-    await this.writeStoredSettings({ ...rest, writeBack: normalizeWriteBackSettings(input) });
+    const writeBack = mergeBasicWriteBackSettings(
+      normalizeSyncSettings(stored?.writeBack, stored?.writeBackEnabled),
+      input,
+    );
+    await this.writeStoredSettings({ ...rest, writeBack });
     return this.getPublicSettings();
   }
 

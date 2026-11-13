@@ -1,10 +1,13 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { evaluateWriteRules, type TemplateContext } from '@tracker/shared';
+import { IsActiveAdminHandler } from '../identity/application/queries/is-active-admin.handler';
 import { AzureDevOpsCredentials, AzureDevOpsHttpError, RoadmapIntegrationService } from './roadmap-integration.service';
 import { AzureWorkItem, RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
+import { azureOrganizationName } from './roadmap-work-item-create.service';
 import {
   quarterLabel,
   renderWriteBackTags,
@@ -54,6 +57,10 @@ export type AzureWebhookPayload = {
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const WEBHOOK_DEBOUNCE_MS = 1500;
+const SYNC_CLAIM_MS = 5 * 60_000;
+const SYNC_REQUEST_TIMEOUT_MS = 30_000;
+const CREATE_REJECTIONS = new Set([400, 401, 403, 404, 405, 415, 422, 429]);
+const UNKNOWN_CREATE = 'Azure DevOps не подтвердил создание задачи. Повторная отправка проверит, появилась ли задача.';
 const ORIGINAL_ESTIMATE = 'Microsoft.VSTS.Scheduling.OriginalEstimate';
 const REMAINING_WORK = 'Microsoft.VSTS.Scheduling.RemainingWork';
 const COMPLETED_WORK = 'Microsoft.VSTS.Scheduling.CompletedWork';
@@ -80,6 +87,7 @@ export class RoadmapAzureSyncService {
     private readonly prisma: PrismaService,
     private readonly integration: RoadmapIntegrationService,
     private readonly importer: RoadmapWorkItemImportService,
+    private readonly isActiveAdmin: IsActiveAdminHandler,
   ) {}
 
   /** Status written by plan edits: the allocation must be sent to Azure DevOps again. */
@@ -92,8 +100,8 @@ export class RoadmapAzureSyncService {
   }
 
   /** Sends every assignment of the project that is not synced yet, or only the selected ones. */
-  async pushProject(projectId: string, allocationIds?: string[]) {
-    const settings = await this.assertWriteBackEnabled();
+  async pushProject(actorId: string, projectId: string, allocationIds?: string[]) {
+    const settings = await this.assertWriteBackEnabled(actorId);
     this.assertProjectAllowed(settings, projectId);
     const allocations = await this.prisma.roadmapAllocation.findMany({
       where: {
@@ -106,25 +114,33 @@ export class RoadmapAzureSyncService {
     });
     const ids = allocations.map((allocation) => allocation.id);
     if (ids.length) {
-      await this.prisma.roadmapAllocation.updateMany({ where: { id: { in: ids } }, data: this.pendingUpdate });
+      const result = await this.prisma.roadmapAllocation.updateMany({
+        where: { id: { in: ids }, azureSyncClaimId: null },
+        data: { ...this.pendingUpdate, azureSyncRequested: true },
+      });
       this.enqueue(ids);
+      return { queued: result.count };
     }
-    return { queued: ids.length };
+    return { queued: 0 };
   }
 
-  async pushAllocation(allocationId: string) {
-    const settings = await this.assertWriteBackEnabled();
+  async pushAllocation(actorId: string, allocationId: string) {
+    const settings = await this.assertWriteBackEnabled(actorId);
     const allocation = await this.prisma.roadmapAllocation.findUnique({ where: { id: allocationId }, select: { workItem: { select: { projectId: true } } } });
     if (!allocation) throw new NotFoundException('Roadmap allocation was not found');
     this.assertProjectAllowed(settings, allocation.workItem.projectId);
-    await this.prisma.roadmapAllocation.update({ where: { id: allocationId }, data: this.pendingUpdate });
-    this.enqueue([allocationId]);
-    return { queued: 1 };
+    const result = await this.prisma.roadmapAllocation.updateMany({
+      where: { id: allocationId, azureSyncClaimId: null },
+      data: { ...this.pendingUpdate, azureSyncRequested: true },
+    });
+    if (result.count) this.enqueue([allocationId]);
+    return { queued: result.count };
   }
 
   /** What "Send to Azure" would do, computed locally without calling Azure DevOps. */
-  async previewProject(projectId: string) {
+  async previewProject(actorId: string, projectId: string) {
     const settings = await this.integration.getWriteBackSettings();
+    await this.assertCanManuallyPush(actorId, settings);
     const allocations = await this.prisma.roadmapAllocation.findMany({
       where: { workItem: { projectId }, OR: [{ azureSyncStatus: null }, { azureSyncStatus: { not: 'synced' } }] },
       include: allocationContext,
@@ -137,6 +153,7 @@ export class RoadmapAzureSyncService {
       const assignee = person?.email ?? allocation.personEmail;
       const skipReason = !projectAllowed ? 'Проект не включён в запись плана'
         : person?.isMock ? 'Демо-участник'
+          : allocation.azureSyncClaimId ? 'Назначение уже отправляется'
           : !assignee ? 'Нет email у участника'
             : null;
       return {
@@ -149,7 +166,7 @@ export class RoadmapAzureSyncService {
         quarterKey: allocation.quarterKey,
         estimatedHours: Number(allocation.estimatedHours),
         pushedHours: allocation.azurePushedHours === null ? null : Number(allocation.azurePushedHours),
-        action: skipReason ? 'skip' : allocation.azureTaskId ? 'update' : 'create',
+        action: skipReason ? 'skip' : allocation.azureTaskId || allocation.azureCreateAttemptId ? 'update' : 'create',
         skipReason,
         taskTitle: allocation.azureTaskId ? null : renderWriteBackTemplate(settings.titleTemplate, this.templateValues(allocation)),
         azureTaskId: allocation.azureTaskId,
@@ -383,14 +400,23 @@ export class RoadmapAzureSyncService {
     return { checks };
   }
 
-  /** Picks up allocations left pending by a restart in automatic mode. */
+  /** Recovers expired claims and durable manual requests after a restart. */
   @Interval(60_000)
   async recoverPending() {
     const settings = await this.integration.getWriteBackSettings().catch(() => null);
-    if (settings?.mode !== 'auto') return;
+    if (!settings || settings.mode === 'off') return;
+    await this.prisma.roadmapAllocation.updateMany({
+      where: { azureSyncClaimedAt: { lt: new Date(Date.now() - SYNC_CLAIM_MS) } },
+      data: { ...this.pendingUpdate, azureSyncClaimId: null, azureSyncClaimedAt: null, azureSyncRequested: true },
+    });
     const pending = await this.prisma.roadmapAllocation.findMany({
-      where: { azureSyncStatus: 'pending' },
+      where: {
+        azureSyncStatus: 'pending',
+        azureSyncClaimId: null,
+        ...(settings.mode === 'manual' ? { azureSyncRequested: true } : {}),
+      },
       select: { id: true },
+      orderBy: { updatedAt: 'asc' },
       take: 500,
     });
     if (pending.length) this.enqueue(pending.map((allocation) => allocation.id));
@@ -470,62 +496,138 @@ export class RoadmapAzureSyncService {
   private async syncAllocation(id: string) {
     const settings = await this.integration.getWriteBackSettings();
     if (settings.mode === 'off') return;
+    const claimId = randomUUID();
+    const claim = await this.prisma.roadmapAllocation.updateMany({
+      where: {
+        id,
+        azureSyncStatus: 'pending',
+        azureSyncClaimId: null,
+        ...(settings.mode === 'manual' ? { azureSyncRequested: true } : {}),
+      },
+      data: { azureSyncStatus: 'sending', azureSyncClaimId: claimId, azureSyncClaimedAt: new Date() },
+    });
+    if (!claim.count) return;
     const allocation = await this.prisma.roadmapAllocation.findUnique({ where: { id }, include: allocationContext });
-    if (!allocation || allocation.azureSyncStatus !== 'pending') return;
-    const snapshot = allocation.updatedAt;
-    const person = await this.prisma.roadmapPerson.findUnique({ where: { externalId: allocation.personExternalId } });
-
+    if (!allocation || allocation.azureSyncClaimId !== claimId) return;
     let taskId = allocation.azureTaskId;
+    const owned = { id, azureSyncClaimId: claimId };
+    const release = { azureSyncClaimId: null, azureSyncClaimedAt: null };
     const finish = async (data: Prisma.RoadmapAllocationUpdateManyMutationInput) => {
-      const result = await this.prisma.roadmapAllocation.updateMany({ where: { id, updatedAt: snapshot }, data: { azureTaskId: taskId, ...data } });
+      const result = await this.prisma.roadmapAllocation.updateMany({
+        where: { ...owned, azureSyncStatus: 'sending' },
+        data: { ...release, azureSyncRequested: false, ...data },
+      });
       if (!result.count) {
-        // The plan changed while we were talking to Azure DevOps: keep the task link and send again.
-        await this.prisma.roadmapAllocation.updateMany({ where: { id }, data: { azureTaskId: taskId } });
-        this.enqueue([id]);
+        // A plan edit changed the row while this worker held the claim.
+        const released = await this.prisma.roadmapAllocation.updateMany({ where: owned, data: release });
+        if (released.count) this.enqueue([id]);
       }
     };
 
-    if (settings.projectIds && !settings.projectIds.includes(allocation.workItem.projectId)) {
-      await finish({ azureSyncStatus: 'skipped', azureSyncError: 'Проект не включён в запись плана в настройках интеграции' });
-      return;
-    }
-    if (person?.isMock) {
-      await finish({ azureSyncStatus: 'skipped', azureSyncError: 'Демо-участник не передаётся в Azure DevOps' });
-      return;
-    }
-    const assignee = person?.email ?? allocation.personEmail;
-    if (!assignee) {
-      await finish({ azureSyncStatus: 'error', azureSyncError: 'У участника нет email или учётной записи Azure DevOps' });
-      return;
-    }
-
     try {
+      if (settings.projectIds && !settings.projectIds.includes(allocation.workItem.projectId)) {
+        await finish({ azureSyncStatus: 'skipped', azureSyncError: 'Проект не включён в запись плана в настройках интеграции' });
+        return;
+      }
+      const person = await this.prisma.roadmapPerson.findUnique({ where: { externalId: allocation.personExternalId } });
+      if (person?.isMock) {
+        await finish({ azureSyncStatus: 'skipped', azureSyncError: 'Демо-участник не передаётся в Azure DevOps' });
+        return;
+      }
+      const assignee = person?.email ?? allocation.personEmail;
+      if (!assignee) {
+        await finish({ azureSyncStatus: 'error', azureSyncError: 'У участника нет email или учётной записи Azure DevOps' });
+        return;
+      }
       const credentials = await this.integration.getCredentials();
       const project = allocation.workItem.project;
       const estimate = Number(allocation.estimatedHours);
-      const estimateChanged = allocation.azurePushedHours === null || Number(allocation.azurePushedHours) !== estimate;
+      const estimateChanged = Boolean(allocation.azureCreateAttemptId)
+        || allocation.azurePushedHours === null || Number(allocation.azurePushedHours) !== estimate;
+      let existing: AzureWorkItem | null = null;
 
-      const existing = taskId ? await this.fetchTask(taskId, credentials) : null;
+      if (allocation.azureCreateAttemptId) {
+        const organization = azureOrganizationName(credentials.organizationUrl);
+        if (!organization || organization !== allocation.azureCreateOrganization) throw new Error(UNKNOWN_CREATE);
+        const recovered = await this.findCreatedAllocationTask(project.externalId, allocation.azureCreateAttemptId, credentials);
+        existing = await this.fetchTask(String(recovered), credentials);
+        if (!existing) throw new Error(UNKNOWN_CREATE);
+        taskId = String(existing.id);
+      } else if (taskId) {
+        existing = await this.fetchTask(taskId, credentials);
+      }
       if (existing) {
         const existingType = existing.fields['System.WorkItemType'];
         const typeName = typeof existingType === 'string' ? existingType : settings.workItemType;
         const typeFields = await this.typeFields(project.externalId, typeName, credentials);
         await this.updateTask(existing, { allocation, assignee, estimate, estimateChanged, settings, typeFields }, credentials);
       } else {
+        const organization = azureOrganizationName(credentials.organizationUrl);
+        if (!organization) throw new Error('Не удалось определить организацию Azure DevOps.');
         const typeFields = await this.typeFields(project.externalId, settings.workItemType, credentials);
-        const operations = await this.createOperations(allocation, assignee, settings, typeFields, credentials);
-        const created = await this.integration.requestJson<AzureWorkItem>(
-          `${credentials.organizationUrl}/${encodeURIComponent(project.externalId)}/_apis/wit/workitems/$${encodeURIComponent(settings.workItemType)}?api-version=${this.apiVersion}`,
-          { method: 'POST', body: JSON.stringify(operations), headers: { 'Content-Type': 'application/json-patch+json' } },
-          credentials,
-        );
-        taskId = String(created.id);
+        const operations = await this.createOperations(allocation, assignee, settings, typeFields, credentials, claimId);
+        // Record the attempt before POST so a lost response cannot trigger a second create.
+        const recorded = await this.prisma.roadmapAllocation.updateMany({
+          where: { ...owned, azureSyncStatus: 'sending', azureCreateAttemptId: null },
+          data: { azureCreateAttemptId: claimId, azureCreateOrganization: organization },
+        });
+        if (!recorded.count) {
+          await finish({ azureSyncStatus: 'error', azureSyncError: 'Назначение изменилось во время отправки.' });
+          return;
+        }
+        try {
+          const created = await this.integration.requestJson<AzureWorkItem>(
+            `${credentials.organizationUrl}/${encodeURIComponent(project.externalId)}/_apis/wit/workitems/$${encodeURIComponent(settings.workItemType)}?api-version=${this.apiVersion}`,
+            { method: 'POST', body: JSON.stringify(operations), headers: { 'Content-Type': 'application/json-patch+json' }, signal: AbortSignal.timeout(SYNC_REQUEST_TIMEOUT_MS) },
+            credentials,
+          );
+          if (!Number.isSafeInteger(created?.id) || created.id <= 0) throw new Error(UNKNOWN_CREATE);
+          taskId = String(created.id);
+        } catch (error) {
+          if (!(error instanceof AzureDevOpsHttpError) || !CREATE_REJECTIONS.has(error.httpStatus)) throw new Error(UNKNOWN_CREATE);
+          await this.prisma.roadmapAllocation.updateMany({
+            where: owned,
+            data: { azureCreateAttemptId: null, azureCreateOrganization: null },
+          });
+          throw error;
+        }
+      }
+      if (allocation.azureCreateAttemptId || taskId !== allocation.azureTaskId) {
+        const linked = await this.prisma.roadmapAllocation.updateMany({
+          where: { ...owned, azureTaskId: allocation.azureTaskId },
+          data: { azureTaskId: taskId, azureCreateAttemptId: null, azureCreateOrganization: null, azurePushedHours: null },
+        });
+        if (!linked.count) {
+          await finish({ azureSyncStatus: 'error', azureSyncError: 'Связь с задачей Azure DevOps изменилась во время отправки.' });
+          return;
+        }
       }
       await this.importer.importWorkItems(project, [Number(taskId)], credentials);
       await finish({ azureSyncStatus: 'synced', azureSyncError: null, azureSyncedAt: new Date(), azurePushedHours: estimate });
     } catch (error) {
-      await finish({ azureSyncStatus: 'error', azureSyncError: this.message(error).slice(0, 1000) });
+      await finish({
+        azureSyncStatus: 'error',
+        azureSyncError: this.message(error).slice(0, 1000),
+      });
     }
+  }
+
+  private async findCreatedAllocationTask(projectExternalId: string, attemptId: string, credentials: AzureDevOpsCredentials) {
+    const result = await this.integration.requestJson<{ workItems: { id: number }[] }>(
+      `${credentials.organizationUrl}/${encodeURIComponent(projectExternalId)}/_apis/wit/wiql?$top=2&api-version=${this.apiVersion}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.Tags] CONTAINS '${this.createAttemptTag(attemptId)}'` }),
+        signal: AbortSignal.timeout(SYNC_REQUEST_TIMEOUT_MS),
+      },
+      credentials,
+    );
+    if (result.workItems.length !== 1) throw new Error(UNKNOWN_CREATE);
+    return result.workItems[0].id;
+  }
+
+  private createAttemptTag(attemptId: string) {
+    return `Roadmap-Create-${attemptId}`;
   }
 
   private async createOperations(
@@ -534,6 +636,7 @@ export class RoadmapAzureSyncService {
     settings: WriteBackSettings,
     typeFields: Set<string>,
     credentials: AzureDevOpsCredentials,
+    attemptId?: string,
   ) {
     const { workItem, role } = allocation;
     const project = workItem.project;
@@ -547,8 +650,8 @@ export class RoadmapAzureSyncService {
       },
       ...this.estimateOperations(Number(allocation.estimatedHours), 0, settings, typeFields, true),
     ];
-    const tags = renderWriteBackTags(settings.tagsTemplate, values);
-    if (tags) operations.push({ op: 'add', path: '/fields/System.Tags', value: tags });
+    const tags = [...renderWriteBackTags(settings.tagsTemplate, values), ...(attemptId ? [this.createAttemptTag(attemptId)] : [])];
+    if (tags.length) operations.push({ op: 'add', path: '/fields/System.Tags', value: tags.join('; ') });
     if (settings.fields.assignedTo) operations.push({ op: 'add', path: '/fields/System.AssignedTo', value: assignee });
     if (settings.fields.description) {
       operations.push({
@@ -572,7 +675,7 @@ export class RoadmapAzureSyncService {
       const iteration = await this.quarterIterationPath(project.externalId, allocation.quarterKey, credentials);
       if (iteration) { iterationPath = iteration; operations.push({ op: 'add', path: '/fields/System.IterationPath', value: iteration }); }
     }
-    if (settings.writeRules?.length) {
+      if (settings.writeRules?.length) {
       const fieldInfo = new Map([...typeFields].map((referenceName) => [referenceName, { referenceName }]));
       const evaluation = evaluateWriteRules(settings.writeRules, this.templateContext(allocation, assignee, iterationPath), fieldInfo, true);
       for (const [targetField, value] of Object.entries(evaluation.values)) {
@@ -614,6 +717,7 @@ export class RoadmapAzureSyncService {
             method: 'PATCH',
             body: JSON.stringify([{ op: 'test', path: '/rev', value: task.rev }, ...operations]),
             headers: { 'Content-Type': 'application/json-patch+json' },
+            signal: AbortSignal.timeout(SYNC_REQUEST_TIMEOUT_MS),
           },
           credentials,
         );
@@ -666,7 +770,7 @@ export class RoadmapAzureSyncService {
     try {
       return await this.integration.requestJson<AzureWorkItem>(
         `${credentials.organizationUrl}/_apis/wit/workitems/${encodeURIComponent(taskId)}?fields=System.AssignedTo,System.WorkItemType,${COMPLETED_WORK}&api-version=${this.apiVersion}`,
-        undefined,
+        { signal: AbortSignal.timeout(SYNC_REQUEST_TIMEOUT_MS) },
         credentials,
       );
     } catch (error) {
@@ -782,8 +886,21 @@ export class RoadmapAzureSyncService {
     }
   }
 
-  private async assertWriteBackEnabled() {
+  async canManuallyPush(actorId: string, settings: WriteBackSettings): Promise<boolean> {
+    return Boolean(actorId) && (settings.pushPermission !== 'admins' || await this.isActiveAdmin.execute(actorId));
+  }
+
+  private async assertCanManuallyPush(actorId: string, settings: WriteBackSettings) {
+    if (!(await this.canManuallyPush(actorId, settings))) {
+      throw new ForbiddenException({
+        error: { code: 'FORBIDDEN', message: 'Отправка плана в Azure DevOps доступна только администраторам.' },
+      });
+    }
+  }
+
+  private async assertWriteBackEnabled(actorId: string) {
     const settings = await this.integration.getWriteBackSettings();
+    await this.assertCanManuallyPush(actorId, settings);
     if (settings.mode === 'off') {
       throw new BadRequestException('Запись плана в Azure DevOps выключена. Включите её в администрировании Roadmap → Интеграции.');
     }

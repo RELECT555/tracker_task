@@ -1,6 +1,8 @@
 import type {
   AzureProject,
+  CreatedAzureWorkItem,
   RoadmapAllocation,
+  RoadmapCatalogSyncResult,
   RoadmapAzurePushPreview,
   RoadmapReadinessCheck,
   RoadmapWriteBackOverview,
@@ -8,8 +10,11 @@ import type {
   RoadmapIntegrationSettings,
   RoadmapPeriod,
   RoadmapPerson,
+  RoadmapProjectsResult,
   RoadmapProjectPlan,
   RoadmapRole,
+  RoadmapRoleAssignment,
+  RoadmapRoleTemplate,
   RoadmapAzureField,
   RoadmapAzureState,
   RoadmapWorkItemType,
@@ -18,10 +23,10 @@ import type { SyncSettingsV2 } from '@tracker/shared';
 
 type DemoMethod =
   | 'connection' | 'integrationSettings' | 'saveIntegrationSettings' | 'testIntegrationConnection'
-  | 'projects' | 'syncProject' | 'plan' | 'people' | 'roles' | 'adminPeople' | 'syncAdminPeople'
+  | 'projects' | 'syncProject' | 'syncProjectCatalog' | 'plan' | 'people' | 'roles' | 'adminPeople' | 'syncAdminPeople'
   | 'adminRoles' | 'roleCatalog' | 'createRoleTemplate' | 'addRoleFromCatalog' | 'createRole'
   | 'updateRole' | 'setRoleMembers' | 'setRoleDefaultPerson' | 'deleteRole' | 'saveAllocation'
-  | 'saveAllocationQuarter' | 'saveWriteBackSettings' | 'writeBackOverview' | 'checkWriteBack'
+  | 'saveAllocationQuarter' | 'rebalanceAllocations' | 'saveWriteBackSettings' | 'writeBackOverview' | 'checkWriteBack'
   | 'syncSettingsV2' | 'saveSyncSettingsV2' | 'workItemTypes' | 'azureFields' | 'azureStates'
   | 'webhookSecret' | 'rotateWebhookSecret' | 'previewAzurePush' | 'pushProjectToAzure' | 'pushAllocationToAzure';
 
@@ -55,22 +60,26 @@ export const roadmapDemoApi = {
   azureStates: (projectId: string, workItemType: string) => call<RoadmapAzureState[]>('azureStates', [projectId, workItemType]),
   webhookSecret: () => call<{ secret: string }>('webhookSecret'),
   rotateWebhookSecret: () => call<{ secret: string }>('rotateWebhookSecret'),
-  projects: () => call<{ data: AzureProject[]; source: 'cache' }>('projects'),
+  projects: () => call<RoadmapProjectsResult>('projects'),
+  syncProjectCatalog: (project: AzureProject) => call<RoadmapCatalogSyncResult>('syncProjectCatalog', [project]),
   syncProject: (project: AzureProject) => call<{ projectId: string; importedWorkItems: number }>('syncProject', [project]),
   plan: (projectId: string) => call<RoadmapProjectPlan>('plan', [projectId]),
+  createWorkItem: (): Promise<CreatedAzureWorkItem> =>
+    Promise.reject(new Error('Создание карточек в Azure DevOps недоступно в демо.')),
   previewAzurePush: (projectId: string) => call<RoadmapAzurePushPreview>('previewAzurePush', [projectId]),
   pushProjectToAzure: (projectId: string, allocationIds?: string[]) => call<{ queued: number }>('pushProjectToAzure', [projectId, allocationIds]),
   pushAllocationToAzure: (allocationId: string) => call<{ queued: number }>('pushAllocationToAzure', [allocationId]),
   people: () => call<{ data: RoadmapPerson[] }>('people'),
   roles: (projectId: string) => call<RoadmapRole[]>('roles', [projectId]),
   adminPeople: () => call<RoadmapPerson[]>('adminPeople'),
+  adminPersonAvatar: async () => ({ avatar: null }),
   syncAdminPeople: () => call<{ synced: number; ignored: number }>('syncAdminPeople'),
-  adminRoles: (projectId: string) => call<RoadmapRole[]>('adminRoles', [projectId]),
-  roleCatalog: () => call<Pick<RoadmapRole, 'id' | 'name' | 'color' | 'isMock'>[]>('roleCatalog'),
-  createRoleTemplate: (name: string, color?: string) => call<Pick<RoadmapRole, 'id' | 'name' | 'color' | 'isMock'>>('createRoleTemplate', [name, color]),
-  addRoleFromCatalog: (projectId: string, templateId: string) => call<RoadmapRole>('addRoleFromCatalog', [projectId, templateId]),
+  adminRoles: (projectId?: string) => call<RoadmapRole[]>('adminRoles', projectId ? [projectId] : []),
+  roleCatalog: () => call<RoadmapRoleTemplate[]>('roleCatalog'),
+  createRoleTemplate: (name: string, color?: string, assignment?: RoadmapRoleAssignment & { projectId: string }) => call<RoadmapRoleTemplate>('createRoleTemplate', [name, color, assignment]),
+  addRoleFromCatalog: (projectId: string, templateId: string, assignment: RoadmapRoleAssignment = {}) => call<RoadmapRole>('addRoleFromCatalog', [projectId, templateId, assignment]),
   createRole: (projectId: string, name: string, color?: string) => call<RoadmapRole>('createRole', [projectId, name, color]),
-  updateRole: (id: string, input: { name?: string; color?: string }) => call<RoadmapRole>('updateRole', [id, input]),
+  updateRole: (id: string, input: { name?: string; color?: string } & RoadmapRoleAssignment) => call<RoadmapRole>('updateRole', [id, input]),
   setRoleMembers: (id: string, personExternalIds: string[]) => call<RoadmapRole>('setRoleMembers', [id, personExternalIds]),
   setRoleDefaultPerson: (id: string, personExternalId: string | null) => call<RoadmapRole>('setRoleDefaultPerson', [id, personExternalId]),
   deleteRole: (id: string) => call<{ deleted: boolean }>('deleteRole', [id]),
@@ -81,4 +90,5 @@ export const roadmapDemoApi = {
   }) => call<RoadmapAllocation>('saveAllocation', [input]),
   saveAllocationQuarter: (allocationId: string, quarterKey: string, months: { monthKey: string; hours: number }[]) =>
     call<RoadmapPeriod[]>('saveAllocationQuarter', [allocationId, quarterKey, months]),
+  rebalanceAllocations: (allocationIds: string[]) => call<{ updated: number }>('rebalanceAllocations', [allocationIds]),
 };

@@ -133,4 +133,40 @@ export function normalizeSyncWriteBackSettings(stored: unknown, legacyEnabled?: 
   return normalizeSyncSettings(stored, legacyEnabled);
 }
 
+/** Applies the basic settings form without rebuilding the advanced mapping. */
+export function mergeBasicWriteBackSettings(current: SyncSettingsV2, input: WriteBackSettings): SyncSettingsV2 {
+  const previous = normalizeWriteBackSettings(current);
+  const defaults = migrateWriteBackSettingsV1(undefined);
+  const enabledTargets = new Set(migrateWriteBackSettingsV1(input).writeRules.map((rule) => rule.targetField));
+  const previousTargets = new Set(migrateWriteBackSettingsV1(previous).writeRules.map((rule) => rule.targetField));
+  const writeRules = [...current.writeRules];
+
+  for (const defaultRule of defaults.writeRules) {
+    const { targetField } = defaultRule;
+    const enabled = enabledTargets.has(targetField);
+    const enableChanged = enabled !== previousTargets.has(targetField);
+    const policyChanged = targetField === 'Microsoft.VSTS.Scheduling.RemainingWork'
+      && input.remainingWorkPolicy !== previous.remainingWorkPolicy;
+    if (!enableChanged && !policyChanged) continue;
+
+    const apply = input.remainingWorkPolicy === 'create-only' ? 'create' : 'always';
+    let found = false;
+    for (const [index, rule] of writeRules.entries()) {
+      if (rule.targetField !== targetField) continue;
+      found = true;
+      writeRules[index] = {
+        ...rule,
+        enabled: enableChanged ? enabled : rule.enabled,
+        apply: policyChanged ? apply : rule.apply,
+      };
+    }
+    if (!found && enabled) {
+      writeRules.push({ ...defaultRule, apply: policyChanged ? apply : defaultRule.apply });
+    }
+  }
+
+  const { mode, workItemType, titleTemplate, tagsTemplate, projectIds } = input;
+  return { ...current, mode, workItemType, titleTemplate, tagsTemplate, projectIds, writeRules };
+}
+
 export { migrateWriteBackSettingsV1 };

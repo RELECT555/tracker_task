@@ -2,39 +2,41 @@
 
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowDownToLine, ArrowUpFromLine, FolderSync, LoaderCircle, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, FolderSync, LoaderCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { roadmapApi, type RoadmapReadinessCheck, type RoadmapWriteBackOverview } from '@/entities/roadmap/api/roadmapApi';
 import { AzurePushPreview } from '@/entities/roadmap/ui/AzurePushPreview';
 import { Button } from '@/shared/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
-import { CheckStatusIcon, Chip, errorText, MODE_LABEL, Panel } from './parts';
+import { AdminCard } from '../AdminLayout';
+import { CheckStatusIcon, Chip, errorText, integrationColors, MODE_LABEL, Panel } from './parts';
 
 type OverviewProject = RoadmapWriteBackOverview['projects'][number];
 
-export function SyncProjectsPanel({ overview, loading }: { overview?: RoadmapWriteBackOverview; loading: boolean }) {
+export function SyncProjectsPanel({ overview }: { overview: RoadmapWriteBackOverview }) {
   const queryClient = useQueryClient();
   const retryMutation = useMutation({
     mutationFn: roadmapApi.pushAllocationToAzure,
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'write-back-overview'] }),
   });
 
-  if (loading) return <p className="flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="h-4 w-4 animate-spin" />Загружаем статус синхронизации…</p>;
-  if (!overview) return null;
   const projectName = new Map(overview.projects.map((project) => [project.id, project.name]));
 
   return (
     <div className="space-y-5">
-      <Panel
-        title="Проекты"
-        description={`Режим записи: ${MODE_LABEL[overview.settings.mode].toLowerCase()}. Проверьте готовность, посмотрите и отправьте изменения, подтяните факт из Azure.`}
-        icon={<FolderSync className="h-[18px] w-[18px]" strokeWidth={1.7} />}
-      >
+      <div id="azure-task-sync" className="scroll-mt-4">
+      <AdminCard title="Синхронизация задач" titleProps={{ tabIndex: -1 }} description="Загружайте задачи и фактические часы по добавленным проектам."
+        icon={<FolderSync aria-hidden="true" className="size-[18px]" strokeWidth={1.7} />}>
         {overview.projects.length ? <ul className="divide-y divide-border">
           {overview.projects.map((project) => <ProjectRow key={project.id} project={project} writeBackOff={overview.settings.mode === 'off'} />)}
-        </ul> : <p className="px-5 py-8 text-center text-sm text-muted-foreground">Импортируйте проект на странице плана, чтобы настроить синхронизацию.</p>}
-      </Panel>
+        </ul> : <p className="px-4 py-6 text-sm text-muted-foreground sm:px-5">Добавьте проект выше, чтобы загрузить его задачи.</p>}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2.5 text-sm text-muted-foreground sm:px-5">
+          <span>Режим отправки плана · {MODE_LABEL[overview.settings.mode]}</span>
+          <a href="#azure-write-back" className="rounded font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">Настроить запись</a>
+        </div>
+      </AdminCard>
+      </div>
 
-      <Panel title="Ошибки отправки" description={overview.errors.length ? 'Последние назначения, которые Azure DevOps не принял. Исправьте причину и отправьте снова.' : 'Ошибок нет.'}>
+      {overview.errors.length || retryMutation.error ? <Panel title="Ошибки отправки" description="Проверьте причину и повторите отправку назначения.">
         {overview.errors.length ? <ul className="divide-y divide-border/70">
           {overview.errors.map((error) => <li key={error.allocationId} className="flex flex-wrap items-start justify-between gap-3 px-5 py-3 text-sm">
             <div className="min-w-0 flex-1 space-y-0.5">
@@ -48,7 +50,7 @@ export function SyncProjectsPanel({ overview, loading }: { overview?: RoadmapWri
           </li>)}
         </ul> : null}
         {retryMutation.error ? <p role="alert" className="border-t border-border px-5 py-2 text-xs text-destructive">{errorText(retryMutation.error)}</p> : null}
-      </Panel>
+      </Panel> : null}
     </div>
   );
 }
@@ -62,71 +64,91 @@ function ProjectRow({ project, writeBackOff }: { project: OverviewProject; write
 
   const checkMutation = useMutation({
     mutationFn: () => roadmapApi.checkWriteBack(project.id),
-    onSuccess: (result) => setChecks(result.checks),
+    onSuccess: async (result) => {
+      setChecks(result.checks);
+      await queryClient.invalidateQueries({ queryKey: ['roadmap', 'write-back-overview'] });
+    },
   });
   const pullMutation = useMutation({
     mutationFn: () => roadmapApi.syncProject({ id: project.externalId, name: project.name, url: project.url ?? undefined, imported: true, roadmapId: project.id }),
     onSuccess: async (result) => {
-      setNotice(`Загружено из Azure: ${result.importedWorkItems} work items. Факт обновлён.`);
+      setNotice(`Обновлено задач из Azure DevOps: ${result.importedWorkItems}.`);
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['roadmap', 'azure-projects'] }),
+        queryClient.invalidateQueries({ queryKey: ['roadmap', 'admin', 'roles'] }),
+        queryClient.invalidateQueries({ queryKey: ['roadmap', 'roles', project.id] }),
         queryClient.invalidateQueries({ queryKey: ['roadmap', 'write-back-overview'] }),
         queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', project.id] }),
       ]);
     },
   });
-  const error = checkMutation.error ?? pullMutation.error;
+  const writeBackAvailable = !writeBackOff && project.enabled;
+  const actionsBusy = checkMutation.isPending || pullMutation.isPending;
 
   return (
-    <li className="space-y-3 px-5 py-4">
+    <li id={`azure-sync-project-${project.id}`} className="scroll-mt-4 space-y-3 px-4 py-4 sm:px-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1.5">
-          <p className="flex flex-wrap items-center gap-2 font-medium text-foreground">
-            {project.name}
-            {project.enabled ? null : <Chip tone="warn">не включён в запись</Chip>}
+        <div className="min-w-0 max-w-full space-y-1">
+          <h3 tabIndex={-1} className="w-fit wrap-break-word rounded text-sm font-semibold text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{project.name}</h3>
+          <p className="text-xs text-muted-foreground">
+            {project.syncedAt ? `Обновлено ${new Date(project.syncedAt).toLocaleString('ru-RU')}` : 'Задачи ещё не загружены'}
           </p>
-          <div className="flex flex-wrap gap-1.5">
-            <Chip tone="ok" title="Задачи созданы и совпадают с планом">В Azure: {project.counts.synced}</Chip>
+          {project.total > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">
+            {project.counts.synced > 0 ? <Chip tone="ok" title="Задачи созданы и совпадают с планом">В Azure: {project.counts.synced}</Chip> : null}
             {project.counts.pending ? <Chip tone="warn" title="Изменено в Roadmap, ждёт отправки">Ожидает: {project.counts.pending}</Chip> : null}
             {project.counts.sending ? <Chip tone="info" title="Задача обрабатывается очередью">Отправляется: {project.counts.sending}</Chip> : null}
             {project.counts.notSent ? <Chip title="Ни разу не отправлялось">Не отправлено: {project.counts.notSent}</Chip> : null}
             {project.counts.error ? <Chip tone="error">Ошибок: {project.counts.error}</Chip> : null}
             {project.counts.conflict ? <Chip tone="warn" title="Поле изменили вручную в Azure">Конфликтов: {project.counts.conflict}</Chip> : null}
             {project.counts.skipped ? <Chip title="Демо-участники или проект вне записи">Пропущено: {project.counts.skipped}</Chip> : null}
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            Факт загружен: {project.syncedAt ? new Date(project.syncedAt).toLocaleString('ru-RU') : 'ещё нет'}
-            {' · '}План отправлен: {project.lastPushedAt ? new Date(project.lastPushedAt).toLocaleString('ru-RU') : 'ещё нет'}
-            {' · '}Проверка: {project.lastCheckAt ? `${new Date(project.lastCheckAt).toLocaleString('ru-RU')} (${project.lastCheckStatus === 'ok' ? 'в порядке' : project.lastCheckStatus === 'warning' ? 'есть предупреждения' : 'есть ошибки'})` : 'ещё не запускалась'}
-            {' · '}Webhook: {project.lastWebhookAt ? new Date(project.lastWebhookAt).toLocaleString('ru-RU') : 'событий нет'}
-          </p>
+          </div> : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" disabled={checkMutation.isPending} onClick={() => checkMutation.mutate()} title="Проверяет права, тип, поля, итерацию и участников. В Azure ничего не создаётся.">
-            {checkMutation.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}Проверить готовность
+          <Button type="button" variant="outline" size="sm" disabled={actionsBusy} onClick={() => { setNotice(null); checkMutation.reset(); pullMutation.mutate(); }}>
+            {pullMutation.isPending ? <LoaderCircle aria-hidden="true" className="size-4 motion-safe:animate-spin" /> : <ArrowDownToLine aria-hidden="true" className="size-4" />}
+            {pullMutation.isPending ? 'Загружаем…' : project.syncedAt ? 'Обновить задачи из Azure' : 'Загрузить задачи из Azure'}
           </Button>
-          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" disabled={pullMutation.isPending} onClick={() => { setNotice(null); pullMutation.mutate(); }} title="Перечитать work items и Completed Work из Azure DevOps">
-            {pullMutation.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ArrowDownToLine className="h-3.5 w-3.5" />}Загрузить из Azure
-          </Button>
-          <Popover open={previewOpen} onOpenChange={setPreviewOpen}>
+          {writeBackAvailable && toSend > 0 ? <Popover open={previewOpen} onOpenChange={setPreviewOpen}>
             <PopoverTrigger asChild>
-              <Button type="button" size="sm" className="h-8 gap-1.5" disabled={writeBackOff || !project.enabled || !toSend} title={writeBackOff ? 'Включите запись в настройках' : 'Посмотреть, что уйдёт в Azure, и отправить'}>
-                <ArrowUpFromLine className="h-3.5 w-3.5" />Отправить в Azure{toSend ? ` (${toSend})` : ''}
+              <Button type="button" size="sm" disabled={actionsBusy}>
+                <ArrowUpFromLine aria-hidden="true" className="size-4" />Отправить в Azure ({toSend})
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-xl p-0">
+            <PopoverContent align="end" side="bottom" sideOffset={8} collisionPadding={16} className={`w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-xl p-0 ${integrationColors}`}>
               {previewOpen ? <AzurePushPreview projectId={project.id} onDone={(queued) => { setPreviewOpen(false); setNotice(`Отправка запущена: ${queued}. Статусы обновятся автоматически.`); }} /> : null}
             </PopoverContent>
-          </Popover>
+          </Popover> : null}
         </div>
       </div>
-      {notice ? <p role="status" className="text-xs text-emerald-700 dark:text-emerald-300">{notice}</p> : null}
-      {error ? <p role="alert" className="text-xs text-destructive">{errorText(error)}</p> : null}
-      {checks ? <ul className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
-        {checks.map((check) => <li key={check.key} className="flex items-start gap-2 text-sm">
-          <CheckStatusIcon status={check.status} />
-          <span className="min-w-0"><span className="font-medium text-foreground">{check.label}.</span> <span className="break-words text-muted-foreground">{check.detail}</span></span>
-        </li>)}
-      </ul> : null}
+      {notice ? <p role="status" className="text-sm text-emerald-700 dark:text-emerald-300">{notice}</p> : null}
+      {pullMutation.data?.roleSyncWarning ? <p role="status" className="text-sm text-amber-800 dark:text-amber-200">{pullMutation.data.roleSyncWarning}</p> : null}
+      {pullMutation.error ? <p role="alert" className="text-sm text-destructive">{errorText(pullMutation.error)}</p> : null}
+      <details className="group">
+        <summary className="inline-flex min-h-7 cursor-pointer list-none items-center gap-1.5 rounded text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+          <ChevronDown aria-hidden="true" className="size-3.5 group-open:rotate-180" /> Подробности синхронизации
+        </summary>
+        <div className="mt-2 space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+          <dl className="flex flex-wrap gap-x-6 gap-y-2 text-xs">
+            <div><dt className="text-muted-foreground">Запись плана</dt><dd>{writeBackOff ? 'Выключена' : project.enabled ? 'Разрешена' : 'Выключена для проекта'}</dd></div>
+            <div><dt className="text-muted-foreground">Последняя отправка плана</dt><dd>{project.lastPushedAt ? new Date(project.lastPushedAt).toLocaleString('ru-RU') : 'Ещё не было'}</dd></div>
+            <div><dt className="text-muted-foreground">Последнее событие webhook</dt><dd>{project.lastWebhookAt ? new Date(project.lastWebhookAt).toLocaleString('ru-RU') : 'Событий пока нет'}</dd></div>
+          </dl>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="sm" disabled={actionsBusy} onClick={() => checkMutation.mutate()}>
+              {checkMutation.isPending ? <LoaderCircle aria-hidden="true" className="size-4 motion-safe:animate-spin" /> : <ShieldCheck aria-hidden="true" className="size-4" />}
+              {checkMutation.isPending ? 'Проверяем…' : 'Проверить готовность'}
+            </Button>
+            {project.lastCheckAt ? <p className="text-xs text-muted-foreground">Последняя проверка {new Date(project.lastCheckAt).toLocaleString('ru-RU')}</p> : null}
+          </div>
+          {checkMutation.error ? <p role="alert" className="text-sm text-destructive">{errorText(checkMutation.error)}</p> : null}
+          {(checks ?? project.lastCheck) ? <ul className="space-y-2" aria-label="Результаты проверки" aria-live="polite">
+            {(checks ?? project.lastCheck)?.map((check) => <li key={check.key} className="flex items-start gap-2 text-sm">
+              <CheckStatusIcon status={check.status} />
+              <span className="min-w-0"><span className="font-medium text-foreground">{check.label}.</span> <span className="wrap-break-word text-muted-foreground">{check.detail}</span></span>
+            </li>)}
+          </ul> : null}
+        </div>
+      </details>
     </li>
   );
 }

@@ -3,6 +3,8 @@ import { AlertCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import type { RoadmapWriteBackMode } from '@/entities/roadmap/api/roadmapApi';
 import { AdminCard } from '../AdminLayout';
 
+export const integrationColors = '[html:not(.dark)_&]:[--primary:239_75%_56%] [html:not(.dark)_&]:[--destructive:0_72%_44%] dark:[--destructive:0_80%_72%] dark:[--destructive-foreground:0_0%_5%]';
+
 export const MODE_LABEL: Record<RoadmapWriteBackMode, string> = {
   off: 'Выключено',
   manual: 'По кнопке',
@@ -22,7 +24,8 @@ export function Panel({ title, description, icon, actions, children }: {
       title={title}
       description={description}
       icon={icon}
-      badge={actions ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div> : undefined}
+      className={actions ? '[&>div:first-child]:flex-wrap [&>div:first-child>div:first-child]:grow [&>div:first-child>div:first-child]:basis-56' : undefined}
+      badge={actions ? <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div> : undefined}
     >
       {children}
     </AdminCard>
@@ -30,9 +33,9 @@ export function Panel({ title, description, icon, actions, children }: {
 }
 
 export function CheckStatusIcon({ status }: { status: 'ok' | 'warning' | 'error' }) {
-  if (status === 'ok') return <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-label="В порядке" />;
-  if (status === 'warning') return <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-label="Предупреждение" />;
-  return <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-label="Ошибка" />;
+  if (status === 'ok') return <CheckCircle2 role="img" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-label="В порядке" />;
+  if (status === 'warning') return <AlertTriangle role="img" className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-label="Предупреждение" />;
+  return <AlertCircle role="img" className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-label="Ошибка" />;
 }
 
 export function Chip({ tone = 'muted', children, title }: { tone?: 'muted' | 'ok' | 'warn' | 'error' | 'info'; children: ReactNode; title?: string }) {

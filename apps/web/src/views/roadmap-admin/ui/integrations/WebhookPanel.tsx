@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, Copy, KeyRound, RefreshCw, Webhook } from 'lucide-react';
+import { Copy, KeyRound, LoaderCircle, RefreshCw, Webhook } from 'lucide-react';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { baseURL } from '@/shared/api/client';
 import { Button } from '@/shared/ui/button';
@@ -31,23 +31,28 @@ export function WebhookPanel({ webhookConfigured }: { webhookConfigured: boolean
 
   return (
     <Panel
-      title="Webhook: факт из Azure DevOps без кнопки"
-      description="Azure DevOps сам сообщает об изменениях work items — факт и состояния обновляются через пару секунд."
-      icon={<Webhook className="h-[18px] w-[18px]" strokeWidth={1.7} />}
-      actions={<div className="flex items-center gap-1.5"><HelpHint text="Webhook сообщает Roadmap об изменениях в Azure, чтобы факт и конфликты обновлялись автоматически." example="API должен быть доступен Azure DevOps из интернета." faqId="webhook-needed" /><StatusPill active={webhookConfigured} label={webhookConfigured ? 'Секрет создан' : 'Не настроен'} /></div>}
+      title="Webhook для Azure DevOps"
+      description="Обновляет фактические часы и статусы задач автоматически после изменений в Azure DevOps."
+      icon={<Webhook aria-hidden="true" className="size-[18px]" strokeWidth={1.7} />}
+      actions={<><StatusPill active={webhookConfigured} label={webhookConfigured ? 'Секрет создан' : 'Секрет не создан'} /><HelpHint text="Webhook сообщает Roadmap об изменениях в Azure, чтобы факт и конфликты обновлялись автоматически." example="API должен быть доступен Azure DevOps из интернета." faqId="webhook-needed" /></>}
     >
-      <div className="space-y-5 px-5 py-5">
+      <div className="space-y-5 p-4 sm:p-5">
         {secretMutation.error ? <AdminAlert tone="error">{errorText(secretMutation.error)}</AdminAlert> : null}
         {notice ? <AdminAlert tone="success">{notice}</AdminAlert> : null}
 
         <ol className="space-y-4">
           <Step n={1} title="Получите секрет">
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" disabled={secretMutation.isPending} onClick={() => secretMutation.mutate(false)}>
-                <KeyRound className="h-3.5 w-3.5" />{webhookConfigured ? 'Показать секрет' : 'Создать секрет'}
+              <Button type="button" variant="outline" size="sm" disabled={secretMutation.isPending} onClick={() => {
+                setNotice(null);
+                if (secret) setSecret(null);
+                else secretMutation.mutate(false);
+              }}>
+                {secretMutation.isPending && !secretMutation.variables ? <LoaderCircle aria-hidden="true" className="size-3.5 motion-safe:animate-spin" /> : <KeyRound aria-hidden="true" className="size-3.5" />}
+                {secret ? 'Скрыть секрет' : webhookConfigured ? 'Показать секрет' : 'Создать секрет'}
               </Button>
-              {webhookConfigured ? <Button type="button" variant="ghost" size="sm" disabled={secretMutation.isPending} onClick={() => secretMutation.mutate(true)}>
-                <RefreshCw className="h-3.5 w-3.5" />Сменить секрет
+              {webhookConfigured ? <Button type="button" variant="ghost" size="sm" disabled={secretMutation.isPending} onClick={() => { setNotice(null); secretMutation.mutate(true); }}>
+                <RefreshCw aria-hidden="true" className={secretMutation.isPending && secretMutation.variables ? 'size-3.5 motion-safe:animate-spin' : 'size-3.5'} />Сменить секрет
               </Button> : null}
             </div>
           </Step>
@@ -58,10 +63,10 @@ export function WebhookPanel({ webhookConfigured }: { webhookConfigured: boolean
             Work item created, updated, deleted, restored — по одной на событие. Фильтры по типу и области не нужны.
           </Step>
           <Step n={4} title="Укажите URL">
-            <CopyField value={webhookUrl()} onCopied={() => setNotice('URL скопирован.')} />
+            <CopyField label="Скопировать URL webhook" value={webhookUrl()} />
           </Step>
           <Step n={5} title="Добавьте заголовок в HTTP headers">
-            {secret ? <CopyField value={`X-Roadmap-Webhook-Secret:${secret}`} onCopied={() => setNotice('Заголовок скопирован.')} /> : <p>Нажмите «{webhookConfigured ? 'Показать' : 'Создать'} секрет» в шаге 1, чтобы получить заголовок.</p>}
+            {secret ? <CopyField key={secret} label="Скопировать заголовок с секретом" value={`X-Roadmap-Webhook-Secret:${secret}`} /> : <p>Получите секрет на первом шаге, чтобы увидеть заголовок.</p>}
           </Step>
           <Step n={6} title="Проверьте">
             Нажмите <span className="text-foreground">Test</span> в подписке: ответ 202 — всё верно, 401 — неверный секрет.
@@ -75,7 +80,7 @@ export function WebhookPanel({ webhookConfigured }: { webhookConfigured: boolean
             <li>Roadmap не доверяет данным события: он заново читает work item из Azure по API.</li>
             <li>Изменения, которые записал сам Roadmap, тоже приходят сюда и просто обновляют данные — циклов нет.</li>
             <li>Удалённая в Azure задача помечает назначение ошибкой. Фичи с назначениями не удаляются, а получают состояние Deleted.</li>
-            <li>Без webhook факт обновляется кнопкой «Загрузить из Azure» на вкладке «Проекты и статус» или «Синхронизировать» на странице плана.</li>
+            <li>Факт также можно обновить вручную на вкладке «Проекты» или на странице плана.</li>
           </ul>
         </div>
       </div>
@@ -86,30 +91,35 @@ export function WebhookPanel({ webhookConfigured }: { webhookConfigured: boolean
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <li className="flex gap-3">
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold tabular-nums text-muted-foreground">{n}</span>
+      <span aria-hidden="true" className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold tabular-nums text-muted-foreground">{n}</span>
       <div className="min-w-0 flex-1 text-sm">
-        <p className="font-medium text-foreground">{title}</p>
+        <h3 className="font-medium text-foreground">{title}</h3>
         <div className="mt-1 text-muted-foreground">{children}</div>
       </div>
     </li>
   );
 }
 
-function CopyField({ value, onCopied }: { value: string; onCopied: () => void }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    void navigator.clipboard?.writeText(value).then(() => {
-      setCopied(true);
-      onCopied();
-      setTimeout(() => setCopied(false), 1500);
-    });
+function CopyField({ label, value }: { label: string; value: string }) {
+  const [copyStatus, setCopyStatus] = useState<'copied' | 'failed' | null>(null);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyStatus('copied');
+    } catch {
+      setCopyStatus('failed');
+    }
   };
   return (
-    <div className="flex min-w-0 items-center gap-1 rounded-lg border border-border bg-muted/40 py-1 pl-3 pr-1">
-      <code className="min-w-0 flex-1 truncate font-mono text-xs text-foreground" title={value}>{value}</code>
-      <button type="button" onClick={copy} aria-label="Скопировать" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground">
-        {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-      </button>
+    <div className="space-y-2">
+      <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-muted/40 py-1 pl-3 pr-1">
+        <code className="min-w-0 flex-1 select-all font-mono text-xs text-foreground [overflow-wrap:anywhere]">{value}</code>
+        <Button type="button" variant="ghost" size="icon" onClick={() => void copy()} aria-label={label} className="size-8 shrink-0">
+          <Copy aria-hidden="true" className="size-3.5" />
+        </Button>
+      </div>
+      {copyStatus === 'failed' ? <p role="alert" className="text-xs text-destructive">Выделите и скопируйте текст вручную.</p> : null}
+      <p role="status" className="text-xs text-muted-foreground empty:hidden">{copyStatus === 'copied' ? 'Скопировано.' : null}</p>
     </div>
   );
 }

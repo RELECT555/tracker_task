@@ -13,6 +13,11 @@ export type FaqItem = {
 
 export const FAQ_ITEMS: FaqItem[] = [
   {
+    id: 'import-roles',
+    question: 'Откуда берутся роли и плановые часы?',
+    answer: <>Роли берутся из вкладки Roles Estimate в формах задач выбранного проекта. После загрузки задач в плане Roadmap видны часы по роли на всю задачу. Квартальные оценки участников сохраняются отдельно.</>,
+  },
+  {
     id: 'what-is-two-way-sync',
     question: 'Что такое обратная синхронизация?',
     answer: <>Roadmap создаёт в Azure DevOps по задаче на каждое назначение (фича × роль × человек × квартал) и держит в ней оценку и исполнителя. Люди списывают время в эту задачу, и факт возвращается в Roadmap.</>,
@@ -25,7 +30,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     id: 'what-appears-in-azure',
     question: 'Что появится в Azure?',
-    answer: <>Например, «Backend: Заявки (Q4 2026)» под фичей «Заявки», исполнитель — Иван, Original Estimate и Remaining Work = 40, теги Roadmap, Roadmap 2026-Q4, Backend и итерация квартала, если она найдена. Состав полей настраивается во вкладке «Маппинг полей».</>,
+    answer: <>Например, «Backend: Заявки (Q4 2026)» под фичей «Заявки», исполнитель — Иван, Original Estimate и Remaining Work = 40, теги Roadmap, Roadmap 2026-Q4, Backend и итерация квартала, если она найдена. Состав полей настраивается в разделе «Поля задач».</>,
   },
   {
     id: 'plan-changes',
@@ -35,7 +40,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     id: 'fact-source',
     question: 'Откуда факт и когда обновляется?',
-    answer: <>Факт берётся из поля факта задачи, по умолчанию Completed Work. С webhook он обновляется через секунды, без webhook — кнопками «Синхронизировать» на плане или «Загрузить из Azure» в интеграциях.</>,
+    answer: <>По умолчанию фактические часы берутся из Completed Work. С webhook они обновляются автоматически. Для ручного обновления откройте вкладку «Проекты», найдите «Синхронизация задач» и нажмите «Обновить задачи из Azure».</>,
   },
   {
     id: 'manual-changes',
@@ -50,17 +55,17 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     id: 'sync-error',
     question: 'Что делать при ошибке?',
-    answer: <>Откройте назначение или раздел «Проекты и статус → Ошибки», прочитайте причину, исправьте права PAT, поле или исполнителя и нажмите «Отправить снова».</>,
+    answer: <>Откройте назначение или найдите его в блоке «Ошибки отправки» на вкладке «Проекты». Исправьте причину ошибки и нажмите «Отправить снова».</>,
   },
   {
     id: 'rollback',
-    question: 'Можно ли откатить?',
-    answer: <>Да. В разделе «Проекты и статус → Откат» можно выбрать задачи, созданные Roadmap, и закрыть или удалить их в корзину Azure после подтверждения. Режим «Выключено» останавливает новые отправки.</>,
+    question: 'Как остановить отправку изменений?',
+    answer: <>Во вкладке «Запись в Azure» выберите режим «Выключено» и сохраните настройки. Уже созданные задачи можно проверить в Azure DevOps.</>,
   },
   {
     id: 'custom-fields',
     question: 'Как писать в кастомные поля и брать факт из своего поля?',
-    answer: <>Во вкладке «Маппинг полей» выберите поле Azure и источник значения. Там же задаётся источник факта.</>,
+    answer: <>В разделе «Поля задач» выберите поле Azure и источник значения. Там же задаётся источник факта.</>,
   },
   {
     id: 'webhook-needed',
@@ -84,7 +89,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
 ];
 
-export function FaqAccordion() {
+export function FaqAccordion({ connected }: { connected: boolean }) {
   const [query, setQuery] = useState('');
   const normalizedQuery = query.trim().toLocaleLowerCase('ru-RU');
   const items = useMemo(() => FAQ_ITEMS.filter((item) => {
@@ -97,15 +102,22 @@ export function FaqAccordion() {
     <div className="space-y-3">
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по вопросам и ответам" className="pl-9" aria-label="Поиск по FAQ" />
+        <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по вопросам и ответам" className="pl-9" aria-label="Поиск по FAQ" />
       </div>
       {items.length ? <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
-        {items.map((item) => <details key={item.id} id={`faq-${item.id}`} className="group bg-card px-4">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-3.5 text-sm font-medium text-foreground [&::-webkit-details-marker]:hidden">
+        {items.map((item) => <details key={item.id} id={`faq-${item.id}`} className="group scroll-mt-4 bg-card px-4">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-sm py-3.5 text-sm font-medium text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
             <span>{item.question}</span>
-            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground motion-safe:transition-transform group-open:rotate-180" />
           </summary>
-          <div className="max-w-3xl pb-4 pr-7 text-sm leading-relaxed text-muted-foreground">{item.answer}</div>
+          <div className="max-w-3xl pb-4 pr-7 text-sm leading-relaxed text-muted-foreground">
+            {item.answer}
+            {item.id === 'fact-source' ? (
+              <a href={connected ? '#azure-task-sync' : '#azure-connection'} className="mt-2 block w-fit rounded font-medium text-primary underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring">
+                {connected ? 'К синхронизации задач' : 'Подключить Azure DevOps'}
+              </a>
+            ) : null}
+          </div>
         </details>)}
       </div> : <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">По этому запросу ничего не найдено.</p>}
     </div>

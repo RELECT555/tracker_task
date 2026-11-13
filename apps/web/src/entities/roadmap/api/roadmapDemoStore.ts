@@ -1,9 +1,10 @@
 import type {
   AzureProject, RoadmapAllocation, RoadmapIntegrationSettings, RoadmapPeriod,
   RoadmapPerson, RoadmapProjectPlan, RoadmapRole, RoadmapWriteBackSettings,
+  RoadmapRoleAssignment, RoadmapRoleTemplate,
   RoadmapAzureField, RoadmapAzureState, RoadmapWorkItemType,
 } from './roadmapApi';
-import type { SyncSettingsV2 } from '@tracker/shared';
+import { rebalanceAllocations, type SyncSettingsV2 } from '@tracker/shared';
 
 export const DEMO_BLOB_PATH = 'roadmap/demo-state-v1.json';
 const PROJECT_ID = 'demo-roadmap-project';
@@ -29,7 +30,7 @@ export type DemoState = {
   projects: AzureProject[];
   people: DemoPerson[];
   roles: RoadmapRole[];
-  roleCatalog: Pick<RoadmapRole, 'id' | 'name' | 'color' | 'isMock'>[];
+  roleCatalog: RoadmapRoleTemplate[];
   plan: RoadmapProjectPlan;
 };
 
@@ -131,7 +132,7 @@ export function createInitialDemoState(): DemoState {
   return {
     version: 1, organizationUrl: '',
     projects: [{ id: AZURE_PROJECT_ID, name: 'Wayo — Roadmap demo', imported: true, roadmapId: PROJECT_ID }],
-    people: peopleSeed.map((item) => ({ ...item, roles: [] })), roles, roleCatalog: catalogSeed, plan,
+    people: peopleSeed.map((item) => ({ ...item, roles: [] })), roles, roleCatalog: clone(catalogSeed), plan,
   };
 }
 
@@ -145,9 +146,29 @@ function roleOf(state: DemoState, id: string) {
 function normalizePersonIds(state: DemoState, ids: string[]) {
   return ids.map((id) => state.people.find((person) => person.id === id || person.externalId === id)?.externalId ?? id);
 }
+function applyRoleAssignment(state: DemoState, role: RoadmapRole, assignment: RoadmapRoleAssignment) {
+  const members = new Set(normalizePersonIds(state,
+    assignment.personExternalIds ?? role.members?.map((member) => member.personExternalId) ?? [],
+  ));
+  const defaultId = assignment.personExternalId;
+  const person = defaultId === undefined
+    ? state.people.find((item) => item.externalId === role.defaultPersonExternalId && members.has(item.externalId))
+    : state.people.find((item) => defaultId && item.isActive && (item.id === defaultId || item.externalId === defaultId));
+  if (defaultId && !person) throw new Error('Выбранный сотрудник недоступен.');
+  if (person) members.add(person.externalId);
+  role.members = state.people.filter((item) => members.has(item.externalId)).map((item) => ({
+    personExternalId: item.externalId, personName: item.name, personEmail: item.email,
+    personIsActive: item.isActive ?? true, personIsMock: item.isMock,
+  }));
+  role.defaultPersonExternalId = person?.externalId ?? null;
+  role.defaultPersonName = person?.name ?? null;
+  role.defaultPersonEmail = person?.email ?? null;
+  role.defaultPersonIsMock = person?.isMock ?? false;
+}
 function peopleWithRoles(state: DemoState): RoadmapPerson[] {
   return state.people.map((person) => ({
     ...person,
+    id: person.externalId,
     roles: rolesOf(state).filter((role) => role.members?.some((member) => member.personExternalId === person.externalId))
       .map((role) => ({ id: role.id, name: role.name, color: role.color, projectName: state.plan.name })),
   }));
@@ -189,15 +210,23 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
     case 'previewAzurePush': case 'pushProjectToAzure': case 'pushAllocationToAzure':
       throw new Error('Запись плана в Azure DevOps недоступна в демо.');
     case 'projects': return { data: clone(state.projects), source: 'cache' };
+    case 'syncProjectCatalog': throw new Error('Импорт из Azure DevOps недоступен в демо.');
     case 'syncProject': return { projectId: PROJECT_ID, importedWorkItems: state.plan.workItems.length };
     case 'plan': return planOf(state);
     case 'people': return { data: peopleWithRoles(state) };
-    case 'roles': case 'adminRoles': return clone(rolesOf(state));
+    case 'roles': return clone(rolesOf(state));
+    case 'adminRoles': return clone(arg0 ? state.roles.filter((role) => role.projectId === arg0) : state.roles);
     case 'adminPeople': return peopleWithRoles(state);
     case 'syncAdminPeople': return { synced: state.people.length, ignored: 0 };
     case 'roleCatalog': return clone(state.roleCatalog);
     case 'createRoleTemplate': {
       const role = { id: `template-${crypto.randomUUID()}`, name: String(arg0), color: arg1 ?? '#6366f1', isMock: true };
+      if (arg2?.projectId) {
+        const projectRole = { ...role, id: `role-${crypto.randomUUID()}`, projectId: arg2.projectId };
+        applyRoleAssignment(state, projectRole, arg2);
+        state.roles.push(projectRole);
+        state.plan.roles = rolesOf(state);
+      }
       state.roleCatalog.push(role); return clone(role);
     }
     case 'addRoleFromCatalog': {
@@ -205,7 +234,8 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
       if (!template) throw new Error('Шаблон роли не найден.');
       const existing = rolesOf(state).find((item) => item.name === template.name);
       if (existing) return clone(existing);
-      const role: RoadmapRole = { ...template, projectId: PROJECT_ID, members: [] };
+      const role: RoadmapRole = { ...template, id: `role-${crypto.randomUUID()}`, projectId: PROJECT_ID, members: [] };
+      if (arg2) applyRoleAssignment(state, role, arg2);
       state.roles.push(role); state.plan.roles = rolesOf(state); return clone(role);
     }
     case 'createRole': {
@@ -214,7 +244,12 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
       state.roles.push(role); state.plan.roles = rolesOf(state); return clone(role);
     }
     case 'updateRole': {
-      const role = roleOf(state, arg0); Object.assign(role, arg1); return clone(role);
+      const role = roleOf(state, arg0);
+      const { name, color, ...assignment } = arg1;
+      applyRoleAssignment(state, role, assignment);
+      if (name !== undefined) role.name = name;
+      if (color !== undefined) role.color = color;
+      return clone(role);
     }
     case 'setRoleMembers': {
       const role = roleOf(state, arg0);
@@ -255,6 +290,24 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
       };
       if (index >= 0) item.allocations[index] = allocation; else item.allocations.push(allocation);
       return clone(allocation);
+    }
+    case 'rebalanceAllocations': {
+      const ids = Array.isArray(arg0) ? new Set<unknown>(arg0) : new Set();
+      const item = state.plan.workItems.find((candidate) => candidate.allocations.some(({ id }) => ids.has(id)));
+      const first = item?.allocations.find(({ id }) => ids.has(id));
+      const group = item?.allocations.filter((row) => row.roleId === first?.roleId
+        && (row.quarterKey ?? LEGACY_QUARTER_KEY) === (first?.quarterKey ?? LEGACY_QUARTER_KEY)) ?? [];
+      if (group.length !== ids.size || group.some(({ id }) => !ids.has(id))) {
+        throw new Error('Состав назначений изменился. Обновите план и повторите действие.');
+      }
+      group.sort((left, right) => left.id.localeCompare(right.id));
+      const balanced = rebalanceAllocations(group);
+      if (!balanced) throw new Error('Часы нельзя распределить с сохранением текущей оценки и шага 0,5 ч.');
+      balanced.forEach(({ estimatedHours, periods }, index) => {
+        group[index].estimatedHours = estimatedHours;
+        group[index].periods = periods.map((period) => ({ ...period, id: `period-${crypto.randomUUID()}` }));
+      });
+      return { updated: balanced.length };
     }
     case 'saveAllocationQuarter': {
       const allocationId = String(arg0); const quarterKey = String(arg1); const months = arg2 as { monthKey: string; hours: number }[];

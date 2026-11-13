@@ -24,7 +24,7 @@ export function AzureProjectPicker({
     ...projects.filter((project) => project.imported).map((project) => ({
       value: project.id,
       label: project.name,
-      description: 'Импортирован · план готов',
+      description: project.planSynced === false ? 'Проект добавлен · задачи ещё не загружены' : 'Импортирован · план готов',
       group: 'В Roadmap',
       leading: <span className="text-emerald-600"><Check className="h-4 w-4" /></span>,
     })),
@@ -46,6 +46,6 @@ export function AzureProjectPicker({
     searchPlaceholder="Найти проект…"
     emptyLabel="Проект не найден. Попробуйте изменить запрос."
     ariaLabel="Выбрать проект Azure DevOps"
-    className={`h-10 w-[min(360px,calc(100vw-2rem))] ${className ?? ''}`}
+    className={className ?? 'h-10 w-[min(360px,calc(100vw-2rem))]'}
   />;
 }

@@ -1,27 +1,41 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { ArrayUnique, IsArray, IsOptional, IsString, MinLength } from 'class-validator';
+import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { ArrayUnique, IsArray, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { AdminRoleGuard } from '../admin/presentation/guards/admin-role.guard';
 import { RoadmapService } from './roadmap.service';
 
+class AssignRoadmapRoleDto {
+  @IsOptional() @IsString() @MinLength(1) personExternalId?: string | null;
+  @IsOptional() @IsArray() @ArrayUnique() @IsString({ each: true }) personExternalIds?: string[];
+}
+
 class CreateRoadmapRoleDto {
   @IsString() projectId!: string;
-  @IsString() @MinLength(1) name!: string;
+  @IsString() @MinLength(1) @MaxLength(100) name!: string;
   @IsOptional() @IsString() color?: string;
 }
 
-class CreateRoadmapRoleTemplateDto {
-  @IsString() @MinLength(1) name!: string;
+class CreateRoadmapRoleTemplateDto extends AssignRoadmapRoleDto {
+  @IsOptional() @IsUUID() projectId?: string;
+  @IsString() @MinLength(1) @MaxLength(100) name!: string;
   @IsOptional() @IsString() color?: string;
 }
 
-class AddRoadmapRoleFromCatalogDto {
+class AddRoadmapRoleFromCatalogDto extends AssignRoadmapRoleDto {
   @IsString() projectId!: string;
   @IsString() templateId!: string;
 }
 
-class UpdateRoadmapRoleDto {
-  @IsOptional() @IsString() @MinLength(1) name?: string;
+class UpdateRoadmapRoleDto extends AssignRoadmapRoleDto {
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(100) name?: string;
   @IsOptional() @IsString() color?: string;
+}
+
+class RoadmapAdminRolesQuery {
+  @IsOptional() @IsUUID() projectId?: string;
+}
+
+class RoadmapPersonAvatarParams {
+  @IsString() @MinLength(1) @MaxLength(255) id!: string;
 }
 
 class SetRoleMembersDto {
@@ -42,6 +56,12 @@ export class RoadmapAdminController {
     return this.roadmap.adminPeople();
   }
 
+  @Get('users/:id/avatar')
+  @Header('Cache-Control', 'private, no-store')
+  userAvatar(@Param() { id }: RoadmapPersonAvatarParams) {
+    return this.roadmap.adminPersonAvatar(id);
+  }
+
   @Post('users/sync')
   syncUsers() {
     return this.roadmap.syncAzurePeople();
@@ -59,12 +79,12 @@ export class RoadmapAdminController {
 
   @Post('roles/from-catalog')
   addRoleFromCatalog(@Body() dto: AddRoadmapRoleFromCatalogDto) {
-    return this.roadmap.addRoleFromCatalog(dto.projectId, dto.templateId);
+    return this.roadmap.addRoleFromCatalog(dto.projectId, dto.templateId, dto);
   }
 
   @Get('roles')
-  roles(@Query('projectId') projectId: string) {
-    return this.roadmap.listRoles(projectId);
+  roles(@Query() query: RoadmapAdminRolesQuery) {
+    return this.roadmap.listAdminRoles(query.projectId);
   }
 
   @Post('roles')

@@ -7,21 +7,39 @@ export interface AzureProject {
   name: string;
   url?: string;
   imported: boolean;
+  planSynced?: boolean;
   roadmapId?: string;
+}
+
+export interface RoadmapCatalogSyncResult {
+  projectId: string;
+  importedRoles: number;
+  roleSyncWarning?: string;
+}
+
+export interface RoadmapProjectsResult {
+  data: AzureProject[];
+  source?: 'azure' | 'cache';
+  azureError?: 'access-denied' | 'unavailable';
 }
 
 export interface RoadmapRole {
   id: string;
   projectId?: string | null;
+  projectName?: string | null;
   name: string;
   color: string;
   isMock?: boolean;
+  azureEstimateField?: string | null;
   defaultPersonExternalId?: string | null;
   defaultPersonName?: string | null;
   defaultPersonEmail?: string | null;
   defaultPersonIsMock?: boolean;
   members?: { personExternalId: string; personName: string; personEmail: string | null; personIsActive: boolean; personIsMock?: boolean }[];
 }
+
+export type RoadmapRoleTemplate = Pick<RoadmapRole, 'id' | 'name' | 'color' | 'isMock' | 'azureEstimateField'>;
+export type RoadmapRoleAssignment = { personExternalId?: string | null; personExternalIds?: string[] };
 
 export interface RoadmapPerson {
   id: string;
@@ -86,7 +104,34 @@ export interface RoadmapProjectPlan {
   syncedAt: string | null;
   workItems: RoadmapWorkItem[];
   roles: RoadmapRole[];
-  azure?: { writeBackEnabled: boolean; mode?: RoadmapWriteBackMode };
+  azure?: { writeBackEnabled: boolean; mode?: RoadmapWriteBackMode; canPush?: boolean; createdTaskIds?: string[] };
+}
+
+export interface CreateAzureWorkItemInput {
+  requestId: string;
+  type: 'Task' | 'Epic';
+  title: string;
+  description?: string;
+  parentExternalId?: string;
+  personExternalId?: string;
+}
+
+export interface CreatedAzureWorkItem {
+  projectId: string;
+  externalId: string;
+  url: string;
+  title: string;
+  type: CreateAzureWorkItemInput['type'];
+}
+
+export interface RoadmapMonthlyFact {
+  workItems: Record<string, number>;
+  allocations: Record<string, number>;
+  totalHours: number;
+}
+
+export function getRoadmapMonthlyFact(projectId: string, monthKey: string, signal?: AbortSignal) {
+  return apiFetch<RoadmapMonthlyFact>(`/roadmap/projects/${encodeURIComponent(projectId)}/fact?monthKey=${encodeURIComponent(monthKey)}`, { signal });
 }
 
 export interface RoadmapIntegrationSettings {
@@ -206,10 +251,10 @@ const liveRoadmapApi = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
-  saveWriteBackSettings: (settings: RoadmapWriteBackSettings) =>
+  saveWriteBackSettings: ({ mode, workItemType, titleTemplate, tagsTemplate, fields, remainingWorkPolicy, projectIds }: RoadmapWriteBackSettings) =>
     apiFetch<RoadmapIntegrationSettings>('/roadmap/settings/azure-devops/write-back', {
       method: 'PUT',
-      body: JSON.stringify(settings),
+      body: JSON.stringify({ mode, workItemType, titleTemplate, tagsTemplate, fields, remainingWorkPolicy, projectIds }),
     }),
   writeBackOverview: () => apiFetch<RoadmapWriteBackOverview>('/roadmap/settings/azure-devops/write-back/overview'),
   syncSettingsV2: () => apiFetch<SyncSettingsV2>('/roadmap/settings/azure-devops/write-back/v2'),
@@ -222,9 +267,14 @@ const liveRoadmapApi = {
   webhookSecret: () => apiFetch<{ secret: string }>('/roadmap/settings/azure-devops/webhook-secret'),
   rotateWebhookSecret: () =>
     apiFetch<{ secret: string }>('/roadmap/settings/azure-devops/webhook-secret/rotate', { method: 'POST', body: '{}' }),
-  projects: () => apiFetch<{ data: AzureProject[]; source?: 'azure' | 'cache' }>('/roadmap/projects'),
+  projects: () => apiFetch<RoadmapProjectsResult>('/roadmap/projects'),
+  syncProjectCatalog: (project: AzureProject) =>
+    apiFetch<RoadmapCatalogSyncResult>(`/roadmap/projects/${encodeURIComponent(project.id)}/sync-catalog`, {
+      method: 'POST',
+      body: '{}',
+    }),
   syncProject: (project: AzureProject) =>
-    apiFetch<{ projectId: string; importedWorkItems: number }>(
+    apiFetch<{ projectId: string; importedWorkItems: number; importedRoles?: number; roleSyncWarning?: string }>(
       `/roadmap/projects/${encodeURIComponent(project.id)}/sync`,
       {
         method: 'POST',
@@ -233,6 +283,11 @@ const liveRoadmapApi = {
     ),
   plan: (projectId: string) =>
     apiFetch<RoadmapProjectPlan>(`/roadmap/projects/${projectId}/plan`),
+  createWorkItem: (externalProjectId: string, input: CreateAzureWorkItemInput) =>
+    apiFetch<CreatedAzureWorkItem>(`/roadmap/azure-projects/${encodeURIComponent(externalProjectId)}/work-items`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
   previewAzurePush: (projectId: string) =>
     apiFetch<RoadmapAzurePushPreview>(`/roadmap/projects/${encodeURIComponent(projectId)}/azure-push/preview`),
   pushProjectToAzure: (projectId: string, allocationIds?: string[]) =>
@@ -242,25 +297,27 @@ const liveRoadmapApi = {
   people: () => apiFetch<{ data: RoadmapPerson[] }>('/roadmap/people'),
   roles: (projectId: string) => apiFetch<RoadmapRole[]>(`/roadmap/roles?projectId=${encodeURIComponent(projectId)}`),
   adminPeople: () => apiFetch<RoadmapPerson[]>('/roadmap/admin/users'),
+  adminPersonAvatar: (id: string, signal?: AbortSignal) =>
+    apiFetch<{ avatar: string | null }>(`/roadmap/admin/users/${encodeURIComponent(id)}/avatar`, { signal }),
   syncAdminPeople: () => apiFetch<{ synced: number; ignored: number }>('/roadmap/admin/users/sync', { method: 'POST', body: '{}' }),
-  adminRoles: (projectId: string) => apiFetch<RoadmapRole[]>(`/roadmap/admin/roles?projectId=${encodeURIComponent(projectId)}`),
-  roleCatalog: () => apiFetch<Pick<RoadmapRole, 'id' | 'name' | 'color' | 'isMock'>[]>('/roadmap/admin/role-catalog'),
-  createRoleTemplate: (name: string, color?: string) =>
-    apiFetch<Pick<RoadmapRole, 'id' | 'name' | 'color' | 'isMock'>>('/roadmap/admin/role-catalog', {
+  adminRoles: (projectId?: string) => apiFetch<RoadmapRole[]>(`/roadmap/admin/roles${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
+  roleCatalog: () => apiFetch<RoadmapRoleTemplate[]>('/roadmap/admin/role-catalog'),
+  createRoleTemplate: (name: string, color?: string, assignment?: RoadmapRoleAssignment & { projectId: string }) =>
+    apiFetch<RoadmapRoleTemplate>('/roadmap/admin/role-catalog', {
       method: 'POST',
-      body: JSON.stringify({ name, color }),
+      body: JSON.stringify({ name, color, ...assignment }),
     }),
-  addRoleFromCatalog: (projectId: string, templateId: string) =>
+  addRoleFromCatalog: (projectId: string, templateId: string, assignment: RoadmapRoleAssignment = {}) =>
     apiFetch<RoadmapRole>('/roadmap/admin/roles/from-catalog', {
       method: 'POST',
-      body: JSON.stringify({ projectId, templateId }),
+      body: JSON.stringify({ projectId, templateId, ...assignment }),
     }),
   createRole: (projectId: string, name: string, color?: string) =>
     apiFetch<RoadmapRole>('/roadmap/admin/roles', {
       method: 'POST',
       body: JSON.stringify({ projectId, name, color }),
     }),
-  updateRole: (id: string, input: { name?: string; color?: string }) =>
+  updateRole: (id: string, input: { name?: string; color?: string } & RoadmapRoleAssignment) =>
     apiFetch<RoadmapRole>(`/roadmap/admin/roles/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
   setRoleMembers: (id: string, personExternalIds: string[]) =>
     apiFetch<RoadmapRole>(`/roadmap/admin/roles/${encodeURIComponent(id)}/members`, { method: 'PUT', body: JSON.stringify({ personExternalIds }) }),
@@ -286,6 +343,11 @@ const liveRoadmapApi = {
     apiFetch<RoadmapPeriod[]>(`/roadmap/allocations/${encodeURIComponent(allocationId)}/quarters/${encodeURIComponent(quarterKey)}`, {
       method: 'PUT',
       body: JSON.stringify({ months }),
+    }),
+  rebalanceAllocations: (allocationIds: string[]) =>
+    apiFetch<{ updated: number }>('/roadmap/allocations/rebalance', {
+      method: 'PUT',
+      body: JSON.stringify({ allocationIds }),
     }),
 };
 

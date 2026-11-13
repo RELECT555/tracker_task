@@ -4,7 +4,7 @@ Roadmap is a project planning workspace backed by Azure DevOps. It imports a pro
 
 ## Azure DevOps connection
 
-Roadmap administrators can open `/roadmap/admin`, then choose the **Integrations** card. Enter the organization URL and a PAT with read access to Projects and Teams, Work Items, and Graph, then use **Test connection** and **Save**. The PAT is not returned to the browser and is stored encrypted in the database.
+Roadmap administrators can open `/roadmap/admin`, then choose **Интеграции**. Enter the organization URL and a PAT with read access to Projects and Teams and Work Items. Use **Проверить доступ** to test access and **Подключить Azure DevOps** to save the connection. To update saved credentials, open **Настройки подключения**. The people directory also needs Graph read access. The PAT is stored encrypted in the database.
 
 For local development, the API can also read a connection from `apps/api/.env`:
 
@@ -15,11 +15,19 @@ AZURE_DEVOPS_PAT=your-personal-access-token
 
 Set `ROADMAP_ENCRYPTION_KEY` to a stable server secret for encrypting saved credentials. If it is unset, the API uses `JWT_SECRET` as the encryption key. Changing the key makes previously stored PATs unreadable. Environment variables remain a fallback; credentials saved in Roadmap administration take precedence. Azure DevOps Services REST API 7.1 is used for projects and work items; the organization Graph users endpoint is `7.1-preview.1`.
 
+## Import projects and roles
+
+1. In **Роли → Роли из Azure DevOps**, choose a project and click **Загрузить роли из Azure**. The same import is available in **Интеграции → Проекты и роли**. Roadmap reads the visible numeric role estimate fields on the project's **Roles Estimate** forms. This loads the project and roles without loading work items or sending changes to Azure DevOps. If Azure rejects access, use **Настройки подключения** to check or replace the saved token; saved roles remain available.
+2. Open **Роли**, choose a role, then choose the project and employee by full name. Roles linked to Azure DevOps have a source badge. You can also create roles manually. If the employee list is empty, import it from **Пользователи**.
+3. On **План проекта**, click **Загрузить задачи** to read Epics, Features and their role estimates. A value such as **План Azure: 32 ч** is the estimate for that role on the whole work item. It is shown alongside the Roadmap assignments and does not populate or replace their quarterly hours.
+
+Project and role import is available to administrators at `POST /roadmap/projects/:externalId/sync-catalog`. If the Azure process layout is unavailable or the tab has no matching fields, the project can still be added and the existing roles are preserved. See [Azure DevOps work item type layouts](https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/work-item-types/list?view=azure-devops-rest-7.1).
+
 ## Planning model
 
 - The planning table groups imported Features under their Azure DevOps Epics. Epic rows summarize the assignments and hours in their child Features.
-- Role types are created once in the shared role catalog. Add only the roles needed by each imported project from the **Add role** control in the planning table header; each project keeps its own participant assignments for those roles.
-- Choose a default person for a project role in its table heading. This person appears on work items until a work item has its own assignment; work item changes stay local to that Feature or Epic.
+- Each project keeps its own roles and assignments. Roles can come from Azure DevOps or from the manual role catalog.
+- Choose a default person for a project role in the role directory or its table heading. This person appears on work items until a work item has its own assignment; work item changes stay local to that Feature or Epic.
 - Feature cells offer only active people assigned to that project's role. Synchronize the people directory from the **Users** card after connecting Azure DevOps.
 - User synchronization ignores deleted identities, profiles without an email/principal name, and known Azure DevOps service identities; excluded accounts are deactivated and hidden unless an administrator chooses to show inactive users.
 - Planning is quarterly. Every person assignment belongs to one quarter (`YYYY-Qn`), and its estimate is the hours planned for that quarter. The role view has a quarter switcher and shows only the selected quarter's assignments; work that spans several quarters gets a separate assignment per quarter. Assignments created before quarterly planning were moved to 2026-Q4.
@@ -28,23 +36,21 @@ Set `ROADMAP_ENCRYPTION_KEY` to a stable server secret for encrypting saved cred
 - Monthly values are non-negative half-hour increments. Their sum, including preserved legacy period estimates, cannot exceed the assignment's overall estimate. The remaining estimate is shown separately.
 - Older custom date ranges are preserved and shown separately; the system does not automatically split their hours between months.
 
-Use **Synchronize** on an imported project to refresh work item names, types, states, parent links, the standard `Completed Work` value, and custom role/estimate fields. Roadmap shows role estimate fields on each work item. Its planned hours come from Roadmap allocations; actual hours on Features and Epics include their own `Completed Work` plus actual hours from descendant Tasks, following intermediate parent work items. Existing planning assignments remain attached to the matching Azure DevOps work item IDs.
+Use **Обновить задачи** on an imported project to refresh work item names, types, states, parent links, the standard `Completed Work` value, and role estimates. Actual hours on Features and Epics include their own `Completed Work` plus actual hours from descendant Tasks, following intermediate parent work items. Existing planning assignments remain attached to the matching Azure DevOps work item IDs.
 
 ## Two-way sync with Azure DevOps
 
-The plan is owned by Roadmap; the actuals are owned by Azure DevOps. Everything is configured in **Integrations**, which has seven tabs:
+Roadmap owns its quarterly assignments; Azure DevOps owns the source role estimates and actual hours. The **Интеграции** page has five tabs:
 
-- **Start** — a setup checklist and searchable FAQ. It remains the first tab until the connection, readiness, first successful sync, and webhook steps are complete; then **Projects and status** becomes the default.
-- **Connection** — organization URL, PAT and the PAT scopes needed for each feature.
-- **How it works** — the data flow, which system owns each field, do/don't rules, the status legend and the first-run order.
-- **Write settings** — mode, project scope, work item type, title/tag templates, fields to write and the Remaining Work policy.
-- **Field mapping** — Azure field discovery, write/read rules, fact source, and role-to-field links.
-- **Projects and status** — per-project counters, **Check readiness**, **Load from Azure** (re-import + fact) and **Send to Azure** with a preview; recent errors with **Send again**.
+- **Справка** — data flow, field ownership, assignment statuses and steps for turning on write-back.
+- **Запись в Azure** — mode, project scope, work item type, title/tag templates, fields to write and the Remaining Work policy.
+- **Поля задач** — Azure field discovery, write/read rules, fact source, and role-to-field links.
+- **Проекты** — project and role import, task and actual-hours sync, and send errors. Open **Подробности синхронизации** on a project row to check readiness and see recent activity.
 - **Webhook** — secret and step-by-step service hook setup.
 
-The integration overview stores the last readiness check and the last webhook event for each imported project. The checklist uses those persisted values, so it reflects the API state after a page reload. Assignment statuses include **sending** while a queue item is being processed and **conflict** when Azure changed a field controlled by Roadmap.
+The integration overview stores the last readiness check and the last webhook event for each imported project. Assignment statuses include **sending** while a queue item is being processed and **conflict** when Azure changed a field controlled by Roadmap.
 
-The **Field mapping** tab discovers work item types, fields and states from Azure DevOps (cached for ten minutes). Settings are stored in the version 2 schema; saved version 1 settings are migrated automatically. Write rules support constants, templates, Roadmap values, parent fields and role-based values. Read rules and the fact source control which custom fields are imported and shown in the plan.
+The **Поля задач** section discovers work item types, fields and states from Azure DevOps (cached for ten minutes). Settings are stored in the version 2 schema; saved version 1 settings are migrated automatically. Write rules support constants, templates, Roadmap values, parent fields and role-based values. Read rules and the fact source control additional imported fields; fields linked through **Roles Estimate** are read regardless of these rules.
 
 **Plan → Azure DevOps (write-back).** Every assignment (work item × role × person × quarter) is mirrored by a work item (Task by default) under its Feature or Epic.
 
@@ -55,6 +61,8 @@ The **Field mapping** tab discovers work item types, fields and states from Azur
 - **Remaining Work policy**: *recalculate* (estimate − Completed Work on every estimate change) or *on create only*.
 - Iteration Path is the iteration whose path names the quarter (`2026 Q4`, `Q4-2026`, …), otherwise the narrowest iteration whose dates span the quarter, otherwise the project default.
 - **Preview** lists what will be created, updated (with the old → new estimate) or skipped and why; you can untick assignments before sending.
+- If Azure does not confirm creation, **Send again** looks for the task by its Roadmap tag. If the task is still unconfirmed, the assignment stays in error for review. Keep the `Roadmap-Create-…` tag on tasks created by write-back.
+- **Manual push access** is configured under **Поля задач → Ручная отправка**. With **Только администраторы** selected, the API restricts preview, push and retry to active administrators. Automatic write-back follows the configured mode.
 - **Check readiness** verifies the connection, mode and scope, the work item type and its fields, the current quarter's iteration, people without email, and runs a create request with `validateOnly=true` — Azure DevOps validates permissions, fields and the assignee without saving anything.
 - Updates use a revision check (`test /rev`) so Remaining Work is not computed from stale Completed Work. If the task is deleted in Azure DevOps, the next push creates a new one. Demo people are `skipped`.
 - The plan page shows a status mark on each assignment (spinner = sending, red = error, grey dot = never sent, hollow dot = skipped), the task link and error in the assignment editor with **Send again**, and **Send to Azure (N)** with the same preview in the plan header.

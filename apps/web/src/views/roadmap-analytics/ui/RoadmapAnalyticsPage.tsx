@@ -8,6 +8,7 @@ import type { LucideIcon } from 'lucide-react';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import type { RoadmapRole } from '@/entities/roadmap/api/roadmapApi';
 import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
+import { AzureWorkItemIcon } from '@/entities/roadmap/ui/AzureWorkItemIcon';
 import { Button } from '@/shared/ui/button';
 import { Card } from '@/shared/ui/card';
 import { ColorMark } from '@/shared/ui/color-mark';
@@ -164,7 +165,10 @@ function AttentionCard({ items, quarter }: { items: AttentionItem[]; quarter: Qu
           return <li key={item.id} className="flex items-start gap-3 py-2.5">
             <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300"><Icon className="h-4 w-4" strokeWidth={1.8} /></span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-foreground" title={item.title}>{item.title}</p>
+              <div className="flex min-w-0 items-center gap-2">
+                <AzureWorkItemIcon type="Feature" />
+                <p className="truncate text-sm font-medium text-foreground" title={item.title}>{item.title}</p>
+              </div>
               <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground/80">{attentionKinds[item.kind].label}</span> · {item.detail}</p>
             </div>
             {item.url ? <a href={item.url} target="_blank" rel="noreferrer" aria-label={`Открыть «${item.title}» в Azure DevOps`} className="mt-1 text-muted-foreground transition-colors hover:text-foreground"><ExternalLink className="h-4 w-4" /></a> : null}
@@ -307,6 +311,7 @@ function EpicsCard({ rows, roles, roleOrder, quarter }: { rows: EpicRow[]; roles
             return <tr key={row.id} className="border-t border-border/60 align-middle">
               <td className="px-5 py-3">
                 <div className="flex min-w-0 items-center gap-2">
+                  {row.id !== 'no-epic' ? <AzureWorkItemIcon type="Epic" /> : null}
                   <p className={cn('truncate font-medium', row.id === 'no-epic' ? 'text-muted-foreground' : 'text-foreground')} title={row.title}>{row.title}</p>
                   {row.url ? <a href={row.url} target="_blank" rel="noreferrer" aria-label={`Открыть «${row.title}» в Azure DevOps`} className="shrink-0 text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /></a> : null}
                 </div>
@@ -356,8 +361,16 @@ export function RoadmapAnalyticsPage() {
   const projects = useMemo(() => projectsQuery.data?.data ?? [], [projectsQuery.data?.data]);
   const [projectId, setProjectId] = useState('');
   const [quarter, setQuarter] = useState(currentQuarterRef);
-  const project = projects.find((item) => item.id === projectId);
+  const project = projects.find((item) => item.id === projectId)
+    ?? projects.find((item) => item.imported)
+    ?? projects[0];
+  const activeProjectId = project?.id ?? '';
   const roadmapProjectId = project?.roadmapId ?? '';
+
+  useEffect(() => {
+    if (activeProjectId) setProjectId(activeProjectId);
+  }, [activeProjectId]);
+
   const planQuery = useQuery({
     queryKey: ['roadmap', 'plan', roadmapProjectId],
     queryFn: () => roadmapApi.plan(roadmapProjectId),
@@ -372,17 +385,10 @@ export function RoadmapAnalyticsPage() {
   }, [plan]);
   const roleOrder = useMemo(() => [...roleLookup.keys()], [roleLookup]);
 
-  useEffect(() => {
-    if (projectId && projects.some((item) => item.id === projectId)) return;
-    const firstImported = projects.find((item) => item.imported);
-    if (firstImported) setProjectId(firstImported.id);
-    else if (projects.length) setProjectId(projects[0].id);
-  }, [projectId, projects]);
-
   const topPerson = analytics?.people[0];
   const error = projectsQuery.error ?? planQuery.error;
 
-  return <main className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6 lg:px-8">
+  return <main className="roadmap-scrollbar relative min-h-0 flex-1 overflow-auto overscroll-none px-4 py-5 sm:px-6 lg:px-8">
     <div className="mx-auto w-full space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
@@ -391,7 +397,7 @@ export function RoadmapAnalyticsPage() {
           <p className="mt-1 truncate text-sm text-muted-foreground">{plan ? <>{plan.name} · {plan.syncedAt ? `синхронизировано ${new Date(plan.syncedAt).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short' })}` : 'ещё не синхронизирован'}</> : 'Загрузка, готовность и риски квартального плана'}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <AzureProjectPicker projects={projects} value={projectId} onChange={setProjectId} disabled={projectsQuery.isLoading} placeholder="Выбрать проект" />
+          <AzureProjectPicker projects={projects} value={activeProjectId} onChange={setProjectId} disabled={projectsQuery.isLoading} placeholder="Выбрать проект" />
           <QuarterSwitcher quarter={quarter} onShift={(offset) => setQuarter((current) => shiftQuarter(current, offset))} />
         </div>
       </div>

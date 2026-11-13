@@ -8,6 +8,7 @@ const OWNERSHIP: { field: string; owner: 'Roadmap' | 'Azure DevOps'; rule: strin
   { field: 'Факт (Completed Work)', owner: 'Azure DevOps', rule: 'Люди списывают время в своей задаче. Roadmap только читает и суммирует по фичам и эпикам' },
   { field: 'Название, состояние, описание, комментарии задачи', owner: 'Azure DevOps', rule: 'Roadmap задаёт их один раз при создании и больше не трогает' },
   { field: 'Эпики и фичи', owner: 'Azure DevOps', rule: 'Roadmap только читает: названия, состояния, иерархию' },
+  { field: 'План по ролям (Roles Estimate)', owner: 'Azure DevOps', rule: 'Отображается рядом с назначениями в плане проекта' },
 ];
 
 const DO = [
@@ -15,7 +16,7 @@ const DO = [
   'Оценки и исполнителей меняйте только в Roadmap.',
   'Время списывайте в Completed Work задачи, созданной Roadmap (тег Roadmap).',
   'Если в Azure используются квартальные итерации, называйте их с кварталом: «2026 Q4» или «Q4-2026».',
-  'Настройте webhook, чтобы факт обновлялся сам, без кнопки «Загрузить из Azure».',
+  'Настройте webhook, чтобы фактические часы обновлялись автоматически.',
 ];
 
 const DONT = [
@@ -28,7 +29,7 @@ const DONT = [
 const STATUSES: { mark: React.ReactNode; label: string; detail: string }[] = [
   { mark: <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />, label: 'Не отправлено', detail: 'Назначение ещё ни разу не уходило в Azure' },
   { mark: <RefreshCw className="h-3.5 w-3.5 text-amber-600" />, label: 'Ожидает', detail: 'Изменено в Roadmap; уйдёт автоматически или по кнопке' },
-  { mark: <RefreshCw className="h-3.5 w-3.5 animate-spin text-sky-600" />, label: 'Отправляется', detail: 'Задача сейчас обрабатывается очередью отправки' },
+  { mark: <RefreshCw className="h-3.5 w-3.5 motion-safe:animate-spin text-sky-600" />, label: 'Отправляется', detail: 'Задача сейчас обрабатывается очередью отправки' },
   { mark: <Check className="h-3.5 w-3.5 text-emerald-600" />, label: 'В Azure', detail: 'Задача создана и совпадает с планом. На странице плана значка нет — всё в порядке' },
   { mark: <AlertCircle className="h-3.5 w-3.5 text-destructive" />, label: 'Ошибка', detail: 'Azure отклонил запись — текст ошибки виден в назначении и на вкладке «Проекты»' },
   { mark: <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />, label: 'Конфликт', detail: 'Поле из правил записи изменили вручную в Azure — выберите действие' },
@@ -43,22 +44,23 @@ export function AzureSyncGuide() {
           <FlowCard title="Roadmap" lines={['Фича × роль × человек × квартал', 'Оценка в часах']} />
           <FlowArrow label="план" hint="автоматически или по кнопке" />
           <FlowCard title="Azure DevOps · Task под фичей" lines={['Assigned To = человек', 'Original Estimate / Remaining Work = оценка', 'Iteration = квартал, теги Roadmap']} accent />
-          <FlowArrow label="факт" hint="webhook или «Загрузить из Azure»" />
+          <FlowArrow label="факт" hint="webhook или ручная загрузка" />
           <FlowCard title="Roadmap" lines={['Completed Work задачи = факт назначения', 'Сумма по фиче и эпику']} />
         </div>
       </Panel>
 
       <Panel title="Кто за что отвечает" description="Источник правды для каждого поля. Правьте поле там, где оно «живёт».">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-left text-sm">
+        <div className="overflow-x-auto rounded-b-xl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring" role="region" aria-label="Где менять поля задач" tabIndex={0}>
+          <table className="w-full text-left text-sm">
+            <colgroup><col className="w-[32%]" /><col className="w-[23%] sm:w-[16%]" /><col /></colgroup>
             <thead className="bg-muted/40 text-xs text-muted-foreground">
-              <tr><th className="px-5 py-2.5 font-medium">Поле</th><th className="px-3 py-2.5 font-medium">Где менять</th><th className="px-5 py-2.5 font-medium">Что будет при правке в другом месте</th></tr>
+              <tr><th scope="col" className="px-3 py-2.5 font-medium sm:px-5">Поле</th><th scope="col" className="px-2 py-2.5 font-medium sm:px-3">Где менять</th><th scope="col" className="px-3 py-2.5 font-medium sm:px-5">Что будет при правке в другом месте</th></tr>
             </thead>
             <tbody className="divide-y divide-border/70">
               {OWNERSHIP.map((row) => <tr key={row.field}>
-                <td className="px-5 py-2.5 font-medium text-foreground">{row.field}</td>
-                <td className="px-3 py-2.5"><span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${row.owner === 'Roadmap' ? 'bg-primary/10 text-primary' : 'bg-sky-500/10 text-sky-700 dark:text-sky-300'}`}>{row.owner}</span></td>
-                <td className="px-5 py-2.5 text-muted-foreground">{row.rule}</td>
+                <th scope="row" className="px-3 py-2.5 font-medium text-foreground sm:px-5">{row.field}</th>
+                <td className="px-2 py-2.5 sm:px-3"><span className={`inline-block rounded-lg px-2 py-0.5 text-xs font-medium ${row.owner === 'Roadmap' ? 'bg-primary/10 text-primary' : 'bg-sky-500/10 text-sky-700 dark:text-sky-300'}`}>{row.owner}</span></td>
+                <td className="px-3 py-2.5 text-muted-foreground sm:px-5">{row.rule}</td>
               </tr>)}
             </tbody>
           </table>
@@ -87,12 +89,12 @@ export function AzureSyncGuide() {
         </ul>
       </Panel>
 
-      <Panel title="Порядок первого запуска">
-        <ol className="grid gap-3 p-5 text-sm md:grid-cols-5">
+      <Panel title="Как включить отправку назначений в Azure">
+        <ol className="grid gap-3 p-5 text-sm sm:grid-cols-2 xl:grid-cols-5">
           {[
-            ['PAT с правами записи', 'Вкладка «Подключение»: Work Items — Read & Write'],
-            ['Настройки записи', 'Режим «По кнопке», один проект, шаблон названия'],
-            ['Проверка готовности', 'Вкладка «Проекты»: пробное создание задачи без сохранения'],
+            ['PAT с правами записи', '«Настройки подключения»: Work Items — Read & Write'],
+            ['Запись в Azure', 'Режим «По кнопке», один проект, шаблон названия'],
+            ['Проверка готовности', 'На вкладке «Проекты» откройте «Подробности синхронизации» и нажмите «Проверить готовность».'],
             ['Предпросмотр и отправка', 'Проверьте список и отправьте выбранные назначения'],
             ['Webhook', 'Чтобы факт приходил сам. Потом можно включить «Автоматически»'],
           ].map(([title, detail], index) => <li key={title} className="rounded-lg border border-border/70 p-3">

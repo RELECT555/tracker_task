@@ -4,11 +4,11 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { PrismaService } from '../../../../shared/infrastructure/prisma/prisma.service';
+import { IsActiveAdminHandler } from '../../../identity/application/queries/is-active-admin.handler';
 
 @Injectable()
 export class AdminRoleGuard implements CanActivate {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly isActiveAdmin: IsActiveAdminHandler) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
@@ -16,21 +16,7 @@ export class AdminRoleGuard implements CanActivate {
       .getRequest<{ devUser?: { id: string } }>();
     const userId = request.devUser?.id;
 
-    if (!userId) {
-      throw new ForbiddenException({
-        error: { code: 'FORBIDDEN', message: 'Admin access required' },
-      });
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: { roles: { include: { role: true } } },
-    });
-
-    const isAdmin =
-      user?.isActive && user.roles.some((entry) => entry.role.code === 'admin');
-
-    if (!isAdmin) {
+    if (!userId || !(await this.isActiveAdmin.execute(userId))) {
       throw new ForbiddenException({
         error: { code: 'FORBIDDEN', message: 'Admin access required' },
       });

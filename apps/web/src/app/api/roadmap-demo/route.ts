@@ -1,4 +1,4 @@
-import { get, put } from '@vercel/blob';
+import { BlobError, BlobNotFoundError, BlobPreconditionFailedError, get, put } from '@vercel/blob';
 import { createInitialDemoState, DEMO_BLOB_PATH, runDemoOperation, type DemoState } from '@/entities/roadmap/api/roadmapDemoStore';
 
 export const runtime = 'nodejs';
@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 const writesState = new Set([
   'saveIntegrationSettings', 'createRoleTemplate', 'addRoleFromCatalog', 'createRole',
   'updateRole', 'setRoleMembers', 'setRoleDefaultPerson', 'deleteRole',
-  'saveAllocation', 'saveAllocationQuarter',
+  'saveAllocation', 'saveAllocationQuarter', 'rebalanceAllocations',
 ]);
 
 async function readState(): Promise<{ state: DemoState; etag?: string }> {
@@ -20,7 +20,7 @@ async function readState(): Promise<{ state: DemoState; etag?: string }> {
     if (state.version !== 1) throw new Error('Неизвестная версия данных демо.');
     return { state, etag: blob.blob.etag };
   } catch (error) {
-    if (error instanceof Error && (error.name === 'BlobNotFoundError' || error.message.includes('not found'))) {
+    if (error instanceof BlobNotFoundError) {
       return { state: createInitialDemoState() };
     }
     throw error;
@@ -37,22 +37,25 @@ export async function POST(request: Request) {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const { state, etag } = await readState();
       const data = await runDemoOperation(state, { method: operation.method, args: operation.args });
-      if (etag && !writesState.has(operation.method)) {
+      if (!writesState.has(operation.method)) {
         return Response.json({ data }, { headers: { 'Cache-Control': 'no-store' } });
       }
       try {
         const body = JSON.stringify(state);
         await put(DEMO_BLOB_PATH, body, {
           access: 'private',
+          addRandomSuffix: false,
           contentType: 'application/json; charset=utf-8',
-          allowOverwrite: true,
+          ...(etag ? { ifMatch: etag } : { allowOverwrite: false }),
         });
         return Response.json({ data }, { headers: { 'Cache-Control': 'no-store' } });
       } catch (error) {
-        if (attempt === 3) throw error;
+        const conflict = error instanceof BlobPreconditionFailedError
+          || (!etag && error instanceof BlobError && /already exists|allowOverwrite/i.test(error.message));
+        if (!conflict) throw error;
       }
     }
-    return Response.json({ error: 'Не удалось сохранить демо-данные.' }, { status: 503 });
+    return Response.json({ error: 'Демо-данные изменились одновременно. Повторите действие.' }, { status: 409 });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Ошибка демо Roadmap.';
     return Response.json({ error: message }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
