@@ -54,7 +54,7 @@ export function useAuth() {
       setTokens(data.accessToken, data.refreshToken);
       setHasToken(true);
       queryClient.setQueryData(['auth', 'me'], { user: data.user });
-      const target = variables.redirectTo ?? routes.workspaces;
+      const target = variables.redirectTo ?? routes.roadmap;
       router.push(target);
       router.refresh();
     },
@@ -68,7 +68,7 @@ export function useAuth() {
       setHasToken(true);
       queryClient.clear();
       queryClient.setQueryData(['auth', 'me'], { user: data.user });
-      router.push(routes.workspaces);
+      router.push(routes.roadmap);
       router.refresh();
     },
   });

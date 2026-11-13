@@ -13,7 +13,10 @@
 
 ```bash
 npm install
+npm run db:setup
 npm run dev
 ```
 
-Веб-приложение запускается на `http://localhost:3000`, API — на `http://localhost:3001`.
+`npm run db:setup` запускает PostgreSQL через Docker Compose, применяет миграции и создаёт локальные учётные записи. При использовании собственного PostgreSQL скопируйте `apps/api/.env.example` в `apps/api/.env`, укажите `DATABASE_URL` и выполните `npm run db:generate`, `npm run db:migrate:deploy` и `npm run db:seed`.
+
+Веб-приложение открывает Roadmap по адресу `http://localhost:3000/roadmap`, API доступен по адресу `http://localhost:3001/api/v1`.

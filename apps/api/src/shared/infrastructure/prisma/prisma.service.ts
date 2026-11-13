@@ -30,7 +30,7 @@ export class PrismaService
     } catch (error) {
       this.connected = false;
       this.logger.warn(
-        'PostgreSQL unavailable — API starts in degraded mode. See docs/12-database-and-environments.md',
+        'PostgreSQL unavailable — API starts in degraded mode. See README.md',
       );
       this.logger.debug(error);
       return false;

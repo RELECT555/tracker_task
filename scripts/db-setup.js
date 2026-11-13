@@ -66,7 +66,7 @@ Docker is not installed or not in PATH.
 
 Options:
   1. Install Docker Desktop: https://www.docker.com/products/docker-desktop/
-  2. Or install PostgreSQL locally — see docs/12-database-and-environments.md
+  2. Or use an existing PostgreSQL instance and follow the setup steps in README.md.
 `);
     process.exit(1);
   }

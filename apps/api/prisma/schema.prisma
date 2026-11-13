@@ -88,17 +88,17 @@ model User {
 
   headedUnits OrgUnit[] @relation("OrgUnitHead")
 
-  requests Request[]
+  requests Request[] @ignore
 
-  assignments Assignment[]
+  assignments Assignment[] @ignore
 
-  transitions Transition[]
+  transitions Transition[] @ignore
 
-  comments Comment[]
+  comments Comment[] @ignore
 
-  auditLogs AuditLog[]
+  auditLogs AuditLog[] @ignore
 
-  notifications Notification[]
+  notifications Notification[] @ignore
 
   @@index([orgUnitId])
   @@index([managerId])
@@ -106,6 +106,8 @@ model User {
   @@map("users")
 }
 
+// Historical approval workflow tables are kept for existing databases.
+// Ignored models and relations are excluded from the generated Prisma Client.
 model RouteTemplate {
   id String @default(uuid()) @db.Uuid
 
@@ -122,6 +124,7 @@ model RouteTemplate {
   steps RouteStepTemplate[]
 
   @@id([id, version])
+  @@ignore
   @@map("route_templates")
 }
 
@@ -147,6 +150,7 @@ model RouteStepTemplate {
   routeTemplate RouteTemplate @relation(fields: [routeTemplateId, routeTemplateVersion], references: [id, version], onDelete: Cascade)
 
   @@index([routeTemplateId, routeTemplateVersion])
+  @@ignore
   @@map("route_step_templates")
 }
 
@@ -177,6 +181,7 @@ model RequestType {
 
   requests Request[]
 
+  @@ignore
   @@map("request_types")
 }
 
@@ -223,6 +228,7 @@ model Request {
   @@index([status])
   @@index([typeId])
   @@index([createdAt(sort: Desc)])
+  @@ignore
   @@map("requests")
 }
 
@@ -249,6 +255,7 @@ model Assignment {
 
   @@index([assigneeId, status])
   @@index([requestId])
+  @@ignore
   @@map("assignments")
 }
 
@@ -280,6 +287,7 @@ model Transition {
   actor User? @relation(fields: [actorId], references: [id])
 
   @@index([requestId, createdAt])
+  @@ignore
   @@map("transitions")
 }
 
@@ -301,6 +309,7 @@ model Comment {
   author User @relation(fields: [authorId], references: [id])
 
   @@index([requestId, createdAt])
+  @@ignore
   @@map("comments")
 }
 
@@ -326,9 +335,11 @@ model AuditLog {
   @@index([entityType, entityId, createdAt])
   @@index([actorId, createdAt])
   @@index([createdAt])
+  @@ignore
   @@map("audit_logs")
 }
 
+// Earlier local databases may contain this table from a schema push.
 model Notification {
   id String @id @default(uuid()) @db.Uuid
 
@@ -351,6 +362,7 @@ model Notification {
   request Request? @relation(fields: [requestId], references: [id], onDelete: SetNull)
 
   @@index([userId, isRead, createdAt(sort: Desc)])
+  @@ignore
   @@map("notifications")
 }
 

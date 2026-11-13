@@ -28,7 +28,7 @@ export function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-background px-5 py-12">
       <section className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Roadmap</p>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">Вход в рабочее пространство</h1>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">Вход</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Используйте корпоративную учётную запись, чтобы открыть план проекта.</p>
         <form onSubmit={handleSubmit} className="mt-7 space-y-5">
           <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required /></div>

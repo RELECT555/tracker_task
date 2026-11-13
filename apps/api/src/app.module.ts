@@ -10,7 +10,6 @@ import { HealthModule } from './modules/health/health.module';
 import { IdentityModule } from './modules/identity/identity.module';
 import { RoadmapModule } from './modules/roadmap/roadmap.module';
 import { PrismaModule } from './shared/infrastructure/prisma/prisma.module';
-import { SystemSettingsModule } from './shared/infrastructure/system-settings/system-settings.module';
 import { AuthMiddleware } from './shared/presentation/middleware/auth.middleware';
 
 @Module({
@@ -18,7 +17,6 @@ import { AuthMiddleware } from './shared/presentation/middleware/auth.middleware
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     PrismaModule,
-    SystemSettingsModule,
     HealthModule,
     IdentityModule,
     RoadmapModule,
@@ -35,6 +33,6 @@ export class AppModule implements NestModule {
         // Azure DevOps service hooks authenticate with the shared webhook secret instead.
         { path: 'roadmap/webhooks/azure-devops', method: RequestMethod.POST },
       )
-      .forRoutes('auth', 'users', 'roadmap');
+      .forRoutes('auth', 'roadmap');
   }
 }

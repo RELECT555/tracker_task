@@ -28,15 +28,9 @@ export class AuthMiddleware implements NestMiddleware {
     }
 
     const authHeader = req.header('authorization');
-    // EventSource cannot set custom headers, so the SSE stream falls back to a query param.
-    const queryToken =
-      req.path.endsWith('/notifications/stream') && typeof req.query.token === 'string'
-        ? req.query.token
-        : undefined;
-    const bearerToken = authHeader?.startsWith('Bearer ')
+    const token = authHeader?.startsWith('Bearer ')
       ? authHeader.slice('Bearer '.length).trim()
       : undefined;
-    const token = bearerToken ?? queryToken;
 
     if (token) {
       try {

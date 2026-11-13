@@ -7,7 +7,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Roadmap',
-  description: 'Согласование запросов и маршруты',
+  description: 'Планирование проектов и загрузки команды',
 };
 
 export default function RootLayout({

@@ -14,30 +14,6 @@ export class NotFoundError extends DomainError {
   }
 }
 
-export class AccessDeniedError extends DomainError {
-  constructor(message = 'Access denied') {
-    super(message, 'ACCESS_DENIED');
-  }
-}
-
-export class InvalidTransitionError extends DomainError {
-  constructor(message: string) {
-    super(message, 'INVALID_TRANSITION');
-  }
-}
-
-export class ValidationError extends DomainError {
-  constructor(message: string) {
-    super(message, 'VALIDATION_ERROR');
-  }
-}
-
-export class BusinessRuleViolationError extends DomainError {
-  constructor(message: string) {
-    super(message, 'BUSINESS_RULE_VIOLATION');
-  }
-}
-
 export class UnauthorizedError extends DomainError {
   constructor(message = 'Unauthorized') {
     super(message, 'UNAUTHORIZED');

@@ -8,6 +8,15 @@ const nextConfig = (phase: string): NextConfig => ({
   // манифесты (иначе запущенный `npm run dev` начинает отдавать 500 / ENOENT).
   distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next',
   transpilePackages: ['@tracker/shared'],
+  async redirects() {
+    return [
+      {
+        source: '/workspaces',
+        destination: '/roadmap',
+        permanent: true,
+      },
+    ];
+  },
   // Проксируем API через Next, чтобы фронт и бэк жили на одном origin.
   // Нужно для доступа извне (туннель/демо-стенд): браузер клиента не может
   // достучаться до localhost:3001 на машине, где всё запущено.

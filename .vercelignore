@@ -12,5 +12,3 @@ apps/*/.env*
 apps/*/.turbo/
 apps/api/dist/
 apps/api/coverage/
-seed-out.txt
-tsc-web-out.txt

@@ -28,58 +28,20 @@
   --sidebar-background: 240 6% 7%;
   --sidebar-foreground: 210 20% 98%;
   --sidebar-primary: 258 90% 76%;
-  --sidebar-primary-foreground: 240 6% 7%;
   --sidebar-accent: 252 14% 18%;
-  --sidebar-accent-foreground: 258 90% 76%;
   --sidebar-muted: 215 16% 65%;
   --sidebar-section: 215 18% 62%;
   --sidebar-border: 240 5% 14%;
   --sidebar-ring: 258 90% 76%;
   --radius: 0.5rem;
-  --sidebar-width: 16rem;
 
-  /* Status badges — flip with .dark class, not prefers-color-scheme */
-  --status-draft-bg: 210 20% 94%;
-  --status-draft-fg: 215 20% 32%;
-  --status-draft-border: 214 16% 80%;
-  --status-submitted-bg: 213 94% 95%;
-  --status-submitted-fg: 224 64% 33%;
-  --status-submitted-border: 213 80% 80%;
   --status-progress-bg: 239 84% 95%;
   --status-progress-fg: 243 55% 35%;
-  --status-progress-border: 239 70% 82%;
-  --status-pending-bg: 48 96% 92%;
-  --status-pending-fg: 32 80% 28%;
-  --status-pending-border: 43 90% 72%;
-  --status-approved-bg: 142 60% 92%;
-  --status-approved-fg: 144 80% 18%;
-  --status-approved-border: 142 50% 55%;
-  --status-rejected-bg: 0 86% 95%;
-  --status-rejected-fg: 0 70% 30%;
-  --status-rejected-border: 0 70% 80%;
-  --status-cancelled-bg: 210 20% 94%;
-  --status-cancelled-fg: 215 14% 40%;
-  --status-cancelled-border: 214 16% 80%;
-}
-
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
 }
 
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-
-@keyframes slide-in-from-bottom {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes slide-in-from-top {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes zoom-in {
@@ -92,77 +54,8 @@
 }
 
 .fade-in { animation-name: fade-in; }
-.slide-in-from-bottom-2 { animation-name: slide-in-from-bottom; }
-.slide-in-from-top-1 { animation-name: slide-in-from-top; }
+
 .zoom-in-95 { animation-name: zoom-in; }
-.duration-300 { animation-duration: 300ms; }
-.duration-500 { animation-duration: 500ms; }
-
-/* Login entrance — staggered reveal (form elements, hero panel, side cards) */
-@keyframes fade-slide-in {
-  from { opacity: 0; filter: blur(6px); transform: translateY(12px); }
-  to { opacity: 1; filter: blur(0); transform: translateY(0); }
-}
-
-@keyframes slide-right-in {
-  from { opacity: 0; filter: blur(10px); transform: translateX(24px); }
-  to { opacity: 1; filter: blur(0); transform: translateX(0); }
-}
-
-@keyframes card-rise-in {
-  from { opacity: 0; filter: blur(8px); transform: translateY(16px) scale(0.97); }
-  to { opacity: 1; filter: blur(0); transform: translateY(0) scale(1); }
-}
-
-.animate-element {
-  opacity: 0;
-  animation: fade-slide-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-.animate-slide-right {
-  opacity: 0;
-  animation: slide-right-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-.animate-card {
-  opacity: 0;
-  animation: card-rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-.animate-delay-100 { animation-delay: 100ms; }
-.animate-delay-200 { animation-delay: 200ms; }
-.animate-delay-300 { animation-delay: 300ms; }
-.animate-delay-400 { animation-delay: 400ms; }
-.animate-delay-500 { animation-delay: 500ms; }
-.animate-delay-600 { animation-delay: 600ms; }
-.animate-delay-700 { animation-delay: 700ms; }
-.animate-delay-800 { animation-delay: 800ms; }
-.animate-delay-900 { animation-delay: 900ms; }
-.animate-delay-1000 { animation-delay: 1000ms; }
-.animate-delay-1200 { animation-delay: 1200ms; }
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-element,
-  .animate-slide-right,
-  .animate-card {
-    animation: none;
-    opacity: 1;
-    filter: none;
-    transform: none;
-  }
-}
-
-@keyframes toast-progress {
-  from { transform: scaleX(1); }
-  to { transform: scaleX(0); }
-}
-
-.toast-progress {
-  transform-origin: left;
-  animation-name: toast-progress;
-  animation-timing-function: linear;
-  animation-fill-mode: forwards;
-}
 
 @keyframes spin {
   to { transform: rotate(360deg); }
@@ -170,17 +63,6 @@
 
 .animate-spin {
   animation: spin 1s linear infinite;
-}
-
-.skeleton-shimmer {
-  background: linear-gradient(
-    90deg,
-    hsl(var(--muted)) 0%,
-    hsl(var(--accent)) 50%,
-    hsl(var(--muted)) 100%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.8s ease-in-out infinite;
 }
 
 .dark {
@@ -209,35 +91,14 @@
   --sidebar-background: 248 14% 11%;
   --sidebar-foreground: 210 20% 96%;
   --sidebar-primary: 258 90% 76%;
-  --sidebar-primary-foreground: 248 20% 8%;
   --sidebar-accent: 252 14% 18%;
-  --sidebar-accent-foreground: 258 90% 76%;
   --sidebar-muted: 215 16% 62%;
   --sidebar-section: 215 18% 62%;
   --sidebar-border: 252 10% 22%;
   --sidebar-ring: 258 90% 76%;
 
-  --status-draft-bg: 0 0% 14%;
-  --status-draft-fg: 0 0% 70%;
-  --status-draft-border: 0 0% 22%;
-  --status-submitted-bg: 217 70% 50% / 0.15;
-  --status-submitted-fg: 213 94% 78%;
-  --status-submitted-border: 217 70% 50% / 0.25;
   --status-progress-bg: 258 90% 76% / 0.15;
   --status-progress-fg: 258 90% 80%;
-  --status-progress-border: 258 90% 76% / 0.3;
-  --status-pending-bg: 38 90% 50% / 0.15;
-  --status-pending-fg: 43 96% 70%;
-  --status-pending-border: 38 90% 50% / 0.25;
-  --status-approved-bg: 142 60% 45% / 0.2;
-  --status-approved-fg: 142 70% 75%;
-  --status-approved-border: 142 60% 45% / 0.4;
-  --status-rejected-bg: 0 70% 50% / 0.15;
-  --status-rejected-fg: 0 90% 75%;
-  --status-rejected-border: 0 70% 50% / 0.25;
-  --status-cancelled-bg: 0 0% 14%;
-  --status-cancelled-fg: 0 0% 62%;
-  --status-cancelled-border: 0 0% 22%;
 }
 
 @theme inline {
@@ -268,27 +129,8 @@
   --color-sidebar-muted: hsl(var(--sidebar-muted));
   --color-sidebar-section: hsl(var(--sidebar-section));
   --color-sidebar-border: hsl(var(--sidebar-border));
-  --color-status-draft-bg: hsl(var(--status-draft-bg));
-  --color-status-draft-fg: hsl(var(--status-draft-fg));
-  --color-status-draft-border: hsl(var(--status-draft-border));
-  --color-status-submitted-bg: hsl(var(--status-submitted-bg));
-  --color-status-submitted-fg: hsl(var(--status-submitted-fg));
-  --color-status-submitted-border: hsl(var(--status-submitted-border));
   --color-status-progress-bg: hsl(var(--status-progress-bg));
   --color-status-progress-fg: hsl(var(--status-progress-fg));
-  --color-status-progress-border: hsl(var(--status-progress-border));
-  --color-status-pending-bg: hsl(var(--status-pending-bg));
-  --color-status-pending-fg: hsl(var(--status-pending-fg));
-  --color-status-pending-border: hsl(var(--status-pending-border));
-  --color-status-approved-bg: hsl(var(--status-approved-bg));
-  --color-status-approved-fg: hsl(var(--status-approved-fg));
-  --color-status-approved-border: hsl(var(--status-approved-border));
-  --color-status-rejected-bg: hsl(var(--status-rejected-bg));
-  --color-status-rejected-fg: hsl(var(--status-rejected-fg));
-  --color-status-rejected-border: hsl(var(--status-rejected-border));
-  --color-status-cancelled-bg: hsl(var(--status-cancelled-bg));
-  --color-status-cancelled-fg: hsl(var(--status-cancelled-fg));
-  --color-status-cancelled-border: hsl(var(--status-cancelled-border));
   --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --radius-lg: var(--radius);

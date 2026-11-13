@@ -4,10 +4,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoginHandler } from './application/commands/login.handler';
 import { RefreshTokenHandler } from './application/commands/refresh-token.handler';
 import { GetMeHandler } from './application/queries/get-me.handler';
-import { ListDirectoryUsersHandler } from './application/queries/list-directory-users.handler';
 import { TokenService } from './infrastructure/token.service';
 import { AuthController } from './presentation/auth.controller';
-import { UsersController } from './presentation/users.controller';
 
 @Module({
   imports: [
@@ -19,14 +17,8 @@ import { UsersController } from './presentation/users.controller';
       }),
     }),
   ],
-  controllers: [AuthController, UsersController],
-  providers: [
-    TokenService,
-    LoginHandler,
-    RefreshTokenHandler,
-    GetMeHandler,
-    ListDirectoryUsersHandler,
-  ],
+  controllers: [AuthController],
+  providers: [TokenService, LoginHandler, RefreshTokenHandler, GetMeHandler],
   exports: [TokenService],
 })
 export class IdentityModule {}

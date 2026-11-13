@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
-import { Cable, ChartNoAxesCombined, Check, ChevronDown, ChevronUp, GitBranch, LogIn, LogOut, Monitor, Moon, PanelsTopLeft, Rows3, Settings2, Sun, UserRoundCog, Users } from 'lucide-react';
+import { Cable, ChartNoAxesCombined, Check, ChevronDown, ChevronUp, GitBranch, LogIn, LogOut, Monitor, Moon, Rows3, Settings2, Sun, UserRoundCog, Users } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { DEV_ACCOUNTS } from '@/features/auth/lib/dev-accounts';
@@ -51,7 +51,7 @@ function ProfileMenu({ mobile = false }: { mobile?: boolean }) {
         {DEV_ACCOUNTS.map((account) => {
           const active = account.email === user?.email;
           return <button key={account.email} type="button" disabled={isSwitchingUser || active} onClick={() => void handleSwitchUser(account.email)} className={cn('flex w-full items-start gap-2 px-3 py-2 text-left text-sm transition-colors', active ? 'bg-sidebar-accent/40 text-sidebar-primary' : 'text-sidebar-foreground hover:bg-sidebar-accent/50', isSwitchingUser && 'opacity-60')}>
-            <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{account.name}</p><p className="truncate text-[11px] text-sidebar-muted">{account.label} · {account.hint}</p></div>
+            <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{account.name}</p><p className="truncate text-[11px] text-sidebar-muted">{account.label}</p></div>
             {active ? <Check className="mt-0.5 h-4 w-4 shrink-0 text-sidebar-primary" strokeWidth={1.5} /> : null}
           </button>;
         })}
@@ -93,7 +93,7 @@ export function RoadmapFrame({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-sidebar dark:bg-background">
       <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground md:flex">
-        <Link href={routes.workspaces} title="Рабочие пространства" className="flex h-16 items-center gap-3 px-5">
+        <Link href={routes.roadmap} className="flex h-16 items-center gap-3 px-5">
           <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-sidebar-border/60 bg-sidebar-accent text-sidebar-primary">
             <GitBranch className="h-5 w-5" strokeWidth={1.7} />
           </span>
@@ -103,8 +103,7 @@ export function RoadmapFrame({ children }: { children: React.ReactNode }) {
           </span>
         </Link>
 
-        <nav className="flex-1 px-3 py-5">
-          <p className="mb-2 px-3 text-[11px] font-medium uppercase tracking-wider text-sidebar-section">Рабочее пространство</p>
+        <nav aria-label="Навигация Roadmap" className="flex-1 px-3 py-5">
           <Link
             href={routes.roadmap}
             aria-current={isPlanner ? 'page' : undefined}
@@ -171,10 +170,6 @@ export function RoadmapFrame({ children }: { children: React.ReactNode }) {
             </nav>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <Link href={routes.workspaces} title="Сменить рабочее пространство" aria-label="Сменить рабочее пространство" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-2.5 text-sm text-foreground transition-colors hover:bg-muted sm:px-3">
-              <PanelsTopLeft className="h-4 w-4" />
-              <span className="hidden sm:inline">Сменить пространство</span>
-            </Link>
             <button type="button" onClick={cycleTheme} title={`Тема: ${themeLabel}`} aria-label={`Тема: ${themeLabel}. Нажмите, чтобы переключить`} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:bg-muted">
               <ThemeIcon className="h-4 w-4" />
             </button>
