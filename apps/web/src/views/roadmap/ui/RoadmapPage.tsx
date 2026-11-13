@@ -677,7 +677,7 @@ export function RoadmapPage() {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setFocusMode(false);
+      if (event.key === 'Escape' && !event.defaultPrevented && !document.querySelector('dialog[open]')) setFocusMode(false);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
@@ -730,7 +730,7 @@ export function RoadmapPage() {
   }, [demoMode, queryClient, roadmapProjectId, syncedAt]);
   const createdTaskIds = new Set(plan?.azure?.createdTaskIds);
   const createdTasks = plan?.workItems.filter((item) => createdTaskIds.has(item.externalId)) ?? [];
-  const createProject = canConfigure && configured && !demoMode ? selectedProject : undefined;
+  const createProject = canConfigure && configured && !demoMode && projectsQuery.data?.source === 'azure' ? selectedProject : undefined;
   const currentQuarterKey = `${quarterSelection.year}-Q${quarterSelection.quarter}`;
   const currentQuarterLabel = `Q${quarterSelection.quarter} ${quarterSelection.year}`;
   const currentQuarterMonths = quarterMonths(quarterSelection.year, quarterSelection.quarter);
@@ -998,16 +998,6 @@ export function RoadmapPage() {
               {syncMutation.isPending ? <RefreshCw aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" /> : <ArrowDownToLine aria-hidden="true" className="h-4 w-4" />}
               {syncMutation.isPending ? 'Загружаем проект…' : 'Загрузить проект из Azure'}
             </Button>}
-            {createProject && (
-              <CreateAzureWorkItem
-                key={createProject.id}
-                externalProjectId={createProject.id}
-                projectName={createProject.name}
-                items={plan?.externalId === createProject.id ? plan.workItems : []}
-                people={people}
-                available={projectsQuery.data?.source === 'azure'}
-              />
-            )}
           </div>
 
           {demoMode ? (
@@ -1163,6 +1153,20 @@ export function RoadmapPage() {
                       <span aria-live="polite" className="min-w-20 text-center text-xs font-semibold tabular-nums">{currentQuarterLabel}</span>
                       <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Следующий квартал" onClick={() => shiftQuarter(1)}><ChevronRight aria-hidden="true" className="h-4 w-4" /></Button>
                     </div>
+                    {createProject && plan.externalId === createProject.id && (
+                      <CreateAzureWorkItem
+                        key={createProject.id}
+                        externalProjectId={createProject.id}
+                        projectName={createProject.name}
+                        items={plan.workItems}
+                        people={people}
+                        onCreated={(item, parentExternalId) => {
+                          if (item.type !== 'Feature' || !parentExternalId) return;
+                          const parent = epics.find((epic) => epic.externalId === parentExternalId);
+                          if (parent) setExpandedEpics((current) => new Set(current).add(parent.id));
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -1173,8 +1177,10 @@ export function RoadmapPage() {
 
                 {roles.length && !people.length && configured ? <div className="border-b border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">Чтобы назначать людей на роли, сначала синхронизируйте пользователей Azure DevOps в администрировании Roadmap.</div> : null}
 
-                {!plan.workItems.length ? (
-                  <div className="px-6 py-12 text-center text-sm text-muted-foreground">В проекте пока нет эпиков или фич. Синхронизируйте его с Azure DevOps.</div>
+                {!epics.length && !features.length ? (
+                  <div className="px-6 py-12 text-center text-sm text-muted-foreground">
+                    В проекте пока нет эпиков или фич.{canImportProject ? ' Загрузите проект из Azure DevOps.' : createProject ? ' Создайте первую карточку.' : ''}
+                  </div>
                 ) : (
                   <div className={focusMode ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'flex flex-1 flex-col'}>
                     {!roles.length ? (

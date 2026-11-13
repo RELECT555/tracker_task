@@ -99,6 +99,41 @@ describe('Roadmap work item creation', () => {
     expect(persisted.create).toMatchObject({ parentExternalId: '24373', url: result.url });
   });
 
+  it.each([undefined, '24373'])('creates a Feature with optional Epic parent %s', async (parentExternalId) => {
+    const { service, integration, prisma } = fixture();
+    prisma.roadmapWorkItem.findUnique.mockResolvedValue({ type: 'Epic', state: 'Active' });
+    if (parentExternalId) {
+      integration.requestJson
+        .mockResolvedValueOnce({ id: project.externalId, name: project.name })
+        .mockResolvedValueOnce({ id: 24373, fields: { 'System.TeamProject': project.name, 'System.WorkItemType': 'Epic' } });
+    }
+
+    const feature = { requestId: input.requestId, type: 'Feature', title: 'Test feature', parentExternalId } as const;
+    await expect(service.create(project.externalId, feature)).resolves.toMatchObject({ type: 'Feature', externalId: '12345' });
+
+    const [url, options] = integration.requestJson.mock.lastCall as [string, RequestInit];
+    expect(url).toBe(`${organizationUrl}/${project.externalId}/_apis/wit/workitems/$Feature?api-version=7.1`);
+    const operations = [{ op: 'add', path: '/fields/System.Title', value: feature.title }] as Array<{ op: string; path: string; value: unknown }>;
+    if (parentExternalId) operations.push({
+      op: 'add', path: '/relations/-',
+      value: { rel: 'System.LinkTypes.Hierarchy-Reverse', url: `${organizationUrl}/${project.externalId}/_apis/wit/workitems/${parentExternalId}` },
+    });
+    expect(JSON.parse(options.body as string)).toEqual(operations);
+    expect(prisma.roadmapWorkItem.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ type: 'Feature', parentExternalId }),
+    }));
+  });
+
+  it.each(['Feature', 'Epic'])('rejects a Feature parent even when the local type is %s', async (localType) => {
+    const { service, integration, prisma } = fixture();
+    prisma.roadmapWorkItem.findUnique.mockResolvedValue({ type: localType, state: 'Active' });
+    const feature = { requestId: input.requestId, type: 'Feature', title: 'Test feature', parentExternalId: '24373' } as const;
+
+    await expect(service.create(project.externalId, feature)).rejects.toThrow('Выберите существующий эпик этого проекта.');
+    expect(integration.requestJson).toHaveBeenCalledTimes(localType === 'Epic' ? 2 : 1);
+    expect(prisma.roadmapWorkItemCreateRequest.createMany).not.toHaveBeenCalled();
+  });
+
   it('prevents a repeated POST when an Azure response is lost, including a concurrent submit', async () => {
     const { service, integration } = fixture();
     let rejectSend!: (error: Error) => void;

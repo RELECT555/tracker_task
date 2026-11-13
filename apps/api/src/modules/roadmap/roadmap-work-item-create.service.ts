@@ -18,12 +18,13 @@ import {
 const AZURE_TIMEOUT_MS = 20_000;
 const REQUEST_IN_PROGRESS_MS = 60_000;
 const AZURE_PROJECT_ID = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
-const SUPPORTED_PARENTS = new Set(['epic', 'feature']);
 const DEFINITIVE_AZURE_REJECTIONS = new Set([400, 401, 403, 404, 405, 415, 422, 429]);
+
+export const ROADMAP_CREATE_WORK_ITEM_TYPES = ['Task', 'Epic', 'Feature'] as const;
 
 export type RoadmapWorkItemCreateInput = {
   requestId: string;
-  type: 'Task' | 'Epic';
+  type: (typeof ROADMAP_CREATE_WORK_ITEM_TYPES)[number];
   title: string;
   description?: string;
   parentExternalId?: string;
@@ -235,12 +236,16 @@ export class RoadmapWorkItemCreateService {
       operations.push({ op: 'add', path: '/fields/System.AssignedTo', value: person.email.trim() });
     }
     if (dto.parentExternalId) {
+      const parentTypes = dto.type === 'Feature' ? ['epic'] : ['epic', 'feature'];
+      const invalidParentMessage = dto.type === 'Feature'
+        ? 'Выберите существующий эпик этого проекта.'
+        : 'Выберите существующую фичу или эпик этого проекта.';
       const parent = await this.prisma.roadmapWorkItem.findUnique({
         where: { projectId_externalId: { projectId: project.id, externalId: dto.parentExternalId } },
         select: { type: true, state: true },
       });
-      if (!parent || !SUPPORTED_PARENTS.has(parent.type.toLowerCase()) || parent.state?.toLowerCase() === 'deleted') {
-        throw new BadRequestException('Выберите существующую фичу или эпик этого проекта.');
+      if (!parent || !parentTypes.includes(parent.type.toLowerCase()) || parent.state?.toLowerCase() === 'deleted') {
+        throw new BadRequestException(invalidParentMessage);
       }
       const base = credentials.organizationUrl.replace(/\/$/, '');
       const parentUrl = `${base}/${project.externalId}/_apis/wit/workitems/${dto.parentExternalId}`;
@@ -262,8 +267,8 @@ export class RoadmapWorkItemCreateService {
       const parentType = currentParent?.fields?.['System.WorkItemType'];
       if (String(currentParent?.id) !== dto.parentExternalId
         || typeof parentProject !== 'string' || parentProject.toLowerCase() !== project.name.toLowerCase()
-        || typeof parentType !== 'string' || !SUPPORTED_PARENTS.has(parentType.toLowerCase())) {
-        throw new BadRequestException('Выберите существующую фичу или эпик этого проекта.');
+        || typeof parentType !== 'string' || !parentTypes.includes(parentType.toLowerCase())) {
+        throw new BadRequestException(invalidParentMessage);
       }
       operations.push({
         op: 'add',

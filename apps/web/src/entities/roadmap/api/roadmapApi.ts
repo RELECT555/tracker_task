@@ -110,7 +110,7 @@ export interface RoadmapProjectPlan {
 
 export interface CreateAzureWorkItemInput {
   requestId: string;
-  type: 'Task' | 'Epic';
+  type: 'Epic' | 'Feature' | 'Task';
   title: string;
   description?: string;
   parentExternalId?: string;

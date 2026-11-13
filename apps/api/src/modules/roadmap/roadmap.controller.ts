@@ -5,7 +5,7 @@ import { CurrentUser, type DevUserPayload } from '../../shared/presentation/deco
 import { AdminRoleGuard } from '../admin/presentation/guards/admin-role.guard';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import { RoadmapService } from './roadmap.service';
-import { RoadmapWorkItemCreateService } from './roadmap-work-item-create.service';
+import { ROADMAP_CREATE_WORK_ITEM_TYPES, RoadmapWorkItemCreateService, type RoadmapWorkItemCreateInput } from './roadmap-work-item-create.service';
 
 class PeriodDto {
   @IsOptional() @Matches(/^\d{4}-(0[1-9]|1[0-2])$/) monthKey?: string;
@@ -48,7 +48,7 @@ class PushToAzureDto {
 
 class CreateRoadmapWorkItemDto {
   @IsUUID('4') requestId!: string;
-  @IsIn(['Task', 'Epic']) type!: 'Task' | 'Epic';
+  @IsIn(ROADMAP_CREATE_WORK_ITEM_TYPES) type!: RoadmapWorkItemCreateInput['type'];
   @IsString() @MinLength(1) @MaxLength(255) title!: string;
   @IsOptional() @IsString() @MaxLength(4000) description?: string;
   @IsOptional() @Matches(/^[1-9]\d{0,9}$/) parentExternalId?: string;
