@@ -10,7 +10,7 @@ export type AzureWorkItem = {
   fields: Record<string, unknown>;
 };
 type AzureWorkItemField = { referenceName: string; name?: string; isCustom?: boolean };
-type CustomFieldCatalog = { names: string[]; labels: Map<string, string>; loadedAt: number };
+type CustomFieldCatalog = { names: string[]; loadedAt: number };
 
 const FIELD_CATALOG_TTL_MS = 10 * 60 * 1000;
 
@@ -27,7 +27,8 @@ export class RoadmapWorkItemImportService {
 
   /** Downloads the given work items and upserts them into the Roadmap project. */
   async importWorkItems(project: { id: string }, ids: number[], credentials: AzureDevOpsCredentials) {
-    const catalog = await this.customFields(credentials);
+    const settings = await this.integration.getSyncSettings();
+    const catalog = await this.customFields(credentials, settings);
     const imported: AzureWorkItem[] = [];
     for (let offset = 0; offset < ids.length; offset += 200) {
       const batchIds = ids.slice(offset, offset + 200);
@@ -62,7 +63,7 @@ export class RoadmapWorkItemImportService {
     const fields = item.fields;
     const azureCustomFields = Object.fromEntries(catalog.names
       .filter((fieldName) => fields[fieldName] !== undefined)
-      .map((fieldName) => [catalog.labels.get(fieldName) ?? fieldName, fields[fieldName]]));
+      .map((fieldName) => [fieldName, fields[fieldName]]));
     const actualHoursValue = fields['Microsoft.VSTS.Scheduling.CompletedWork'];
     const actualHours = typeof actualHoursValue === 'number' && Number.isFinite(actualHoursValue)
       ? actualHoursValue
@@ -88,19 +89,23 @@ export class RoadmapWorkItemImportService {
   }
 
   /** Custom role/estimate fields shown in the plan; cached because the catalog is organization-wide. */
-  private async customFields(credentials: AzureDevOpsCredentials): Promise<CustomFieldCatalog> {
+  private async customFields(credentials: AzureDevOpsCredentials, settings: Awaited<ReturnType<RoadmapIntegrationService['getSyncSettings']>>): Promise<CustomFieldCatalog> {
     if (this.fieldCatalog && Date.now() - this.fieldCatalog.loadedAt < FIELD_CATALOG_TTL_MS) return this.fieldCatalog;
     const fieldCatalog = await this.integration.requestJson<{ value: AzureWorkItemField[] }>(
       `${credentials.organizationUrl}/_apis/wit/fields?api-version=${this.apiVersion}`,
       undefined,
       credentials,
     );
+    const explicit = new Set([
+      ...settings.readRules.filter((rule) => rule.field !== 'auto').map((rule) => rule.field),
+      settings.fact.field,
+      ...settings.roleFields.flatMap((link) => [link.estimateField, link.aggregateField].filter((field): field is string => Boolean(field))),
+    ]);
+    const legacyAuto = settings.readRules.some((rule) => rule.field === 'auto') || settings.readRules.length === 0;
     this.fieldCatalog = {
       names: fieldCatalog.value
-        .filter((field) => (field.isCustom || field.referenceName.startsWith('Custom.'))
-          && /role|estimate/i.test(`${field.name ?? ''} ${field.referenceName}`))
+        .filter((field) => explicit.has(field.referenceName) || (legacyAuto && (field.isCustom || field.referenceName.startsWith('Custom.')) && /role|estimate/i.test(`${field.name ?? ''} ${field.referenceName}`)))
         .map((field) => field.referenceName),
-      labels: new Map(fieldCatalog.value.map((field) => [field.referenceName, field.name ?? field.referenceName])),
       loadedAt: Date.now(),
     };
     return this.fieldCatalog;

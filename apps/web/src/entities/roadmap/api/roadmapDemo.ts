@@ -10,7 +10,11 @@ import type {
   RoadmapPerson,
   RoadmapProjectPlan,
   RoadmapRole,
+  RoadmapAzureField,
+  RoadmapAzureState,
+  RoadmapWorkItemType,
 } from './roadmapApi';
+import type { SyncSettingsV2 } from '@tracker/shared';
 
 type DemoMethod =
   | 'connection' | 'integrationSettings' | 'saveIntegrationSettings' | 'testIntegrationConnection'
@@ -18,6 +22,7 @@ type DemoMethod =
   | 'adminRoles' | 'roleCatalog' | 'createRoleTemplate' | 'addRoleFromCatalog' | 'createRole'
   | 'updateRole' | 'setRoleMembers' | 'setRoleDefaultPerson' | 'deleteRole' | 'saveAllocation'
   | 'saveAllocationQuarter' | 'saveWriteBackSettings' | 'writeBackOverview' | 'checkWriteBack'
+  | 'syncSettingsV2' | 'saveSyncSettingsV2' | 'workItemTypes' | 'azureFields' | 'azureStates'
   | 'webhookSecret' | 'rotateWebhookSecret' | 'previewAzurePush' | 'pushProjectToAzure' | 'pushAllocationToAzure';
 
 async function call<T>(method: DemoMethod, args: unknown[] = []): Promise<T> {
@@ -43,6 +48,11 @@ export const roadmapDemoApi = {
   saveWriteBackSettings: (settings: RoadmapWriteBackSettings) => call<RoadmapIntegrationSettings>('saveWriteBackSettings', [settings]),
   writeBackOverview: () => call<RoadmapWriteBackOverview>('writeBackOverview'),
   checkWriteBack: (projectId: string) => call<{ checks: RoadmapReadinessCheck[] }>('checkWriteBack', [projectId]),
+  syncSettingsV2: () => call<SyncSettingsV2>('syncSettingsV2'),
+  saveSyncSettingsV2: (settings: SyncSettingsV2) => call<SyncSettingsV2>('saveSyncSettingsV2', [settings]),
+  workItemTypes: (projectId: string) => call<RoadmapWorkItemType[]>('workItemTypes', [projectId]),
+  azureFields: (projectId: string, workItemType: string, refresh = false) => call<RoadmapAzureField[]>('azureFields', [projectId, workItemType, refresh]),
+  azureStates: (projectId: string, workItemType: string) => call<RoadmapAzureState[]>('azureStates', [projectId, workItemType]),
   webhookSecret: () => call<{ secret: string }>('webhookSecret'),
   rotateWebhookSecret: () => call<{ secret: string }>('rotateWebhookSecret'),
   projects: () => call<{ data: AzureProject[]; source: 'cache' }>('projects'),

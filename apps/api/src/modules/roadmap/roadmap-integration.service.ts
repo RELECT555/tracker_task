@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
+import { normalizeSyncSettings, syncSettingsV2Schema, type SyncSettingsV2 } from '@tracker/shared';
 import { normalizeWriteBackSettings, WriteBackSettings } from './roadmap-write-back.settings';
 
 export interface AzureDevOpsCredentials {
@@ -90,12 +91,28 @@ export class RoadmapIntegrationService {
     return this.writeBackOf(await this.readStoredSettings());
   }
 
+  async getSyncSettings(): Promise<SyncSettingsV2> {
+    const stored = await this.readStoredSettings();
+    return normalizeSyncSettings(stored?.writeBack, stored?.writeBackEnabled);
+  }
+
   async saveWriteBackSettings(input: WriteBackSettings) {
     const stored = await this.readStoredSettings();
     const { writeBackEnabled: _legacy, ...rest } = stored ?? {};
     void _legacy;
     await this.writeStoredSettings({ ...rest, writeBack: normalizeWriteBackSettings(input) });
     return this.getPublicSettings();
+  }
+
+  async saveSyncSettings(input: unknown): Promise<SyncSettingsV2> {
+    const result = syncSettingsV2Schema.safeParse(input);
+    if (!result.success) throw new BadRequestException('Некорректные настройки маппинга полей');
+    const parsed = result.data;
+    const stored = await this.readStoredSettings();
+    const { writeBackEnabled: _legacy, ...rest } = stored ?? {};
+    void _legacy;
+    await this.writeStoredSettings({ ...rest, writeBack: parsed });
+    return parsed;
   }
 
   /** Returns the webhook secret for administrators, creating it on first use. */

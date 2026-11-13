@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { Interval } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
+import { evaluateWriteRules, type TemplateContext } from '@tracker/shared';
 import { AzureDevOpsCredentials, AzureDevOpsHttpError, RoadmapIntegrationService } from './roadmap-integration.service';
 import { AzureWorkItem, RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import {
@@ -24,6 +25,19 @@ type AllocationWithContext = Prisma.RoadmapAllocationGetPayload<{
   include: { role: true; workItem: { include: { project: true } } };
 }>;
 export type ReadinessCheck = { key: string; label: string; status: 'ok' | 'warning' | 'error'; detail: string };
+type AzureFieldMetadata = {
+  referenceName: string;
+  name?: string;
+  type?: string;
+  isCustom?: boolean;
+  readOnly?: boolean;
+  isIdentity?: boolean;
+  isPicklist?: boolean;
+  alwaysRequired?: boolean;
+  allowedValues?: string[];
+  defaultValue?: unknown;
+  helpText?: string;
+};
 
 export function worstReadinessStatus(checks: ReadinessCheck[] | null): ReadinessCheck['status'] | null {
   if (!checks?.length) return null;
@@ -57,6 +71,7 @@ export class RoadmapAzureSyncService {
   private readonly queue = new Set<string>();
   private draining: Promise<void> | null = null;
   private readonly typeFieldCache = new Map<string, CacheEntry<Set<string>>>();
+  private readonly fieldMetadataCache = new Map<string, CacheEntry<AzureFieldMetadata[]>>();
   private readonly iterationCache = new Map<string, CacheEntry<IterationNode | null>>();
   private readonly pendingImports = new Map<string, Set<number>>();
   private importTimer: NodeJS.Timeout | null = null;
@@ -202,6 +217,70 @@ export class RoadmapAzureSyncService {
         updatedAt: allocation.updatedAt,
       })),
     };
+  }
+
+  async workItemTypes(projectId: string) {
+    const project = await this.prisma.roadmapProject.findUnique({ where: { id: projectId }, select: { externalId: true } });
+    if (!project) throw new NotFoundException('Roadmap project was not found');
+    const credentials = await this.integration.getCredentials();
+    const result = await this.integration.requestJson<{ value?: { name: string; referenceName?: string; icon?: { id?: string }; color?: string }[] }>(
+      `${credentials.organizationUrl}/${encodeURIComponent(project.externalId)}/_apis/wit/workitemtypes?api-version=${this.apiVersion}`,
+      undefined,
+      credentials,
+    );
+    return (result.value ?? []).map((item) => ({ name: item.name, referenceName: item.referenceName ?? item.name, icon: item.icon?.id, color: item.color }));
+  }
+
+  async fields(projectId: string, workItemType: string, refresh = false) {
+    const project = await this.prisma.roadmapProject.findUnique({ where: { id: projectId }, select: { externalId: true } });
+    if (!project) throw new NotFoundException('Roadmap project was not found');
+    const cacheKey = `${project.externalId}:${workItemType}`;
+    const cached = this.fieldMetadataCache.get(cacheKey);
+    if (!refresh && cached && Date.now() - cached.loadedAt < CACHE_TTL_MS) return cached.value;
+    const credentials = await this.integration.getCredentials();
+    const [typeFields, globalFields] = await Promise.all([
+      this.integration.requestJson<{ value?: AzureFieldMetadata[] }>(
+        `${credentials.organizationUrl}/${encodeURIComponent(project.externalId)}/_apis/wit/workitemtypes/${encodeURIComponent(workItemType)}/fields?$expand=all&api-version=${this.apiVersion}`,
+        undefined,
+        credentials,
+      ),
+      this.integration.requestJson<{ value?: AzureFieldMetadata[] }>(
+        `${credentials.organizationUrl}/_apis/wit/fields?api-version=${this.apiVersion}`,
+        undefined,
+        credentials,
+      ),
+    ]);
+    const globalByName = new Map((globalFields.value ?? []).map((field) => [field.referenceName, field]));
+    const result = (typeFields.value ?? []).map((field) => {
+      const global = globalByName.get(field.referenceName);
+      return {
+        referenceName: field.referenceName,
+        name: field.name ?? global?.name ?? field.referenceName,
+        type: field.type ?? global?.type ?? 'string',
+        isCustom: field.isCustom ?? global?.isCustom ?? field.referenceName.startsWith('Custom.'),
+        readOnly: field.readOnly ?? global?.readOnly ?? false,
+        isIdentity: field.isIdentity ?? global?.isIdentity ?? false,
+        isPicklist: field.isPicklist ?? global?.isPicklist ?? false,
+        alwaysRequired: field.alwaysRequired ?? false,
+        allowedValues: field.allowedValues,
+        defaultValue: field.defaultValue,
+        helpText: field.helpText ?? global?.helpText,
+      };
+    });
+    this.fieldMetadataCache.set(cacheKey, { value: result, loadedAt: Date.now() });
+    return result;
+  }
+
+  async states(projectId: string, workItemType: string) {
+    const project = await this.prisma.roadmapProject.findUnique({ where: { id: projectId }, select: { externalId: true } });
+    if (!project) throw new NotFoundException('Roadmap project was not found');
+    const credentials = await this.integration.getCredentials();
+    const result = await this.integration.requestJson<{ value?: { name: string; category?: string; color?: string }[] }>(
+      `${credentials.organizationUrl}/${encodeURIComponent(project.externalId)}/_apis/wit/workitemtypes/${encodeURIComponent(workItemType)}/states?api-version=${this.apiVersion}`,
+      undefined,
+      credentials,
+    );
+    return result.value ?? [];
   }
 
   /**
@@ -431,7 +510,7 @@ export class RoadmapAzureSyncService {
         const existingType = existing.fields['System.WorkItemType'];
         const typeName = typeof existingType === 'string' ? existingType : settings.workItemType;
         const typeFields = await this.typeFields(project.externalId, typeName, credentials);
-        await this.updateTask(existing, { assignee, estimate, estimateChanged, settings, typeFields }, credentials);
+        await this.updateTask(existing, { allocation, assignee, estimate, estimateChanged, settings, typeFields }, credentials);
       } else {
         const typeFields = await this.typeFields(project.externalId, settings.workItemType, credentials);
         const operations = await this.createOperations(allocation, assignee, settings, typeFields, credentials);
@@ -488,28 +567,43 @@ export class RoadmapAzureSyncService {
         operations.push({ op: 'add', path: '/fields/System.AreaPath', value: parent.fields['System.AreaPath'] });
       }
     }
+    let iterationPath: string | null = null;
     if (settings.fields.iteration) {
       const iteration = await this.quarterIterationPath(project.externalId, allocation.quarterKey, credentials);
-      if (iteration) operations.push({ op: 'add', path: '/fields/System.IterationPath', value: iteration });
+      if (iteration) { iterationPath = iteration; operations.push({ op: 'add', path: '/fields/System.IterationPath', value: iteration }); }
+    }
+    if (settings.writeRules?.length) {
+      const fieldInfo = new Map([...typeFields].map((referenceName) => [referenceName, { referenceName }]));
+      const evaluation = evaluateWriteRules(settings.writeRules, this.templateContext(allocation, assignee, iterationPath), fieldInfo, true);
+      for (const [targetField, value] of Object.entries(evaluation.values)) {
+        if (!operations.some((operation) => operation.path === `/fields/${targetField}`)) operations.push({ op: 'add', path: `/fields/${targetField}`, value });
+      }
     }
     return operations;
   }
 
   private async updateTask(
     initial: AzureWorkItem,
-    input: { assignee: string; estimate: number; estimateChanged: boolean; settings: WriteBackSettings; typeFields: Set<string> },
+    input: { allocation: AllocationWithContext; assignee: string; estimate: number; estimateChanged: boolean; settings: WriteBackSettings; typeFields: Set<string> },
     credentials: AzureDevOpsCredentials,
   ) {
     let task: AzureWorkItem | null = initial;
     for (let attempt = 0; attempt < 2 && task; attempt += 1) {
       const operations: PatchOperation[] = [];
       const assignedTo = task.fields['System.AssignedTo'] as { uniqueName?: string } | undefined;
+      const completed = Number(task.fields[COMPLETED_WORK] ?? 0) || 0;
       if (input.settings.fields.assignedTo && assignedTo?.uniqueName?.toLowerCase() !== input.assignee.toLowerCase()) {
         operations.push({ op: 'add', path: '/fields/System.AssignedTo', value: input.assignee });
       }
       if (input.estimateChanged) {
-        const completed = Number(task.fields[COMPLETED_WORK] ?? 0) || 0;
         operations.push(...this.estimateOperations(input.estimate, completed, input.settings, input.typeFields, false));
+      }
+      if (input.settings.writeRules?.length) {
+        const fieldInfo = new Map([...input.typeFields].map((referenceName) => [referenceName, { referenceName }]));
+        const evaluation = evaluateWriteRules(input.settings.writeRules, this.templateContext(input.allocation, input.assignee, null, completed), fieldInfo, false);
+        for (const [targetField, value] of Object.entries(evaluation.values)) {
+          if (!operations.some((operation) => operation.path === `/fields/${targetField}`)) operations.push({ op: 'add', path: `/fields/${targetField}`, value });
+        }
       }
       if (!operations.length) return;
       try {
@@ -552,6 +646,18 @@ export class RoadmapAzureSyncService {
       quarterKey: allocation.quarterKey,
       person: allocation.personName,
       id: allocation.workItem.externalId,
+    };
+  }
+
+  private templateContext(allocation: AllocationWithContext, assignee: string, iterationPath: string | null, completed = 0): TemplateContext & { estimate: number; remaining: number; assignee: string; iterationPath: string | null; parentAreaPath: string | null } {
+    return {
+      ...this.templateValues(allocation),
+      personEmail: assignee,
+      estimate: Number(allocation.estimatedHours),
+      remaining: Math.max(0, Number(allocation.estimatedHours) - completed),
+      assignee,
+      iterationPath,
+      parentAreaPath: null,
     };
   }
 

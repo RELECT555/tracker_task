@@ -1,3 +1,10 @@
+import {
+  migrateWriteBackSettingsV1,
+  normalizeSyncSettings,
+  type SyncSettingsV2,
+  type WriteRule,
+} from '@tracker/shared';
+
 /**
  * How Roadmap writes the plan to Azure DevOps.
  * - off: nothing is written; plan changes are only remembered as `pending`.
@@ -26,6 +33,16 @@ export type WriteBackSettings = {
   remainingWorkPolicy: 'recalculate' | 'create-only';
   /** Roadmap project ids that may be written; null means every imported project. */
   projectIds: string[] | null;
+  /** v2 settings are kept alongside the v1-compatible projection during migration. */
+  version?: 2;
+  writeRules?: WriteRule[];
+  readRules?: SyncSettingsV2['readRules'];
+  fact?: SyncSettingsV2['fact'];
+  roleFields?: SyncSettingsV2['roleFields'];
+  writeFeatureAggregates?: boolean;
+  conflictPolicy?: SyncSettingsV2['conflictPolicy'];
+  removalPolicy?: SyncSettingsV2['removalPolicy'];
+  pushPermission?: SyncSettingsV2['pushPermission'];
 };
 
 export const DEFAULT_WRITE_BACK_SETTINGS: WriteBackSettings = {
@@ -81,10 +98,39 @@ export function renderWriteBackTags(template: string, values: WriteBackTemplateV
 
 /** Merges stored settings with defaults; `writeBackEnabled: true` from the first version means automatic mode. */
 export function normalizeWriteBackSettings(stored: Partial<WriteBackSettings> | undefined, legacyEnabled?: boolean): WriteBackSettings {
+  const v2 = normalizeSyncSettings(stored, legacyEnabled);
+  const enabled = new Set(v2.writeRules.filter((rule) => rule.enabled).map((rule) => rule.targetField));
+  const remainingRule = v2.writeRules.find((rule) => rule.targetField === 'Microsoft.VSTS.Scheduling.RemainingWork');
   return {
     ...DEFAULT_WRITE_BACK_SETTINGS,
-    ...(legacyEnabled && !stored?.mode ? { mode: 'auto' as const } : {}),
-    ...stored,
-    fields: { ...DEFAULT_WRITE_BACK_SETTINGS.fields, ...stored?.fields },
+    mode: v2.mode,
+    workItemType: v2.workItemType,
+    titleTemplate: v2.titleTemplate,
+    tagsTemplate: v2.tagsTemplate,
+    projectIds: v2.projectIds,
+    fields: {
+      assignedTo: enabled.has('System.AssignedTo'),
+      originalEstimate: enabled.has('Microsoft.VSTS.Scheduling.OriginalEstimate'),
+      remainingWork: enabled.has('Microsoft.VSTS.Scheduling.RemainingWork'),
+      iteration: enabled.has('System.IterationPath'),
+      areaPath: enabled.has('System.AreaPath'),
+      description: enabled.has('System.Description'),
+    },
+    remainingWorkPolicy: remainingRule?.apply === 'create' ? 'create-only' : 'recalculate',
+    version: 2,
+    writeRules: v2.writeRules,
+    readRules: v2.readRules,
+    fact: v2.fact,
+    roleFields: v2.roleFields,
+    writeFeatureAggregates: v2.writeFeatureAggregates,
+    conflictPolicy: v2.conflictPolicy,
+    removalPolicy: v2.removalPolicy,
+    pushPermission: v2.pushPermission,
   };
 }
+
+export function normalizeSyncWriteBackSettings(stored: unknown, legacyEnabled?: boolean) {
+  return normalizeSyncSettings(stored, legacyEnabled);
+}
+
+export { migrateWriteBackSettingsV1 };

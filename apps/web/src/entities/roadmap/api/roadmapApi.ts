@@ -1,4 +1,5 @@
 import { apiFetch } from '@/shared/api/client';
+import type { SyncSettingsV2 } from '@tracker/shared';
 import { isRoadmapDemoMode, roadmapDemoApi } from './roadmapDemo';
 
 export interface AzureProject {
@@ -184,6 +185,10 @@ export interface RoadmapReadinessCheck {
   detail: string;
 }
 
+export type RoadmapWorkItemType = { name: string; referenceName: string; icon?: string; color?: string };
+export type RoadmapAzureField = { referenceName: string; name: string; type: string; isCustom: boolean; readOnly: boolean; isIdentity: boolean; isPicklist: boolean; alwaysRequired: boolean; allowedValues?: string[]; defaultValue?: unknown; helpText?: string };
+export type RoadmapAzureState = { name: string; category?: string; color?: string };
+
 const liveRoadmapApi = {
   connection: () =>
     apiFetch<{ provider: string; configured: boolean; organizationUrl: string }>(
@@ -207,6 +212,11 @@ const liveRoadmapApi = {
       body: JSON.stringify(settings),
     }),
   writeBackOverview: () => apiFetch<RoadmapWriteBackOverview>('/roadmap/settings/azure-devops/write-back/overview'),
+  syncSettingsV2: () => apiFetch<SyncSettingsV2>('/roadmap/settings/azure-devops/write-back/v2'),
+  saveSyncSettingsV2: (settings: SyncSettingsV2) => apiFetch<SyncSettingsV2>('/roadmap/settings/azure-devops/write-back/v2', { method: 'PUT', body: JSON.stringify(settings) }),
+  workItemTypes: (projectId: string) => apiFetch<RoadmapWorkItemType[]>(`/roadmap/settings/azure-devops/work-item-types?projectId=${encodeURIComponent(projectId)}`),
+  azureFields: (projectId: string, workItemType: string, refresh = false) => apiFetch<RoadmapAzureField[]>(`/roadmap/settings/azure-devops/fields?projectId=${encodeURIComponent(projectId)}&workItemType=${encodeURIComponent(workItemType)}${refresh ? '&refresh=1' : ''}`),
+  azureStates: (projectId: string, workItemType: string) => apiFetch<RoadmapAzureState[]>(`/roadmap/settings/azure-devops/states?projectId=${encodeURIComponent(projectId)}&workItemType=${encodeURIComponent(workItemType)}`),
   checkWriteBack: (projectId: string) =>
     apiFetch<{ checks: RoadmapReadinessCheck[] }>(`/roadmap/settings/azure-devops/write-back/check/${encodeURIComponent(projectId)}`, { method: 'POST', body: '{}' }),
   webhookSecret: () => apiFetch<{ secret: string }>('/roadmap/settings/azure-devops/webhook-secret'),

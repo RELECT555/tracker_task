@@ -10,12 +10,13 @@ import { Label } from '@/shared/ui/label';
 import { AdminAlert, AdminCard, AdminPage, AdminPageHeader, StatusPill } from './AdminLayout';
 import { AzureSyncStart } from './integrations/AzureSyncStart';
 import { AzureSyncGuide } from './integrations/AzureSyncGuide';
+import { FieldMappingPanel } from './integrations/FieldMappingPanel';
 import { Chip, MODE_LABEL } from './integrations/parts';
 import { SyncProjectsPanel } from './integrations/SyncProjectsPanel';
 import { WebhookPanel } from './integrations/WebhookPanel';
 import { WriteBackSettingsPanel } from './integrations/WriteBackSettingsPanel';
 
-type Tab = 'start' | 'connection' | 'guide' | 'write-back' | 'projects' | 'webhook';
+type Tab = 'start' | 'connection' | 'guide' | 'write-back' | 'mapping' | 'projects' | 'webhook';
 const TAB_STORAGE_KEY = 'roadmap-integrations-tab';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; needsConnection?: boolean }[] = [
@@ -23,6 +24,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; needsConnection?: b
   { id: 'connection', label: 'Подключение', icon: <PlugZap className="h-4 w-4" /> },
   { id: 'guide', label: 'Как это работает', icon: <BookOpen className="h-4 w-4" /> },
   { id: 'write-back', label: 'Настройки записи', icon: <SlidersHorizontal className="h-4 w-4" />, needsConnection: true },
+  { id: 'mapping', label: 'Маппинг полей', icon: <SlidersHorizontal className="h-4 w-4" />, needsConnection: true },
   { id: 'projects', label: 'Проекты и статус', icon: <FolderSync className="h-4 w-4" />, needsConnection: true },
   { id: 'webhook', label: 'Webhook', icon: <Webhook className="h-4 w-4" />, needsConnection: true },
 ];
@@ -110,6 +112,7 @@ export function RoadmapIntegrationsPage() {
         {activeTab === 'connection' ? <ConnectionCard /> : null}
         {activeTab === 'guide' ? <AzureSyncGuide /> : null}
         {activeTab === 'write-back' && settings ? <WriteBackSettingsPanel settings={settings.writeBack} overview={overview} /> : null}
+        {activeTab === 'mapping' ? <FieldMappingPanel overview={overview} /> : null}
         {activeTab === 'projects' ? <SyncProjectsPanel overview={overview} loading={overviewQuery.isLoading} /> : null}
         {activeTab === 'webhook' && settings ? <WebhookPanel webhookConfigured={settings.webhookConfigured} /> : null}
       </div>

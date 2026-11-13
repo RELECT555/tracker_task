@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import { ArrayUnique, IsArray, IsBoolean, IsIn, IsOptional, IsString, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { AdminRoleGuard } from '../admin/presentation/guards/admin-role.guard';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import { RoadmapIntegrationService } from './roadmap-integration.service';
+import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 
 class SaveAzureDevOpsSettingsDto {
   @IsString() @MinLength(8) organizationUrl!: string;
@@ -40,6 +41,7 @@ export class RoadmapSettingsController {
   constructor(
     private readonly integration: RoadmapIntegrationService,
     private readonly azureSync: RoadmapAzureSyncService,
+    private readonly importer: RoadmapWorkItemImportService,
   ) {}
 
   @Get('azure-devops')
@@ -57,9 +59,37 @@ export class RoadmapSettingsController {
     return this.integration.saveWriteBackSettings({ ...dto, workItemType: dto.workItemType.trim(), projectIds: dto.projectIds ?? null });
   }
 
+  @Get('azure-devops/write-back/v2')
+  getWriteBackSettingsV2() {
+    return this.integration.getSyncSettings();
+  }
+
+  @Put('azure-devops/write-back/v2')
+  saveWriteBackSettingsV2(@Body() dto: unknown) {
+    return this.integration.saveSyncSettings(dto).then((result) => { this.importer.invalidateFieldCatalog(); return result; });
+  }
+
   @Get('azure-devops/write-back/overview')
   writeBackOverview() {
     return this.azureSync.overview();
+  }
+
+  @Get('azure-devops/work-item-types')
+  workItemTypes(@Query('projectId') projectId: string) {
+    if (!projectId) throw new BadRequestException('Укажите projectId');
+    return this.azureSync.workItemTypes(projectId);
+  }
+
+  @Get('azure-devops/fields')
+  fields(@Query('projectId') projectId: string, @Query('workItemType') workItemType: string, @Query('refresh') refresh?: string) {
+    if (!projectId || !workItemType) throw new BadRequestException('Укажите projectId и workItemType');
+    return this.azureSync.fields(projectId, workItemType, refresh === '1');
+  }
+
+  @Get('azure-devops/states')
+  states(@Query('projectId') projectId: string, @Query('workItemType') workItemType: string) {
+    if (!projectId || !workItemType) throw new BadRequestException('Укажите projectId и workItemType');
+    return this.azureSync.states(projectId, workItemType);
   }
 
   @Post('azure-devops/write-back/check/:projectId')

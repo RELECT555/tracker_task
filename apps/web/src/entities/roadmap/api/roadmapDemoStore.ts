@@ -1,7 +1,9 @@
 import type {
   AzureProject, RoadmapAllocation, RoadmapIntegrationSettings, RoadmapPeriod,
   RoadmapPerson, RoadmapProjectPlan, RoadmapRole, RoadmapWriteBackSettings,
+  RoadmapAzureField, RoadmapAzureState, RoadmapWorkItemType,
 } from './roadmapApi';
+import type { SyncSettingsV2 } from '@tracker/shared';
 
 export const DEMO_BLOB_PATH = 'roadmap/demo-state-v1.json';
 const PROJECT_ID = 'demo-roadmap-project';
@@ -13,6 +15,12 @@ const DEMO_WRITE_BACK: RoadmapWriteBackSettings = {
   mode: 'off', workItemType: 'Task', titleTemplate: '{role}: {title} ({quarter})', tagsTemplate: 'Roadmap; Roadmap {quarterKey}; {role}',
   fields: { assignedTo: true, originalEstimate: true, remainingWork: true, iteration: true, areaPath: true, description: true },
   remainingWorkPolicy: 'recalculate', projectIds: null,
+};
+const DEMO_SYNC_SETTINGS: SyncSettingsV2 = {
+  version: 2, mode: 'off', projectIds: null, workItemType: 'Task',
+  titleTemplate: '{role}: {title} ({quarter})', tagsTemplate: 'Roadmap; Roadmap {quarterKey}; {role}',
+  writeRules: [], readRules: [], fact: { field: 'Microsoft.VSTS.Scheduling.CompletedWork', scope: 'roadmapTasks', unlinkedTasks: 'featureOnly' },
+  roleFields: [], writeFeatureAggregates: false, conflictPolicy: 'overwrite', removalPolicy: { action: 'keep' }, pushPermission: 'planners',
 };
 
 export type DemoState = {
@@ -173,7 +181,11 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
     case 'saveIntegrationSettings': state.organizationUrl = arg0.organizationUrl; return integrationSettings(state);
     case 'testIntegrationConnection': throw new Error('Подключение Azure DevOps недоступно в демо. Данные проекта уже загружены.');
     case 'writeBackOverview': return { settings: DEMO_WRITE_BACK, projects: [], errors: [] };
-    case 'saveWriteBackSettings': case 'checkWriteBack': case 'webhookSecret': case 'rotateWebhookSecret':
+    case 'syncSettingsV2': return clone(DEMO_SYNC_SETTINGS);
+    case 'workItemTypes': return [] as RoadmapWorkItemType[];
+    case 'azureFields': return [] as RoadmapAzureField[];
+    case 'azureStates': return [] as RoadmapAzureState[];
+    case 'saveWriteBackSettings': case 'saveSyncSettingsV2': case 'checkWriteBack': case 'webhookSecret': case 'rotateWebhookSecret':
     case 'previewAzurePush': case 'pushProjectToAzure': case 'pushAllocationToAzure':
       throw new Error('Запись плана в Azure DevOps недоступна в демо.');
     case 'projects': return { data: clone(state.projects), source: 'cache' };
