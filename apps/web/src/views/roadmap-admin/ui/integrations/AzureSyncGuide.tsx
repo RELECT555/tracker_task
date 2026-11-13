@@ -7,7 +7,7 @@ const OWNERSHIP: { field: string; owner: 'Roadmap' | 'Azure DevOps'; rule: strin
   { field: 'Remaining Work', owner: 'Roadmap', rule: 'В режиме «пересчитывать» = оценка − списанное при каждой смене оценки; в режиме «только при создании» дальше ведётся в Azure' },
   { field: 'Факт (Completed Work)', owner: 'Azure DevOps', rule: 'Люди списывают время в своей задаче. Roadmap только читает и суммирует по фичам и эпикам' },
   { field: 'Название, состояние, описание, комментарии задачи', owner: 'Azure DevOps', rule: 'Roadmap задаёт их один раз при создании и больше не трогает' },
-  { field: 'Эпики и фичи', owner: 'Azure DevOps', rule: 'Roadmap только читает: названия, состояния, иерархию' },
+  { field: 'Эпики и фичи', owner: 'Azure DevOps', rule: 'Создать карточку можно из плана. Редактировать название, состояние и иерархию нужно в Azure' },
   { field: 'План по ролям (Roles Estimate)', owner: 'Azure DevOps', rule: 'Отображается рядом с назначениями в плане проекта' },
 ];
 
@@ -16,7 +16,7 @@ const DO = [
   'Оценки и исполнителей меняйте только в Roadmap.',
   'Время списывайте в Completed Work задачи, созданной Roadmap (тег Roadmap).',
   'Если в Azure используются квартальные итерации, называйте их с кварталом: «2026 Q4» или «Q4-2026».',
-  'Настройте webhook, чтобы фактические часы обновлялись автоматически.',
+  'Настройте webhook, чтобы быстрее получать изменения из Azure и обрабатывать удаления.',
 ];
 
 const DONT = [
@@ -44,7 +44,7 @@ export function AzureSyncGuide() {
           <FlowCard title="Roadmap" lines={['Фича × роль × человек × квартал', 'Оценка в часах']} />
           <FlowArrow label="план" hint="автоматически или по кнопке" />
           <FlowCard title="Azure DevOps · Task под фичей" lines={['Assigned To = человек', 'Original Estimate / Remaining Work = оценка', 'Iteration = квартал, теги Roadmap']} accent />
-          <FlowArrow label="факт" hint="webhook или ручная загрузка" />
+          <FlowArrow label="факт" hint="каждые 5 минут или по webhook" />
           <FlowCard title="Roadmap" lines={['Completed Work задачи = факт назначения', 'Сумма по фиче и эпику']} />
         </div>
       </Panel>
@@ -96,7 +96,7 @@ export function AzureSyncGuide() {
             ['Запись в Azure', 'Режим «По кнопке», один проект, шаблон названия'],
             ['Проверка готовности', 'На вкладке «Проекты» откройте «Подробности синхронизации» и нажмите «Проверить готовность».'],
             ['Предпросмотр и отправка', 'Проверьте список и отправьте выбранные назначения'],
-            ['Webhook', 'Чтобы факт приходил сам. Потом можно включить «Автоматически»'],
+            ['Webhook', 'Чтобы быстрее получать изменения из Azure и видеть конфликты'],
           ].map(([title, detail], index) => <li key={title} className="rounded-lg border border-border/70 p-3">
             <p className="text-xs font-semibold text-primary">Шаг {index + 1}</p>
             <p className="mt-1 font-medium text-foreground">{title}</p>

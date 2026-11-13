@@ -17,11 +17,10 @@ Set `ROADMAP_ENCRYPTION_KEY` to a stable server secret for encrypting saved cred
 
 ## Import projects and roles
 
-1. In **Роли → Роли из Azure DevOps**, choose a project and click **Загрузить роли из Azure**. The same import is available in **Интеграции → Проекты и роли**. Roadmap reads the visible numeric role estimate fields on the project's **Roles Estimate** forms. This loads the project and roles without loading work items or sending changes to Azure DevOps. If Azure rejects access, use **Настройки подключения** to check or replace the saved token; saved roles remain available.
-2. Open **Роли**, choose a role, then choose the project and employee by full name. Roles linked to Azure DevOps have a source badge. You can also create roles manually. If the employee list is empty, import it from **Пользователи**.
-3. On **План проекта**, click **Загрузить задачи** to read Epics, Features and their role estimates. A value such as **План Azure: 32 ч** is the estimate for that role on the whole work item. It is shown alongside the Roadmap assignments and does not populate or replace their quarterly hours.
+1. On **План проекта**, choose a project and click **Загрузить проект из Azure**. Roadmap imports the project, work items and roles from the visible numeric fields on the project's **Roles Estimate** forms. A value such as **План Azure: 32 ч** is the estimate for that role on the whole work item. Roadmap shows it alongside the quarterly assignments.
+2. Open **Роли и участники** from the plan or the administration menu. Choose the project, select a role and configure its members and default assignee. Roles linked to Azure DevOps have a source badge. If the employee list is empty, import it from **Пользователи**.
 
-Project and role import is available to administrators at `POST /roadmap/projects/:externalId/sync-catalog`. If the Azure process layout is unavailable or the tab has no matching fields, the project can still be added and the existing roles are preserved. See [Azure DevOps work item type layouts](https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/work-item-types/list?view=azure-devops-rest-7.1).
+Project import runs through `POST /roadmap/projects/:externalId/sync`. If the Azure process layout is unavailable or the tab has no matching fields, Roadmap still imports the work items and preserves the existing roles. See [Azure DevOps work item type layouts](https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/work-item-types/list?view=azure-devops-rest-7.1).
 
 ## Planning model
 
@@ -36,7 +35,9 @@ Project and role import is available to administrators at `POST /roadmap/project
 - Monthly values are non-negative half-hour increments. Their sum, including preserved legacy period estimates, cannot exceed the assignment's overall estimate. The remaining estimate is shown separately.
 - Older custom date ranges are preserved and shown separately; the system does not automatically split their hours between months.
 
-Use **Обновить задачи** on an imported project to refresh work item names, types, states, parent links, the standard `Completed Work` value, and role estimates. Actual hours on Features and Epics include their own `Completed Work` plus actual hours from descendant Tasks, following intermediate parent work items. Existing planning assignments remain attached to the matching Azure DevOps work item IDs.
+After the first import, the Roadmap API checks for new and changed work items every five minutes. It refreshes names, types, states, parent links, the standard `Completed Work` value and role estimates even when the plan is closed. Use **Обновить проект из Azure** in **Интеграции → Проекты** for a manual refresh, including the list of roles. Actual hours on Features and Epics include their own `Completed Work` plus actual hours from descendant Tasks, following intermediate parent work items. Existing planning assignments remain attached to the matching Azure DevOps work item IDs.
+
+Use **Создать карточку** in the planning table to add an Epic, Feature, or Task to Azure DevOps. You can link a Feature to an Epic and a Task to a Feature or an Epic.
 
 ## Two-way sync with Azure DevOps
 
@@ -45,7 +46,7 @@ Roadmap owns its quarterly assignments; Azure DevOps owns the source role estima
 - **Справка** — data flow, field ownership, assignment statuses and steps for turning on write-back.
 - **Запись в Azure** — mode, project scope, work item type, title/tag templates, fields to write and the Remaining Work policy.
 - **Поля задач** — Azure field discovery, write/read rules, fact source, and role-to-field links.
-- **Проекты** — project and role import, task and actual-hours sync, and send errors. Open **Подробности синхронизации** on a project row to check readiness and see recent activity.
+- **Проекты** — sync status, project refresh and send errors. Open **Подробности синхронизации** on a project row to check readiness and see recent activity. To add a project, open **План проекта**.
 - **Webhook** — secret and step-by-step service hook setup.
 
 The integration overview stores the last readiness check and the last webhook event for each imported project. Assignment statuses include **sending** while a queue item is being processed and **conflict** when Azure changed a field controlled by Roadmap.
@@ -69,7 +70,7 @@ The **Поля задач** section discovers work item types, fields and states
 
 The PAT needs **Work Items: Read & Write** for write-back.
 
-**Fact ← Azure DevOps.** People log time in Completed Work of their Task. It becomes the assignment's fact (shown as `fact / plan` on the assignment) and rolls up into the Feature and Epic fact. Without a webhook this refreshes on **Synchronize** (plan page) or **Load from Azure** (Integrations → Projects and status); with a webhook it refreshes a couple of seconds after the change:
+**Fact ← Azure DevOps.** People log time in Completed Work of their Task. The assignment editor shows these actual hours, and the plan table rolls them up by Feature, Epic, and role. The scheduled import updates them every five minutes. Set up a webhook for faster updates and to process deletions:
 
 1. In Azure DevOps open **Project settings → Service hooks → Create subscription → Web Hooks**.
 2. Subscribe to *Work item created*, *updated*, *deleted* and *restored* (one subscription per event).
