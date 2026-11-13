@@ -2,32 +2,44 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTheme } from 'next-themes';
-import { Cable, ChartNoAxesCombined, Check, ChevronDown, ChevronUp, GitBranch, LogIn, LogOut, Monitor, Moon, Rows3, Settings2, Sun, UserRoundCog, Users } from 'lucide-react';
+import { ChartNoAxesCombined, Check, ChevronDown, ChevronUp, GitBranch, LogIn, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Settings2, Sun, Users, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { DEV_ACCOUNTS } from '@/features/auth/lib/dev-accounts';
+import { roadmapAdminSections } from '@/shared/config/roadmap-admin-sections';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
 
-const adminLinks = [
-  { href: routes.roadmapAdminHome, label: 'Обзор', icon: Settings2 },
-  { href: routes.roadmapAdmin, label: 'Интеграции', icon: Cable },
-  { href: routes.roadmapAdminUsers, label: 'Пользователи', icon: Users },
-  { href: routes.roadmapAdminRoles, label: 'Роли', icon: UserRoundCog },
+const SIDEBAR_STORAGE_KEY = 'roadmap:sidebar-collapsed';
+const ADMIN_LABEL = 'Администрирование';
+
+const roadmapLinks = [
+  { href: routes.roadmap, label: 'План проекта', icon: Rows3 },
+  { href: routes.roadmapAnalytics, label: 'Аналитика', icon: ChartNoAxesCombined },
 ];
 
 function initials(fullName: string) {
   return fullName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
 }
 
-function ProfileMenu({ mobile = false }: { mobile?: boolean }) {
-  const { user, isAuthenticated, logout, switchUser, isSwitchingUser } = useAuth();
+function ProfileMenu({ auth, mobile = false, collapsed = false }: {
+  auth: ReturnType<typeof useAuth>;
+  mobile?: boolean;
+  collapsed?: boolean;
+}) {
+  const { user, isAuthenticated, logout, switchUser, isSwitchingUser } = auth;
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuId = useId();
+  const trigger = useRef<HTMLButtonElement>(null);
   const displayName = user?.fullName ?? 'Dev-пользователь';
   const displayEmail = user?.email ?? 'без JWT (DEV_USER_ID)';
   const primaryRole = user?.roles[0] ?? 'dev';
+  const compact = mobile || collapsed;
+
+  useEffect(() => setMenuOpen(false), [pathname]);
 
   async function handleSwitchUser(email: string) {
     if (email === user?.email || isSwitchingUser) return;
@@ -36,17 +48,26 @@ function ProfileMenu({ mobile = false }: { mobile?: boolean }) {
   }
 
   return (
-    <div className={cn('relative', mobile ? 'md:hidden' : 'hidden md:block')}>
-      <button type="button" onClick={() => setMenuOpen((open) => !open)} aria-label="Профиль пользователя" className={cn('flex items-center gap-3 rounded-lg border border-sidebar-border/50 bg-sidebar-accent/30 text-left transition-colors hover:bg-sidebar-accent/50', mobile ? 'h-9 w-9 justify-center p-0' : 'w-full px-3 py-2.5')}>
+    <div
+      className={cn('relative', mobile ? 'md:hidden' : 'hidden md:block')}
+      onKeyDown={(event) => {
+        if (menuOpen && event.key === 'Escape') {
+          event.stopPropagation();
+          setMenuOpen(false);
+          trigger.current?.focus();
+        }
+      }}
+    >
+      <button ref={trigger} type="button" onClick={() => setMenuOpen((open) => !open)} aria-label="Профиль пользователя" aria-expanded={menuOpen} aria-controls={menuOpen ? menuId : undefined} title={collapsed ? displayName : undefined} className={cn('flex items-center gap-3 rounded-lg border border-sidebar-border/50 bg-sidebar-accent/30 text-left transition-colors hover:bg-sidebar-accent/50 focus-visible:outline-2 focus-visible:outline-sidebar-primary', mobile ? 'size-9 justify-center' : collapsed ? 'h-10 w-full justify-center' : 'w-full px-3 py-2.5')}>
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-sidebar-accent text-xs font-semibold text-sidebar-primary">{initials(displayName)}</div>
-        {!mobile ? <div className="min-w-0 flex-1">
+        {!compact ? <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-sidebar-foreground">{displayName}</p>
           <p className="truncate text-xs text-sidebar-muted">{displayEmail}</p>
           <span className="mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sidebar-muted">{primaryRole}</span>
         </div> : null}
-        {!mobile ? <ChevronUp className={cn('h-4 w-4 shrink-0 text-sidebar-muted transition-transform', menuOpen && 'rotate-180')} strokeWidth={1.5} /> : null}
+        {!compact ? <ChevronUp className={cn('h-4 w-4 shrink-0 text-sidebar-muted transition-transform', menuOpen && 'rotate-180')} strokeWidth={1.5} aria-hidden="true" /> : null}
       </button>
-      {menuOpen ? <div className={cn('absolute z-50 max-h-[min(24rem,70vh)] overflow-y-auto rounded-lg border border-sidebar-border/50 bg-sidebar shadow-lg', mobile ? 'right-0 top-full mt-2 w-72' : 'bottom-full left-0 right-0 mb-1')}>
+      {menuOpen ? <div id={menuId} className={cn('absolute z-50 max-h-[min(24rem,70vh)] overflow-y-auto rounded-lg border border-sidebar-border/50 bg-sidebar shadow-lg', mobile ? 'right-0 top-full mt-2 w-72' : collapsed ? 'bottom-0 left-full ml-2 w-72' : 'bottom-full left-0 right-0 mb-1')}>
         <div className="border-b border-sidebar-border/40 px-3 py-2"><p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-sidebar-muted"><Users className="h-3 w-3" strokeWidth={1.5} />Сменить пользователя</p></div>
         {DEV_ACCOUNTS.map((account) => {
           const active = account.email === user?.email;
@@ -61,19 +82,68 @@ function ProfileMenu({ mobile = false }: { mobile?: boolean }) {
   );
 }
 
+type RoadmapNavItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  active: boolean;
+  collapsed?: boolean;
+  className?: string;
+};
+
+function RoadmapNavLink({ href, label, icon: Icon, active, collapsed, className }: RoadmapNavItem) {
+  return (
+    <Link
+      href={href}
+      aria-label={collapsed ? label : undefined}
+      title={collapsed ? label : undefined}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        'flex h-10 items-center rounded-lg text-sm transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sidebar-primary',
+        collapsed ? 'justify-center' : 'gap-3 px-3',
+        active ? 'bg-sidebar-accent font-medium text-sidebar-primary' : 'text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+        className,
+      )}
+    >
+      <Icon className="size-[18px] shrink-0" strokeWidth={1.5} aria-hidden="true" />
+      {!collapsed && <span>{label}</span>}
+    </Link>
+  );
+}
+
 export function RoadmapFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user } = useAuth();
+  const auth = useAuth();
   const { theme, setTheme } = useTheme();
   const [themeMounted, setThemeMounted] = useState(false);
-  const isAdmin = isAdminUser(user);
-  const isAdminSection = pathname.startsWith(routes.roadmapAdminHome);
-  const [adminMenuOpen, setAdminMenuOpen] = useState(isAdminSection);
-  const isPlanner = pathname === routes.roadmap;
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const isAdmin = isAdminUser(auth.user);
+  const isAdminHome = pathname === routes.roadmapAdminHome;
+  const activeAdminSection = roadmapAdminSections.find(({ href }) => pathname === href);
+  const isAdminSection = isAdminHome || pathname.startsWith(`${routes.roadmapAdminHome}/`);
+  const [adminMenuOpen, setAdminMenuOpen] = useState(Boolean(activeAdminSection));
   useEffect(() => setThemeMounted(true), []);
   useEffect(() => {
-    if (isAdminSection) setAdminMenuOpen(true);
-  }, [isAdminSection, pathname]);
+    try {
+      setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true');
+    } catch {
+      // Keep the default when browser storage is unavailable.
+    }
+  }, []);
+  useEffect(() => {
+    if (activeAdminSection) setAdminMenuOpen(true);
+  }, [activeAdminSection]);
+  const toggleSidebar = () => {
+    const nextCollapsed = !sidebarCollapsed;
+    setSidebarCollapsed(nextCollapsed);
+    try {
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(nextCollapsed));
+    } catch {
+      // Toggling still works without browser storage.
+    }
+  };
+  const sidebarToggleLabel = sidebarCollapsed ? 'Развернуть боковую панель' : 'Свернуть боковую панель';
+  const SidebarToggleIcon = sidebarCollapsed ? PanelLeftOpen : PanelLeftClose;
   const themeLabel = !themeMounted ? 'Системная' : theme === 'dark' ? 'Тёмная' : theme === 'light' ? 'Светлая' : 'Системная';
   const ThemeIcon = !themeMounted ? Monitor : theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
   const cycleTheme = () => {
@@ -83,97 +153,112 @@ export function RoadmapFrame({ children }: { children: React.ReactNode }) {
   };
   const breadcrumbs = [
     { label: 'Roadmap', href: routes.roadmap },
-    ...(pathname.startsWith(routes.roadmapAdminHome) ? [{ label: 'Администрирование', href: routes.roadmapAdminHome }] : []),
+    ...(isAdminSection ? [{ label: ADMIN_LABEL, href: isAdminHome ? undefined : routes.roadmapAdminHome }] : []),
     ...(pathname === routes.roadmapAnalytics ? [{ label: 'Аналитика' }] : []),
-    ...(pathname === routes.roadmapAdminUsers ? [{ label: 'Пользователи' }] : []),
-    ...(pathname === routes.roadmapAdminRoles ? [{ label: 'Роли' }] : []),
-    ...(pathname === routes.roadmapAdmin ? [{ label: 'Интеграции' }] : []),
+    ...(activeAdminSection ? [{ label: activeAdminSection.title }] : []),
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden bg-sidebar dark:bg-background">
-      <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground md:flex">
-        <Link href={routes.roadmap} className="flex h-16 items-center gap-3 px-5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-sidebar-border/60 bg-sidebar-accent text-sidebar-primary">
-            <GitBranch className="h-5 w-5" strokeWidth={1.7} />
-          </span>
-          <span>
-            <span className="block text-sm font-semibold tracking-tight">Roadmap</span>
-            <span className="block text-[10px] uppercase tracking-[0.13em] text-sidebar-muted">Планирование</span>
-          </span>
-        </Link>
-
-        <nav aria-label="Навигация Roadmap" className="flex-1 px-3 py-5">
-          <Link
-            href={routes.roadmap}
-            aria-current={isPlanner ? 'page' : undefined}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${isPlanner ? 'bg-sidebar-accent font-medium text-sidebar-primary' : 'text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
-          >
-            <Rows3 className="h-[18px] w-[18px]" strokeWidth={1.5} />
-            План проекта
+    <div className="roadmap-frame relative flex h-dvh overflow-clip bg-sidebar dark:bg-background">
+      <aside id="roadmap-sidebar" className={cn('hidden h-full shrink-0 flex-col border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground md:flex', sidebarCollapsed ? 'w-16' : 'w-64')}>
+        <div className={cn('flex h-16 shrink-0 items-center gap-2', sidebarCollapsed ? 'justify-center' : 'justify-between pl-5 pr-3')}>
+          <Link href={routes.roadmap} className={cn('flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-sidebar-primary', sidebarCollapsed && 'hidden')}>
+            <span className="flex size-9 items-center justify-center rounded-lg border border-sidebar-border/60 bg-sidebar-accent text-sidebar-primary">
+              <GitBranch className="size-5" strokeWidth={1.7} aria-hidden="true" />
+            </span>
+            <span>
+              <span className="block text-sm font-semibold tracking-tight">Roadmap</span>
+              <span className="block text-[10px] uppercase tracking-[0.13em] text-sidebar-muted">Планирование</span>
+            </span>
           </Link>
-          <Link
-            href={routes.roadmapAnalytics}
-            aria-current={pathname === routes.roadmapAnalytics ? 'page' : undefined}
-            className={`mt-1 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${pathname === routes.roadmapAnalytics ? 'bg-sidebar-accent font-medium text-sidebar-primary' : 'text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
+          <button
+            type="button"
+            title={sidebarToggleLabel}
+            aria-label={sidebarToggleLabel}
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="roadmap-sidebar"
+            onClick={toggleSidebar}
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg text-sidebar-muted transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-sidebar-primary"
           >
-            <ChartNoAxesCombined className="h-[18px] w-[18px]" strokeWidth={1.5} />
-            Аналитика
-          </Link>
+            <SidebarToggleIcon className="size-5" strokeWidth={1.5} aria-hidden="true" />
+          </button>
+        </div>
 
-          {isAdmin ? (
-            <>
-              <button
-                type="button"
-                aria-expanded={adminMenuOpen}
-                aria-controls="roadmap-admin-navigation"
-                onClick={() => setAdminMenuOpen((open) => !open)}
-                className="group mb-2 mt-7 flex w-full items-center justify-between rounded-md px-3 py-1 text-left text-[11px] font-medium uppercase tracking-wider text-sidebar-section transition-colors hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-              >
-                <span>Администрирование</span>
-                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${adminMenuOpen ? 'rotate-180' : ''}`} strokeWidth={1.7} aria-hidden="true" />
-              </button>
-              {adminMenuOpen ? <div id="roadmap-admin-navigation" className="space-y-1">
-                {adminLinks.map(({ href, label, icon: Icon }) => {
-                  const active = pathname === href;
-                  return <Link
-                    key={href}
-                    href={href}
-                    aria-current={active ? 'page' : undefined}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${active ? 'bg-sidebar-accent font-medium text-sidebar-primary' : 'text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'}`}
-                  >
-                    <Icon className="h-[18px] w-[18px]" strokeWidth={1.5} />
-                    {label}
-                  </Link>;
-                })}
-              </div> : null}
-            </>
-          ) : null}
+        <nav aria-label="Навигация Roadmap" className={cn('min-h-0 flex-1 overflow-auto py-5', sidebarCollapsed ? 'px-2.5' : 'px-3')}>
+          <ul className="space-y-1">
+            {roadmapLinks.map((link) => (
+              <li key={link.href}>
+                <RoadmapNavLink {...link} active={pathname === link.href} collapsed={sidebarCollapsed} />
+              </li>
+            ))}
+            {isAdmin ? (
+              <li>
+                <div className={cn('flex items-center rounded-lg', isAdminSection && 'bg-sidebar-accent/50')}>
+                  <RoadmapNavLink
+                    href={routes.roadmapAdminHome}
+                    label={ADMIN_LABEL}
+                    icon={Settings2}
+                    active={isAdminHome}
+                    collapsed={sidebarCollapsed}
+                    className={cn('min-w-0 flex-1', !sidebarCollapsed && 'gap-2.5 pr-1', isAdminSection && 'text-sidebar-primary')}
+                  />
+                  {!sidebarCollapsed ? (
+                    <button
+                      type="button"
+                      aria-label="Разделы администрирования"
+                      aria-expanded={adminMenuOpen}
+                      aria-controls="roadmap-admin-navigation"
+                      onClick={() => setAdminMenuOpen((open) => !open)}
+                      className="flex h-10 w-9 shrink-0 items-center justify-center rounded-lg text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sidebar-primary"
+                    >
+                      <ChevronDown className={cn('size-4 motion-safe:transition-transform', adminMenuOpen && 'rotate-180')} strokeWidth={1.7} aria-hidden="true" />
+                    </button>
+                  ) : null}
+                </div>
+                {!sidebarCollapsed ? (
+                  <ul id="roadmap-admin-navigation" hidden={!adminMenuOpen} className="ml-5 mt-1 space-y-0.5 border-l border-sidebar-border pl-2">
+                    {roadmapAdminSections.map(({ id, href, title, icon }) => (
+                      <li key={id}>
+                        <RoadmapNavLink href={href} label={title} icon={icon} active={pathname === href} className="h-9 gap-2.5 px-2.5" />
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            ) : null}
+          </ul>
         </nav>
 
-        <div className="border-t border-sidebar-border/60 p-3"><ProfileMenu /></div>
+        <div className={cn('shrink-0 border-t border-sidebar-border/60 py-3', sidebarCollapsed ? 'px-2.5' : 'px-3')}>
+          <ProfileMenu auth={auth} collapsed={sidebarCollapsed} />
+        </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background md:rounded-tl-2xl md:border-l md:border-t md:border-border">
-        <header className="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-border bg-card px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary md:hidden">
-              <GitBranch className="h-5 w-5" strokeWidth={1.7} />
+      <div className="relative flex min-w-0 flex-1 flex-col overflow-clip bg-background md:rounded-tl-2xl md:border-l md:border-t md:border-border">
+        <header className="flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 sm:gap-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="hidden size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary sm:flex md:hidden">
+              <GitBranch className="size-5" strokeWidth={1.7} aria-hidden="true" />
             </span>
-            <nav aria-label="Хлебные крошки" className="min-w-0 overflow-x-auto">
-              <ol className="flex items-center gap-2 whitespace-nowrap text-sm">
+            <nav aria-label="Хлебные крошки" className="min-w-0">
+              <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm">
                 {breadcrumbs.map((crumb, index) => <li key={crumb.label} className="flex items-center gap-2">
                   {index ? <span aria-hidden="true" className="text-muted-foreground/50">/</span> : null}
-                  {'href' in crumb && crumb.href ? <Link href={crumb.href} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined} className={index === breadcrumbs.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground transition-colors hover:text-foreground'}>{crumb.label}</Link> : <span aria-current="page" className="font-semibold text-foreground">{crumb.label}</span>}
+                  {'href' in crumb && crumb.href ? <Link href={crumb.href} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined} className={index === breadcrumbs.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground transition-colors hover:text-foreground'}>{crumb.label}</Link> : <span aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined} className={index === breadcrumbs.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}>{crumb.label}</span>}
                 </li>)}
               </ol>
             </nav>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <button type="button" onClick={cycleTheme} title={`Тема: ${themeLabel}`} aria-label={`Тема: ${themeLabel}. Нажмите, чтобы переключить`} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:bg-muted">
-              <ThemeIcon className="h-4 w-4" />
+            {isAdmin && !isAdminSection ? (
+              <Link href={routes.roadmapAdminHome} aria-label={ADMIN_LABEL} title={ADMIN_LABEL} className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring md:hidden">
+                <Settings2 className="size-4" strokeWidth={1.7} aria-hidden="true" />
+              </Link>
+            ) : null}
+            <button type="button" onClick={cycleTheme} title={`Тема: ${themeLabel}`} aria-label={`Тема: ${themeLabel}. Нажмите, чтобы переключить`} className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+              <ThemeIcon className="size-4" aria-hidden="true" />
             </button>
-            <ProfileMenu mobile />
+            <ProfileMenu auth={auth} mobile />
           </div>
         </header>
         {children}

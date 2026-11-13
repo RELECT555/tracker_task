@@ -1,11 +1,11 @@
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
-/** Общая обёртка страниц администрирования: единая ширина и вертикальный ритм. */
+/** Общая обёртка страниц администрирования. */
 export function AdminPage({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <main className="min-h-0 flex-1 overflow-auto px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-      <div className={cn('mx-auto w-full max-w-6xl space-y-6', className)}>{children}</div>
+    <main className="roadmap-scrollbar relative min-h-0 flex-1 overflow-auto overscroll-none px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <div className={cn('space-y-6', className)}>{children}</div>
     </main>
   );
 }
@@ -38,8 +38,9 @@ export function AdminAlert({ tone, children }: { tone: 'error' | 'success'; chil
   );
 }
 
-export function AdminCard({ title, description, icon, badge, children, className }: {
+export function AdminCard({ title, titleProps, description, icon, badge, children, className }: {
   title: string;
+  titleProps?: Pick<React.ComponentPropsWithoutRef<'h2'>, 'tabIndex'>;
   description?: string;
   icon?: React.ReactNode;
   badge?: React.ReactNode;
@@ -52,7 +53,7 @@ export function AdminCard({ title, description, icon, badge, children, className
         <div className="flex min-w-0 items-start gap-3">
           {icon ? <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">{icon}</span> : null}
           <div className="min-w-0">
-            <h2 className="font-semibold text-foreground">{title}</h2>
+            <h2 className="font-semibold text-foreground" {...titleProps}>{title}</h2>
             {description ? <p className="mt-0.5 text-sm text-muted-foreground">{description}</p> : null}
           </div>
         </div>
