@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { NextFunction, Request, Response } from 'express';
 import { TokenService } from '../../../modules/identity/infrastructure/token.service';
+import type { AuthMode } from '../../infrastructure/config/auth-config';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 
 @Injectable()
@@ -47,7 +48,7 @@ export class AuthMiddleware implements NestMiddleware {
       }
     }
 
-    if (this.isStrictAuth()) {
+    if (this.config.getOrThrow<AuthMode>('AUTH_MODE') === 'strict') {
       throw new UnauthorizedException({
         error: {
           code: 'UNAUTHORIZED',
@@ -78,9 +79,5 @@ export class AuthMiddleware implements NestMiddleware {
 
     (req as Request & { devUser: { id: string } }).devUser = { id: userId };
     next();
-  }
-
-  private isStrictAuth(): boolean {
-    return this.config.get<string>('AUTH_MODE', 'dev') === 'strict';
   }
 }

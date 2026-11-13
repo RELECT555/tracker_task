@@ -9,12 +9,13 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { HealthModule } from './modules/health/health.module';
 import { IdentityModule } from './modules/identity/identity.module';
 import { RoadmapModule } from './modules/roadmap/roadmap.module';
+import { validateAuthConfig } from './shared/infrastructure/config/auth-config';
 import { PrismaModule } from './shared/infrastructure/prisma/prisma.module';
 import { AuthMiddleware } from './shared/presentation/middleware/auth.middleware';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateAuthConfig }),
     ScheduleModule.forRoot(),
     PrismaModule,
     HealthModule,

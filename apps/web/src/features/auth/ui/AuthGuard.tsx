@@ -22,6 +22,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    setAllowed(false);
     const redirect = encodeURIComponent(pathname);
     router.replace(`${routes.login}?redirect=${redirect}`);
   }, [pathname, router]);

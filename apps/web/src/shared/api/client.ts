@@ -1,4 +1,4 @@
-import { getAccessToken } from '@/shared/lib/auth-storage';
+import { getAccessToken, getSessionId } from '@/shared/lib/auth-storage';
 import { handleUnauthorizedResponse } from '@/shared/lib/auth-session';
 
 export const baseURL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
@@ -19,17 +19,14 @@ export class ApiError extends Error {
   }
 }
 
-function buildHeaders(options?: ApiFetchOptions): HeadersInit {
+function buildHeaders(options?: ApiFetchOptions, token?: string | null): HeadersInit {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options?.headers as Record<string, string> | undefined),
   };
 
-  if (!options?.skipAuth && typeof window !== 'undefined') {
-    const token = getAccessToken();
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
   }
 
   return headers;
@@ -39,24 +36,25 @@ export async function apiFetch<T>(
   path: string,
   options?: ApiFetchOptions,
 ): Promise<T> {
+  const token = options?.skipAuth ? null : getAccessToken();
+  const sessionId = token ? getSessionId() : null;
   const response = await fetch(`${baseURL}${path}`, {
     ...options,
-    headers: buildHeaders(options),
+    headers: buildHeaders(options, token),
   });
 
   if (
     response.status === 401 &&
-    !options?.skipAuth &&
     !options?._retry &&
-    typeof window !== 'undefined' &&
-    getAccessToken()
+    token &&
+    sessionId
   ) {
     const body = await response.json().catch(() => ({}));
     const code = body?.error?.code as string | undefined;
 
     if (code === 'UNAUTHORIZED' || !code) {
-      const refreshed = await handleUnauthorizedResponse();
-      if (refreshed) {
+      const refreshed = await handleUnauthorizedResponse(sessionId, token);
+      if (refreshed && getSessionId() === sessionId) {
         return apiFetch<T>(path, { ...options, _retry: true });
       }
     }
@@ -80,5 +78,9 @@ export async function apiFetch<T>(
     throw new ApiError(message, body?.error?.code, response.status);
   }
 
-  return response.json() as Promise<T>;
+  const data = await response.json() as T;
+  if (!options?.skipAuth && getSessionId() !== sessionId) {
+    throw new ApiError('Session changed', 'SESSION_CHANGED', 401);
+  }
+  return data;
 }

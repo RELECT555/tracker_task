@@ -14,7 +14,7 @@ import { routes } from '@/shared/config/routes';
 export function useAuth() {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const [hasToken, setHasToken] = useState(false);
+  const [hasToken, setHasToken] = useState<boolean | null>(null);
 
   useEffect(() => {
     setHasToken(Boolean(getAccessToken()));
@@ -23,7 +23,7 @@ export function useAuth() {
   useEffect(() => {
     const onAuthExpired = () => {
       setHasToken(false);
-      queryClient.removeQueries({ queryKey: ['auth', 'me'] });
+      queryClient.clear();
       if (window.location.pathname !== routes.login) {
         const redirect = encodeURIComponent(window.location.pathname);
         router.push(`${routes.login}?redirect=${redirect}`);
@@ -38,7 +38,7 @@ export function useAuth() {
   const meQuery = useQuery({
     queryKey: ['auth', 'me'],
     queryFn: () => authApi.me(),
-    enabled: hasToken,
+    enabled: hasToken === true,
     staleTime: 60_000,
     retry: (failureCount, error) => {
       if (error instanceof ApiError && error.status === 401) {
@@ -51,6 +51,7 @@ export function useAuth() {
   const loginMutation = useMutation({
     mutationFn: ({ dto }: { dto: LoginDto; redirectTo?: string }) => authApi.login(dto),
     onSuccess: (data, variables) => {
+      queryClient.clear();
       setTokens(data.accessToken, data.refreshToken);
       setHasToken(true);
       queryClient.setQueryData(['auth', 'me'], { user: data.user });
@@ -76,15 +77,15 @@ export function useAuth() {
   const logout = () => {
     clearTokens();
     setHasToken(false);
-    queryClient.removeQueries({ queryKey: ['auth', 'me'] });
+    queryClient.clear();
     router.push(routes.login);
     router.refresh();
   };
 
   return {
     user: meQuery.data?.user ?? null,
-    isLoading: hasToken && meQuery.isLoading,
-    isAuthenticated: hasToken && Boolean(meQuery.data?.user),
+    isLoading: hasToken === null || (hasToken && meQuery.isLoading),
+    isAuthenticated: hasToken === true && Boolean(meQuery.data?.user),
     login: (dto: LoginDto, redirectTo?: string) =>
       loginMutation.mutateAsync({ dto, redirectTo }),
     loginError: loginMutation.error,
