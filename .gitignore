@@ -35,6 +35,12 @@ npm-debug.log*
 # Test
 coverage/
 
+# Generated screenshots and browser test artifacts
+/output/
+.playwright-cli/
+playwright-report/
+test-results/
+
 # Impeccable (local install per developer — run `npx impeccable install`)
 .cursor/skills/
 .cursor/hooks.json
