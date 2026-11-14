@@ -35,10 +35,11 @@ function buildHeaders(options?: ApiFetchOptions, token?: string | null): Headers
 export async function apiFetch<T>(
   path: string,
   options?: ApiFetchOptions,
+  origin = baseURL,
 ): Promise<T> {
   const token = options?.skipAuth ? null : getAccessToken();
   const sessionId = token ? getSessionId() : null;
-  const response = await fetch(`${baseURL}${path}`, {
+  const response = await fetch(`${origin}${path}`, {
     ...options,
     headers: buildHeaders(options, token),
   });
@@ -55,7 +56,7 @@ export async function apiFetch<T>(
     if (code === 'UNAUTHORIZED' || !code) {
       const refreshed = await handleUnauthorizedResponse(sessionId, token);
       if (refreshed && getSessionId() === sessionId) {
-        return apiFetch<T>(path, { ...options, _retry: true });
+        return apiFetch<T>(path, { ...options, _retry: true }, origin);
       }
     }
 

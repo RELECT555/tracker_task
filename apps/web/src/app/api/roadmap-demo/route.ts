@@ -28,10 +28,22 @@ async function readState(): Promise<{ state: DemoState; etag?: string }> {
 }
 
 export async function POST(request: Request) {
+  if (process.env.NEXT_PUBLIC_ROADMAP_DEMO !== 'true') return new Response(null, { status: 404 });
+
   try {
+    const authorization = request.headers.get('authorization');
+    if (!authorization) return new Response(null, { status: 401 });
+    const origin = process.env.API_PROXY_ORIGIN ?? 'http://localhost:3001';
+    const profile = await fetch(new URL('/api/v1/auth/me', origin), {
+      headers: { authorization }, cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(5_000),
+    });
+    if (!profile.ok) return new Response(null, { status: profile.status === 401 ? 401 : 503 });
+    const { user } = await profile.json() as { user: { roles: string[] } };
+    if (!user.roles.includes('admin')) return new Response(null, { status: 403 });
+
     const operation = await request.json() as { method?: string; args?: unknown[] };
     if (!operation.method || !Array.isArray(operation.args)) {
-      return Response.json({ error: 'Некорректный запрос демо Roadmap.' }, { status: 400 });
+      return Response.json({ message: 'Некорректный запрос демо Roadmap.' }, { status: 400 });
     }
 
     for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -55,9 +67,9 @@ export async function POST(request: Request) {
         if (!conflict) throw error;
       }
     }
-    return Response.json({ error: 'Демо-данные изменились одновременно. Повторите действие.' }, { status: 409 });
+    return Response.json({ message: 'Демо-данные изменились одновременно. Повторите действие.' }, { status: 409 });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Ошибка демо Roadmap.';
-    return Response.json({ error: message }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
+    return Response.json({ message }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
   }
 }

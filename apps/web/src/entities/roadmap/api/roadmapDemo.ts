@@ -20,6 +20,7 @@ import type {
   RoadmapWorkItemType,
 } from './roadmapApi';
 import type { SyncSettingsV2 } from '@tracker/shared';
+import { apiFetch } from '@/shared/api/client';
 
 type DemoMethod =
   | 'connection' | 'integrationSettings' | 'saveIntegrationSettings' | 'testIntegrationConnection'
@@ -31,14 +32,11 @@ type DemoMethod =
   | 'webhookSecret' | 'rotateWebhookSecret' | 'previewAzurePush' | 'pushProjectToAzure' | 'pushAllocationToAzure';
 
 async function call<T>(method: DemoMethod, args: unknown[] = []): Promise<T> {
-  const response = await fetch('/api/roadmap-demo', {
+  const response = await apiFetch<{ data: T }>('/api/roadmap-demo', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ method, args }),
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error ?? `Demo request failed (${response.status})`);
-  return body.data as T;
+  }, '');
+  return response.data;
 }
 
 export function isRoadmapDemoMode(): boolean {
