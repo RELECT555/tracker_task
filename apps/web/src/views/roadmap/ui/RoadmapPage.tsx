@@ -890,7 +890,7 @@ export function RoadmapPage() {
     const featureCountForm = isEpic ? FEATURE_COUNT_PLURALS.select(childCount) : null;
     return (
       <tr key={item.id} className={`group/row align-top transition-colors ${isEpic ? 'border-t border-border bg-muted/30 hover:bg-muted/45' : 'border-t border-border/50 hover:bg-muted/15'}`}>
-        <th scope="row" className={`py-2 text-left font-normal ${isEpic ? 'border-l-2 border-l-primary/40 px-3 sm:px-4' : isChild ? 'px-0' : 'px-3 sm:px-4'}`}>
+        <th scope="row" className={`py-2 text-left font-normal ${isEpic ? 'px-3 inset-shadow-[2px_0_0] inset-shadow-primary/40 sm:px-4' : isChild ? 'px-0' : 'px-3 sm:px-4'}`}>
           {isEpic ? (
             <div className="-ml-1 grid grid-cols-[1.75rem_1rem_minmax(0,1fr)] items-start gap-x-2">
               <Button
@@ -1138,7 +1138,7 @@ export function RoadmapPage() {
                 aria-label={focusMode ? 'Режим заполнения плана' : undefined}
                 className={focusMode
                   ? 'fixed inset-3 z-50 flex h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl'
-                  : 'flex min-h-[420px] flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card'}
+                  : 'flex flex-col overflow-hidden rounded-xl border border-border bg-card'}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
                   <div>
@@ -1248,7 +1248,7 @@ export function RoadmapPage() {
                     В проекте пока нет эпиков или фич.{canImportProject ? ' Загрузите проект из Azure DevOps.' : createProject ? ' Создайте первую карточку.' : ''}
                   </div>
                 ) : (
-                  <div className={focusMode ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'flex flex-1 flex-col'}>
+                  <div className={focusMode ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : undefined}>
                     {!roles.length ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/20 px-4 py-3">
                         <div>
@@ -1288,7 +1288,7 @@ export function RoadmapPage() {
                       role="region"
                       aria-label="Таблица плана и факта по ролям"
                       tabIndex={0}
-                      className={cn('@container roadmap-scrollbar min-w-0 flex-1 overflow-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring', focusMode ? 'min-h-0' : 'max-h-[calc(100dvh-7rem)]')}
+                      className={cn('@container roadmap-scrollbar min-w-0 overflow-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring', focusMode ? 'min-h-0 flex-1' : 'max-h-[calc(100dvh-7rem)]')}
                     >
                       <ResizablePlanTable
                         key={JSON.stringify([user?.id, roadmapProjectId])}
