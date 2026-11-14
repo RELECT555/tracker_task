@@ -28,12 +28,12 @@ export function AdminAlert({ tone, children }: { tone: 'error' | 'success'; chil
     <div
       role={tone === 'error' ? 'alert' : 'status'}
       className={cn(
-        'flex items-start gap-2.5 rounded-lg border px-3.5 py-2.5 text-sm',
-        tone === 'error' ? 'border-destructive/25 bg-destructive/5 text-destructive' : 'border-emerald-500/25 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300',
+        'flex items-start gap-3 rounded-xl border px-4 py-3 text-sm leading-5',
+        tone === 'error' ? 'border-border bg-card text-foreground' : 'border-emerald-500/25 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300',
       )}
     >
-      <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-      <div className="min-w-0">{children}</div>
+      <Icon aria-hidden="true" className={cn('mt-0.5 size-4 shrink-0', tone === 'error' && 'text-destructive')} />
+      <div className="min-w-0 wrap-anywhere">{children}</div>
     </div>
   );
 }
@@ -71,8 +71,4 @@ export function StatusPill({ active, label }: { active: boolean; label: string }
       {label}
     </span>
   );
-}
-
-export function personInitials(name: string) {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toLocaleUpperCase('ru-RU');
 }

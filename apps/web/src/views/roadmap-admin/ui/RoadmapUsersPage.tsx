@@ -1,16 +1,17 @@
 'use client';
 
-import Image from 'next/image';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, Search, Users, X } from 'lucide-react';
 import { roadmapApi, type RoadmapPerson } from '@/entities/roadmap/api/roadmapApi';
+import { RoadmapPersonAvatar } from '@/entities/roadmap/ui/RoadmapPersonAvatar';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { ColorMark } from '@/shared/ui/color-mark';
+import { QueryErrorNotice } from '@/shared/ui/error-notice';
 import { Input } from '@/shared/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
-import { AdminAlert, AdminPage, AdminPageHeader, personInitials, StatusPill } from './AdminLayout';
+import { AdminAlert, AdminPage, AdminPageHeader, StatusPill } from './AdminLayout';
 
 const MAX_VISIBLE_ROLES = 3;
 const statusFilters = [
@@ -77,59 +78,13 @@ function UserRoles({ person }: { person: RoadmapPerson }) {
   );
 }
 
-function UserAvatar({ person }: { person: RoadmapPerson }) {
-  const element = useRef<HTMLSpanElement>(null);
-  const [visible, setVisible] = useState(false);
-  const [failedSrc, setFailedSrc] = useState<string>();
-  const { data } = useQuery({
-    queryKey: ['roadmap', 'admin', 'user-avatar', person.id],
-    queryFn: ({ signal }) => roadmapApi.adminPersonAvatar(person.id, signal),
-    enabled: visible && !person.isMock,
-    staleTime: 30 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    retry: false,
-  });
-
-  useEffect(() => {
-    if (visible || person.isMock || !element.current) return;
-    if (typeof IntersectionObserver === 'undefined') {
-      setVisible(true);
-      return;
-    }
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return;
-      setVisible(true);
-      observer.disconnect();
-    });
-    observer.observe(element.current);
-    return () => observer.disconnect();
-  }, [visible, person.isMock]);
-
-  const src = data?.avatar;
-  return (
-    <span
-      ref={element}
-      aria-hidden="true"
-      className={cn(
-        'relative flex size-9 shrink-0 select-none items-center justify-center overflow-hidden rounded-full text-xs font-semibold sm:size-10',
-        person.isActive !== false ? 'bg-status-progress-bg text-status-progress-fg' : 'bg-muted text-muted-foreground',
-      )}
-    >
-      {personInitials(person.name)}
-      {src && src !== failedSrc ? (
-        <Image src={src} alt="" unoptimized width={44} height={44} className="absolute inset-0 size-full object-cover" onError={() => setFailedSrc(src)} />
-      ) : null}
-    </span>
-  );
-}
-
 function UserRow({ person }: { person: RoadmapPerson }) {
   const active = person.isActive !== false;
 
   return (
     <li className={cn('grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-2.5 px-3 py-3 hover:bg-muted/20 sm:px-5 @min-[42rem]:items-center @min-[42rem]:py-3.5', directoryColumns)}>
       <div className="flex min-w-0 items-start gap-2.5 sm:gap-3">
-        <UserAvatar person={person} />
+        <RoadmapPersonAvatar person={person} />
         <div className="min-w-0 self-center">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <p className="min-w-0 text-sm font-semibold wrap-anywhere">{person.name}</p>
@@ -194,7 +149,6 @@ export function RoadmapUsersPage() {
     return matchesStatus && (!term || `${person.name} ${person.email ?? ''}`.toLocaleLowerCase('ru-RU').includes(term));
   }), [users, status, term]);
 
-  const loadError = usersQuery.error?.message ?? 'Не удалось загрузить пользователей';
   const blockedByError = usersQuery.isError && !usersQuery.data;
 
   function clearSearch() {
@@ -225,15 +179,18 @@ export function RoadmapUsersPage() {
         }
       />
 
-      {usersQuery.isError && usersQuery.data ? <AdminAlert tone="error"><span className="wrap-anywhere">{loadError}</span></AdminAlert> : null}
-      {sync.isError ? <AdminAlert tone="error"><span className="wrap-anywhere">{sync.error.message || 'Не удалось синхронизировать пользователей'}</span></AdminAlert> : null}
+      <QueryErrorNotice
+        title={sync.error ? 'Не удалось обновить пользователей' : 'Не удалось загрузить пользователей'}
+        queries={[usersQuery]}
+        errors={[sync.error]}
+      />
       {sync.isSuccess ? (
         <AdminAlert tone="success">
           Синхронизировано людей: {sync.data.synced}{sync.data.ignored ? ` · служебных или неподходящих записей пропущено: ${sync.data.ignored}` : ''}
         </AdminAlert>
       ) : null}
 
-      <section aria-label="Список пользователей" className="@container rounded-xl border border-border bg-card shadow-[0_1px_2px_hsl(var(--foreground)/0.04)] dark:shadow-none">
+      {!blockedByError && <section aria-label="Список пользователей" className="@container rounded-xl border border-border bg-card shadow-[0_1px_2px_hsl(var(--foreground)/0.04)] dark:shadow-none">
         <div className="flex flex-col items-start gap-3 border-b border-border p-3 sm:px-5 sm:py-4 @min-[40rem]:flex-row @min-[40rem]:items-center @min-[40rem]:justify-between">
           <div role="group" aria-label="Фильтр по статусу" className="inline-flex max-w-full flex-wrap gap-0.5 rounded-lg bg-muted/55 p-1">
             {statusFilters.map((option) => (
@@ -293,11 +250,6 @@ export function RoadmapUsersPage() {
               <RefreshCw aria-hidden="true" className="size-4 motion-safe:animate-spin" />
               Загружаем участников…
             </div>
-          ) : blockedByError ? (
-            <div className="space-y-3 p-3 sm:p-5">
-              <AdminAlert tone="error"><span className="wrap-anywhere">{loadError}</span></AdminAlert>
-              <Button type="button" variant="outline" size="sm" onClick={() => void usersQuery.refetch()} disabled={usersQuery.isFetching}>Повторить загрузку</Button>
-            </div>
           ) : visibleUsers.length ? (
             <>
               <div aria-hidden="true" className={cn('hidden border-b border-border bg-muted/30 px-5 py-2.5 text-xs font-medium text-muted-foreground @min-[42rem]:grid', directoryColumns)}>
@@ -329,7 +281,7 @@ export function RoadmapUsersPage() {
             />
           )}
         </div>
-      </section>
+      </section>}
     </AdminPage>
   );
 }
