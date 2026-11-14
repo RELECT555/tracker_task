@@ -1,0 +1,363 @@
+.dashboard {
+  --analytics-done: var(--color-emerald-700);
+  --analytics-canvas: color-mix(in srgb, var(--color-card) 54%, var(--color-background));
+  background: var(--analytics-canvas);
+}
+
+:global(.dark) .dashboard {
+  --analytics-done: var(--color-emerald-400);
+  --analytics-canvas: var(--color-background);
+}
+
+.content {
+  container-type: inline-size;
+}
+
+.header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding-block-end: 0.25rem;
+}
+
+.projectPicker {
+  grid-column: 1 / -1;
+}
+
+@container (min-width: 45rem) {
+  .header {
+    grid-template-columns: minmax(0, 1fr) auto minmax(12rem, 16rem);
+  }
+
+  .projectPicker {
+    grid-column: auto;
+  }
+}
+
+.panel {
+  container-type: inline-size;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  background: hsl(var(--border) / 0.65);
+}
+
+.metric {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+  background: var(--color-card);
+}
+
+.primaryMetric {
+  grid-column: 1 / -1;
+  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-card));
+}
+
+.columns {
+  display: grid;
+  align-items: start;
+  gap: 1rem;
+}
+
+@container (min-width: 60rem) {
+  .metrics {
+    grid-template-columns: 1.2fr repeat(4, minmax(0, 1fr));
+  }
+
+  .primaryMetric {
+    grid-column: auto;
+  }
+
+  .columns {
+    grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr);
+  }
+}
+
+.chart {
+  --plot-height: clamp(9.5rem, 34cqw, 13rem);
+  --axis-width: clamp(1.75rem, 7cqw, 3.25rem);
+  display: grid;
+  grid-template-columns: var(--axis-width) minmax(0, 1fr);
+  min-inline-size: 0;
+  padding-block-start: 0.625rem;
+  margin-inline: 0.75rem 1rem;
+}
+
+.axis,
+.plot {
+  position: relative;
+  grid-row: 1;
+  height: var(--plot-height);
+}
+
+.axis {
+  grid-column: 1;
+  color: var(--color-muted-foreground);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.axis span {
+  position: absolute;
+  right: 0.375rem;
+  white-space: nowrap;
+  transform: translateY(50%);
+}
+
+.plot,
+.months {
+  grid-area: 1 / 2;
+}
+
+.quarterBand {
+  position: absolute;
+  inset-block: 0;
+  width: 25%;
+  border-radius: 0.375rem 0.375rem 0 0;
+  background: hsl(var(--primary) / 0.09);
+}
+
+.months {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+.month {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  border-radius: 0.375rem;
+}
+
+.month:has(:focus-visible) {
+  outline: 2px solid var(--color-ring);
+  outline-offset: -1px;
+}
+
+.barTrack {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  height: var(--plot-height);
+}
+
+.barTotal {
+  display: none;
+}
+
+@container (min-width: 36rem) {
+  .barTotal {
+    position: absolute;
+    display: block;
+    padding-bottom: 0.125rem;
+    color: var(--color-foreground);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+}
+
+.bar,
+.zeroBar {
+  width: 65%;
+  max-width: 2.5rem;
+}
+
+.bar {
+  display: flex;
+  flex-direction: column-reverse;
+  overflow: hidden;
+  border-radius: 0.25rem 0.25rem 0 0;
+  min-height: 1px;
+}
+
+.zeroBar {
+  height: 1px;
+  background: var(--color-border);
+}
+
+.monthLabel {
+  margin-top: 0.25rem;
+  padding-block: 0.25rem;
+  width: 100%;
+  text-align: center;
+  font-size: clamp(0.5625rem, 2.65cqw, 0.6875rem);
+  color: var(--color-muted-foreground);
+}
+
+.inQuarter .monthLabel,
+.activeMonth .monthLabel {
+  font-weight: 650;
+  color: var(--color-foreground);
+}
+
+.activeMonth {
+  background: hsl(var(--primary) / 0.12);
+}
+
+.table {
+  width: 100%;
+  font-size: 0.8125rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.table th,
+.table td {
+  border-top: 1px solid hsl(var(--border) / 0.55);
+  padding: 0.625rem 0.5rem;
+}
+
+.table :where(th, td):where(:first-child) {
+  padding-inline-start: 1.25rem;
+}
+
+.table :where(th, td):where(:last-child) {
+  padding-inline-end: 1.25rem;
+}
+
+.table thead,
+.table tfoot {
+  background: hsl(var(--muted) / 0.32);
+}
+
+.table thead th,
+.inlineLabel {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+}
+
+.table td,
+.table tfoot th {
+  font-variant-numeric: tabular-nums;
+}
+
+.table tfoot td {
+  font-weight: 600;
+}
+
+.table tbody tr:hover {
+  background: hsl(var(--muted) / 0.22);
+}
+
+.teamTable :where(th:not(:first-child), td) {
+  width: 13%;
+  text-align: center;
+}
+
+.teamTable :where(th, td):where(:last-child) {
+  width: 21%;
+  text-align: right;
+}
+
+.epicsTable {
+  table-layout: fixed;
+}
+
+.epicsTable :where(thead th:first-child) { width: 30%; }
+.epicsTable :where(thead th:nth-child(2)) { width: 14%; }
+.epicsTable :where(thead th:nth-child(n + 3):nth-child(-n + 5)) { width: 12%; }
+.epicsTable :where(thead th:last-child) { width: 20%; }
+
+.epicsTable :where(:is(th, td):nth-child(n + 3):nth-child(-n + 5)) {
+  text-align: right;
+}
+
+.inlineLabel {
+  display: none;
+}
+
+@container (max-width: 49rem) {
+  .epicsTable thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .epicsTable,
+  .epicsTable tbody {
+    display: block;
+  }
+
+  .epicsTable tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem 0.625rem;
+    padding: 0.875rem 1rem;
+    border-top: 1px solid hsl(var(--border) / 0.55);
+  }
+
+  .epicsTable tr > :is(th, td) {
+    width: auto;
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+
+  .epicsTable th:first-child,
+  .epicsTable td:nth-child(2),
+  .epicsTable td:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .epicsTable .inlineLabel {
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+}
+
+@container (max-width: 31rem) {
+  .teamTable thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .teamTable,
+  .teamTable tbody,
+  .teamTable tfoot {
+    display: block;
+  }
+
+  .teamTable tr {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem 0.25rem;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid hsl(var(--border) / 0.55);
+  }
+
+  .teamTable tr > :is(th, td) {
+    width: auto;
+    padding: 0;
+    border: 0;
+  }
+
+  .teamTable th:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .teamTable .inlineLabel {
+    display: block;
+    margin-bottom: 0.125rem;
+  }
+}
