@@ -1,10 +1,12 @@
-export function isAuthRequired(): boolean {
-  return process.env.NEXT_PUBLIC_AUTH_REQUIRED === 'true';
-}
-
 export function safeRedirectPath(path: string | null, fallback: string): string {
-  if (path && path.startsWith('/') && !path.startsWith('//')) {
-    return path;
+  const base = 'https://tracker.local';
+  if (!path?.startsWith('/')) return fallback;
+  try {
+    const target = new URL(path, base);
+    return target.origin === base && !target.pathname.startsWith('//')
+      ? `${target.pathname}${target.search}${target.hash}`
+      : fallback;
+  } catch {
+    return fallback;
   }
-  return fallback;
 }

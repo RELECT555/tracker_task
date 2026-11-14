@@ -4,7 +4,6 @@
  * 1. Start PostgreSQL (Docker)
  * 2. Wait until ready
  * 3. Apply migrations (deploy — safe for existing DB)
- * 4. Seed dev data
  */
 const { execSync, spawnSync } = require('node:child_process');
 const { existsSync, copyFileSync } = require('node:fs');
@@ -75,14 +74,14 @@ Options:
   waitForPostgres();
   run('npm run db:generate');
   run('npm run db:migrate:deploy');
-  run('npm run db:seed');
 
   console.log(`
 Database setup complete.
 
   API ready:   http://localhost:3001/api/v1/health/ready
-  Dev user:    admin@tracker.local
-  Manager:     manager@tracker.local
+  Local login: admin@tracker.local
+
+Set LOCAL_ADMIN_PASSWORD and JWT_SECRET in apps/api/.env before starting the API.
 
 Start the app: npm run dev
 `);

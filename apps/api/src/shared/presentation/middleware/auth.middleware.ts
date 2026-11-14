@@ -4,16 +4,14 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { NextFunction, Request, Response } from 'express';
 import { TokenService } from '../../../modules/identity/infrastructure/token.service';
-import type { AuthMode } from '../../infrastructure/config/auth-config';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import type { AuthenticatedUser } from '../decorators/current-user.decorator';
 
 @Injectable()
 export class AuthMiddleware implements NestMiddleware {
   constructor(
-    private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
   ) {}
@@ -33,51 +31,36 @@ export class AuthMiddleware implements NestMiddleware {
       ? authHeader.slice('Bearer '.length).trim()
       : undefined;
 
-    if (token) {
-      try {
-        const userId = this.tokens.verifyAccessToken(token);
-        (req as Request & { devUser: { id: string } }).devUser = { id: userId };
-        return next();
-      } catch {
-        throw new UnauthorizedException({
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'Invalid or expired access token',
-          },
-        });
-      }
+    if (!token) throw this.unauthorized('Authentication required');
+    let id: string;
+    try {
+      id = this.tokens.verifyAccessToken(token);
+    } catch {
+      throw this.unauthorized('Invalid or expired access token');
     }
 
-    if (this.config.getOrThrow<AuthMode>('AUTH_MODE') === 'strict') {
-      throw new UnauthorizedException({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required',
-        },
-      });
-    }
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        isActive: true,
+        roles: { select: { role: { select: { code: true } } } },
+      },
+    });
+    if (!user?.isActive) throw this.unauthorized('Account is inactive');
 
-    const devUserId = this.config.get<string>('DEV_USER_ID');
-    const headerUserId = req.header('x-user-id');
-    let userId = headerUserId ?? devUserId;
-
-    if (!userId) {
-      const admin = await this.prisma.user.findFirst({
-        where: { email: 'admin@tracker.local' },
-      });
-      userId = admin?.id;
-    }
-
-    if (!userId) {
-      throw new ServiceUnavailableException({
-        error: {
-          code: 'DEV_USER_NOT_FOUND',
-          message: 'Run db:seed to create dev user',
-        },
-      });
-    }
-
-    (req as Request & { devUser: { id: string } }).devUser = { id: userId };
+    (req as Request & { user: AuthenticatedUser }).user = {
+      id: user.id,
+      email: user.email,
+      isAdmin: user.roles.some(({ role }) => role.code === 'admin'),
+    };
     next();
+  }
+
+  private unauthorized(message: string) {
+    return new UnauthorizedException({
+      error: { code: 'UNAUTHORIZED', message },
+    });
   }
 }

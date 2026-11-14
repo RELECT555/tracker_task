@@ -5,10 +5,9 @@ import { usePathname } from 'next/navigation';
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from 'next-themes';
-import { ChartNoAxesCombined, Check, ChevronDown, ChevronUp, GitBranch, LogIn, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Settings2, Sun, Users, type LucideIcon } from 'lucide-react';
+import { ChartNoAxesCombined, ChevronDown, ChevronUp, GitBranch, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Settings2, Sun, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
-import { DEV_ACCOUNTS } from '@/features/auth/lib/dev-accounts';
 import { roadmapAdminSections } from '@/shared/config/roadmap-admin-sections';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
@@ -31,23 +30,17 @@ function ProfileMenu({ auth, mobile = false, collapsed = false }: {
   mobile?: boolean;
   collapsed?: boolean;
 }) {
-  const { user, isAuthenticated, logout, switchUser, isSwitchingUser } = auth;
+  const { user, logout } = auth;
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
-  const displayName = user?.fullName ?? 'Dev-пользователь';
-  const displayEmail = user?.email ?? 'без JWT (DEV_USER_ID)';
-  const primaryRole = user?.roles[0] ?? 'dev';
   const compact = mobile || collapsed;
 
   useEffect(() => setMenuOpen(false), [pathname]);
 
-  async function handleSwitchUser(email: string) {
-    if (email === user?.email || isSwitchingUser) return;
-    setMenuOpen(false);
-    await switchUser(email);
-  }
+  if (!user) return null;
+  const { fullName: displayName, email: displayEmail } = user;
 
   return (
     <div
@@ -65,20 +58,15 @@ function ProfileMenu({ auth, mobile = false, collapsed = false }: {
         {!compact ? <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-sidebar-foreground">{displayName}</p>
           <p className="truncate text-xs text-sidebar-muted">{displayEmail}</p>
-          <span className="mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sidebar-muted">{primaryRole}</span>
         </div> : null}
         {!compact ? <ChevronUp className={cn('h-4 w-4 shrink-0 text-sidebar-muted transition-transform', menuOpen && 'rotate-180')} strokeWidth={1.5} aria-hidden="true" /> : null}
       </button>
       {menuOpen ? <div id={menuId} className={cn('absolute z-50 max-h-[min(24rem,70vh)] overflow-y-auto rounded-lg border border-sidebar-border/50 bg-sidebar shadow-lg', mobile ? 'right-0 top-full mt-2 w-72' : collapsed ? 'bottom-0 left-full ml-2 w-72' : 'bottom-full left-0 right-0 mb-1')}>
-        <div className="border-b border-sidebar-border/40 px-3 py-2"><p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-sidebar-muted"><Users className="h-3 w-3" strokeWidth={1.5} />Сменить пользователя</p></div>
-        {DEV_ACCOUNTS.map((account) => {
-          const active = account.email === user?.email;
-          return <button key={account.email} type="button" disabled={isSwitchingUser || active} onClick={() => void handleSwitchUser(account.email)} className={cn('flex w-full items-start gap-2 px-3 py-2 text-left text-sm transition-colors', active ? 'bg-sidebar-accent/40 text-sidebar-primary' : 'text-sidebar-foreground hover:bg-sidebar-accent/50', isSwitchingUser && 'opacity-60')}>
-            <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{account.name}</p><p className="truncate text-[11px] text-sidebar-muted">{account.label}</p></div>
-            {active ? <Check className="mt-0.5 h-4 w-4 shrink-0 text-sidebar-primary" strokeWidth={1.5} /> : null}
-          </button>;
-        })}
-        <div className="border-t border-sidebar-border/40">{isAuthenticated ? <button type="button" onClick={() => { setMenuOpen(false); logout(); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50"><LogOut className="h-4 w-4" strokeWidth={1.5} />Выйти</button> : <Link href={routes.login} onClick={() => setMenuOpen(false)} className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50"><LogIn className="h-4 w-4" strokeWidth={1.5} />Войти</Link>}</div>
+        {compact ? <div className="border-b border-sidebar-border/40 px-3 py-2">
+          <p className="truncate text-sm font-medium text-sidebar-foreground">{displayName}</p>
+          <p className="truncate text-xs text-sidebar-muted">{displayEmail}</p>
+        </div> : null}
+        <button type="button" onClick={() => { setMenuOpen(false); logout(); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50"><LogOut className="h-4 w-4" strokeWidth={1.5} />Выйти</button>
       </div> : null}
     </div>
   );
@@ -243,7 +231,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="relative flex min-w-0 flex-1 flex-col overflow-clip bg-background md:rounded-tl-2xl md:border-l md:border-t md:border-border">
+      <div className="relative flex min-w-0 flex-1 flex-col overflow-clip bg-background md:rounded-tl-2xl md:border-l md:border-t md:border-border dark:md:rounded-tl-none dark:md:border-l-0 dark:md:border-t-0">
         <header className={cn('flex min-h-16 shrink-0 items-center justify-between gap-x-2 gap-y-2 border-b border-border bg-card px-3 py-3 sm:gap-x-4 sm:px-6', isPlanPage && 'flex-wrap')}>
           <div className="flex min-w-0 items-center gap-3">
             <span className="hidden size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary sm:flex md:hidden">

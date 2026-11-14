@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
+import { isUUID } from 'class-validator';
 
 interface TokenPayload {
   sub: string;
@@ -19,10 +20,10 @@ export class TokenService {
     refreshToken: string;
     expiresIn: number;
   } {
-    const accessExpires =
-      (this.config.get<string>('JWT_ACCESS_EXPIRES') ?? '15m') as JwtSignOptions['expiresIn'];
-    const refreshExpires =
-      (this.config.get<string>('JWT_REFRESH_EXPIRES') ?? '7d') as JwtSignOptions['expiresIn'];
+    const accessExpires = (this.config.get<string>('JWT_ACCESS_EXPIRES') ??
+      '15m') as JwtSignOptions['expiresIn'];
+    const refreshExpires = (this.config.get<string>('JWT_REFRESH_EXPIRES') ??
+      '7d') as JwtSignOptions['expiresIn'];
 
     const accessToken = this.jwt.sign(
       { sub: userId, type: 'access' } satisfies TokenPayload,
@@ -42,17 +43,17 @@ export class TokenService {
   }
 
   verifyAccessToken(token: string): string {
-    const payload = this.jwt.verify<TokenPayload>(token);
-    if (payload.type !== 'access') {
-      throw new Error('Invalid token type');
-    }
-    return payload.sub;
+    return this.verify(token, 'access');
   }
 
   verifyRefreshToken(token: string): string {
+    return this.verify(token, 'refresh');
+  }
+
+  private verify(token: string, type: TokenPayload['type']): string {
     const payload = this.jwt.verify<TokenPayload>(token);
-    if (payload.type !== 'refresh') {
-      throw new Error('Invalid token type');
+    if (payload.type !== type || !isUUID(payload.sub)) {
+      throw new Error('Invalid token claims');
     }
     return payload.sub;
   }

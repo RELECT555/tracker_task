@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { LoginDto } from '@tracker/shared';
 import { authApi } from '@/entities/user/api/authApi';
-import { DEV_PASSWORD } from '@/features/auth/lib/dev-accounts';
 import { AUTH_EXPIRED_EVENT } from '@/shared/lib/auth-session';
 import { clearTokens, getAccessToken, setTokens } from '@/shared/lib/auth-storage';
 import { ApiError } from '@/shared/api/client';
@@ -25,7 +24,7 @@ export function useAuth() {
       setHasToken(false);
       queryClient.clear();
       if (window.location.pathname !== routes.login) {
-        const redirect = encodeURIComponent(window.location.pathname);
+        const redirect = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
         router.push(`${routes.login}?redirect=${redirect}`);
         router.refresh();
       }
@@ -61,19 +60,6 @@ export function useAuth() {
     },
   });
 
-  const switchUserMutation = useMutation({
-    mutationFn: (email: string) =>
-      authApi.login({ email, password: DEV_PASSWORD }),
-    onSuccess: (data) => {
-      setTokens(data.accessToken, data.refreshToken);
-      setHasToken(true);
-      queryClient.clear();
-      queryClient.setQueryData(['auth', 'me'], { user: data.user });
-      router.push(routes.roadmap);
-      router.refresh();
-    },
-  });
-
   const logout = () => {
     clearTokens();
     setHasToken(false);
@@ -85,13 +71,13 @@ export function useAuth() {
   return {
     user: meQuery.data?.user ?? null,
     isLoading: hasToken === null || (hasToken && meQuery.isLoading),
+    hasToken,
+    profileError: meQuery.error,
     isAuthenticated: hasToken === true && Boolean(meQuery.data?.user),
     login: (dto: LoginDto, redirectTo?: string) =>
       loginMutation.mutateAsync({ dto, redirectTo }),
     loginError: loginMutation.error,
     isLoggingIn: loginMutation.isPending,
-    switchUser: (email: string) => switchUserMutation.mutateAsync(email),
-    isSwitchingUser: switchUserMutation.isPending,
     logout,
   };
 }

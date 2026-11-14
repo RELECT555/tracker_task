@@ -1,15 +1,19 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
-import { PrismaService } from '../../../../shared/infrastructure/prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
 import { UnauthorizedError } from '../../../../shared/domain/domain.error';
 import type { AuthTokens, UserDto } from '../../domain/user.dto';
-import { mapUserToDto } from '../../infrastructure/user.mapper';
 import { TokenService } from '../../infrastructure/token.service';
+import { GetMeHandler } from '../queries/get-me.handler';
+
+const localAdminEmail = 'admin@tracker.local';
+const digest = (value: string) => createHash('sha256').update(value).digest();
 
 @Injectable()
 export class LoginHandler {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    private readonly getMe: GetMeHandler,
     private readonly tokens: TokenService,
   ) {}
 
@@ -17,29 +21,17 @@ export class LoginHandler {
     email: string;
     password: string;
   }): Promise<AuthTokens & { user: UserDto }> {
-    const user = await this.prisma.user.findUnique({
-      where: { email: input.email },
-      include: {
-        orgUnit: true,
-        manager: { select: { id: true, fullName: true } },
-        roles: { include: { role: true } },
-      },
-    });
-
-    if (!user?.passwordHash) {
-      throw new UnauthorizedError('Invalid email or password');
+    const configured = this.config.getOrThrow<string>('LOCAL_ADMIN_PASSWORD');
+    if (
+      input.email.trim().toLowerCase() !== localAdminEmail ||
+      !timingSafeEqual(digest(input.password), digest(configured))
+    ) {
+      throw new UnauthorizedError('Неверный логин или пароль');
     }
 
-    const valid = await bcrypt.compare(input.password, user.passwordHash);
-    if (!valid) {
-      throw new UnauthorizedError('Invalid email or password');
-    }
-
-    const issued = this.tokens.issueTokens(user.id);
-
-    return {
-      ...issued,
-      user: mapUserToDto(user),
-    };
+    const user = await this.getMe.byEmail(localAdminEmail);
+    if (!user.roles.includes('admin'))
+      throw new UnauthorizedError('Вход администратора недоступен');
+    return { ...this.tokens.issueTokens(user.id), user };
   }
 }

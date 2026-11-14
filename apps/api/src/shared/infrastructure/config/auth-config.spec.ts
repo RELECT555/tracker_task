@@ -1,35 +1,73 @@
 import { validateAuthConfig } from './auth-config';
 
 describe('Authentication configuration', () => {
-  it('keeps dev mode as the local default', () => {
-    expect(validateAuthConfig({}).AUTH_MODE).toBe('dev');
-  });
-
-  it('rejects unknown modes and dev mode in production', () => {
-    expect(() => validateAuthConfig({ AUTH_MODE: 'strcit' })).toThrow(
-      'AUTH_MODE',
-    );
-    expect(() =>
-      validateAuthConfig({ NODE_ENV: 'production', AUTH_MODE: 'dev' }),
-    ).toThrow('AUTH_MODE');
-  });
+  const jwtSecret = 'strict-test-secret-'.repeat(3);
+  const password = 'local-admin-test-password';
 
   it.each([
     undefined,
     'dev-only-change-me',
     'generate-strong-random-secret-min-32-chars',
-  ])('rejects an unsafe strict-mode secret (%s)', (secret) => {
+  ])('rejects an unsafe JWT secret in local development (%s)', (secret) => {
     expect(() =>
-      validateAuthConfig({ AUTH_MODE: 'strict', JWT_SECRET: secret }),
+      validateAuthConfig({
+        JWT_SECRET: secret,
+        LOCAL_ADMIN_PASSWORD: password,
+      }),
     ).toThrow('JWT_SECRET');
   });
 
-  it('defaults production to strict with a configured secret', () => {
+  it.each([undefined, '', 'tracker'])(
+    'rejects missing or legacy admin credentials (%s)',
+    (configuredPassword) => {
+      expect(() =>
+        validateAuthConfig({
+          JWT_SECRET: jwtSecret,
+          LOCAL_ADMIN_PASSWORD: configuredPassword,
+        }),
+      ).toThrow('LOCAL_ADMIN_PASSWORD');
+    },
+  );
+
+  it('keeps the configured password unchanged', () => {
     expect(
       validateAuthConfig({
+        JWT_SECRET: jwtSecret,
+        LOCAL_ADMIN_PASSWORD: ` ${password} `,
+      }).LOCAL_ADMIN_PASSWORD,
+    ).toBe(` ${password} `);
+  });
+
+  it('accepts a shorter password in local development', () => {
+    expect(
+      validateAuthConfig({
+        NODE_ENV: 'development',
+        JWT_SECRET: jwtSecret,
+        LOCAL_ADMIN_PASSWORD: 'roadmap',
+      }).LOCAL_ADMIN_PASSWORD,
+    ).toBe('roadmap');
+  });
+
+  it.each(['development', 'production'])(
+    'rejects a whitespace-only password in %s',
+    (mode) => {
+      expect(() =>
+        validateAuthConfig({
+          NODE_ENV: mode,
+          JWT_SECRET: jwtSecret,
+          LOCAL_ADMIN_PASSWORD: '   ',
+        }),
+      ).toThrow('LOCAL_ADMIN_PASSWORD');
+    },
+  );
+
+  it('rejects a short password in production', () => {
+    expect(() =>
+      validateAuthConfig({
         NODE_ENV: 'production',
-        JWT_SECRET: 'strict-test-secret-'.repeat(3),
-      }).AUTH_MODE,
-    ).toBe('strict');
+        JWT_SECRET: jwtSecret,
+        LOCAL_ADMIN_PASSWORD: 'roadmap',
+      }),
+    ).toThrow('LOCAL_ADMIN_PASSWORD');
   });
 });

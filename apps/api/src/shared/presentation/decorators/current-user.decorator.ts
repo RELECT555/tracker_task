@@ -1,12 +1,13 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
-export interface DevUserPayload {
+export interface AuthenticatedUser {
   id: string;
+  email: string;
+  isAdmin: boolean;
 }
 
 export const CurrentUser = createParamDecorator(
-  (_data: unknown, ctx: ExecutionContext): DevUserPayload => {
-    const request = ctx.switchToHttp().getRequest<{ devUser: DevUserPayload }>();
-    return request.devUser;
+  (_data: unknown, ctx: ExecutionContext): AuthenticatedUser => {
+    return ctx.switchToHttp().getRequest<{ user: AuthenticatedUser }>().user;
   },
 );

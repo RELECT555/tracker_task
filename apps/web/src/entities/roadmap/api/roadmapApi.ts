@@ -20,7 +20,7 @@ export interface RoadmapProjectSyncResult {
 
 export interface RoadmapProjectsResult {
   data: AzureProject[];
-  source?: 'azure' | 'cache';
+  source?: 'azure' | 'cache' | 'local';
   azureError?: 'access-denied' | 'unavailable';
 }
 
@@ -105,6 +105,7 @@ export interface RoadmapProjectPlan {
   syncedAt: string | null;
   workItems: RoadmapWorkItem[];
   roles: RoadmapRole[];
+  canEditPlan?: boolean;
   azure?: { writeBackEnabled: boolean; mode?: RoadmapWriteBackMode; canPush?: boolean; createdTaskIds?: string[] };
 }
 

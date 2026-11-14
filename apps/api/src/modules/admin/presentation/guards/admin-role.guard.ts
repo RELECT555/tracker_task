@@ -4,19 +4,16 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { IsActiveAdminHandler } from '../../../identity/application/queries/is-active-admin.handler';
+import type { AuthenticatedUser } from '../../../../shared/presentation/decorators/current-user.decorator';
 
 @Injectable()
 export class AdminRoleGuard implements CanActivate {
-  constructor(private readonly isActiveAdmin: IsActiveAdminHandler) {}
-
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  canActivate(context: ExecutionContext): boolean {
     const request = context
       .switchToHttp()
-      .getRequest<{ devUser?: { id: string } }>();
-    const userId = request.devUser?.id;
+      .getRequest<{ user?: AuthenticatedUser }>();
 
-    if (!userId || !(await this.isActiveAdmin.execute(userId))) {
+    if (!request.user?.isAdmin) {
       throw new ForbiddenException({
         error: { code: 'FORBIDDEN', message: 'Admin access required' },
       });

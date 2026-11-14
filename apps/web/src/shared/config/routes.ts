@@ -6,4 +6,5 @@ export const routes = {
   roadmapAdmin: '/roadmap/admin/integrations',
   roadmapAdminUsers: '/roadmap/admin/users',
   roadmapAdminRoles: '/roadmap/admin/roles',
+  roadmapAdminAccess: '/roadmap/admin/access',
 } as const;

@@ -1,4 +1,4 @@
-import { Cable, UserRoundCog, Users } from 'lucide-react';
+import { Cable, ShieldCheck, UserRoundCog, Users } from 'lucide-react';
 import { routes } from './routes';
 
 export const roadmapAdminSections = [
@@ -22,5 +22,12 @@ export const roadmapAdminSections = [
     title: 'Роли и участники',
     description: 'Участники и исполнители по умолчанию для ролей проекта.',
     icon: UserRoundCog,
+  },
+  {
+    id: 'access',
+    href: routes.roadmapAdminAccess,
+    title: 'Доступ к проектам',
+    description: 'Права просмотра и редактирования плана для сотрудников.',
+    icon: ShieldCheck,
   },
 ] as const;

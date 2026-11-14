@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import { NotFoundError } from '../../../../shared/domain/domain.error';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
+import { UnauthorizedError } from '../../../../shared/domain/domain.error';
 import { PrismaService } from '../../../../shared/infrastructure/prisma/prisma.service';
 import type { UserDto } from '../../domain/user.dto';
 import { mapUserToDto } from '../../infrastructure/user.mapper';
@@ -9,8 +10,20 @@ export class GetMeHandler {
   constructor(private readonly prisma: PrismaService) {}
 
   async execute(userId: string): Promise<UserDto> {
+    return this.findActive({ id: userId });
+  }
+
+  async byEmail(email: string): Promise<UserDto> {
+    return this.findActive({ email });
+  }
+
+  private async findActive(
+    where: Prisma.UserWhereUniqueInput,
+  ): Promise<UserDto> {
+    if (!this.prisma.isConnected)
+      throw new ServiceUnavailableException('Database is not available');
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+      where,
       include: {
         orgUnit: true,
         manager: { select: { id: true, fullName: true } },
@@ -18,8 +31,8 @@ export class GetMeHandler {
       },
     });
 
-    if (!user) {
-      throw new NotFoundError('User', userId);
+    if (!user?.isActive) {
+      throw new UnauthorizedError('Учётная запись недоступна');
     }
 
     return mapUserToDto(user);

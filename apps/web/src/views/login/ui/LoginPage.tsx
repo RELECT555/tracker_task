@@ -14,7 +14,7 @@ export function LoginPage() {
   const searchParams = useSearchParams();
   const { login, loginError, isLoggingIn } = useAuth();
   const [email, setEmail] = useState('admin@tracker.local');
-  const [password, setPassword] = useState('tracker');
+  const [password, setPassword] = useState('');
   const redirectTo = safeRedirectPath(searchParams.get('redirect'), routes.roadmap);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {

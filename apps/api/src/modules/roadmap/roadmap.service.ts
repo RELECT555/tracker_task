@@ -240,7 +240,7 @@ export class RoadmapService {
     return importedCount;
   }
 
-  async getProjectPlan(projectId: string, actorId: string) {
+  async getProjectPlan(projectId: string, actorId: string, canEditPlan: boolean) {
     const project = await this.prisma.roadmapProject.findUnique({
       where: { id: projectId },
       include: {
@@ -300,9 +300,12 @@ export class RoadmapService {
       azure: {
         writeBackEnabled: settings.writeBackEnabled,
         mode: settings.writeBack.mode,
-        canPush: settings.writeBackEnabled
-          && (!settings.writeBack.projectIds || settings.writeBack.projectIds.includes(projectId))
-          && await this.azureSync.canManuallyPush(actorId, settings.writeBack),
+        canPush:
+          canEditPlan &&
+          settings.writeBackEnabled &&
+          (!settings.writeBack.projectIds ||
+            settings.writeBack.projectIds.includes(projectId)) &&
+          (await this.azureSync.canManuallyPush(actorId, settings.writeBack)),
         canCreateWorkItems: settings.configured
           && (!projectOrganization || connectedOrganization === projectOrganization)
           && canCreateRoadmapWorkItems(project.externalId, settings.organizationUrl),

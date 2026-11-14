@@ -388,8 +388,25 @@ model RoadmapProject {
   createRequests RoadmapWorkItemCreateRequest[]
   roles      RoadmapRole[]
   azureState RoadmapAzureProjectState?
+  access     RoadmapProjectAccess[]
 
   @@map("roadmap_projects")
+}
+
+enum RoadmapProjectRole {
+  viewer
+  planner
+}
+
+model RoadmapProjectAccess {
+  projectId String             @map("project_id") @db.Uuid
+  email     String             @db.VarChar(255)
+  role      RoadmapProjectRole
+  project   RoadmapProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, email])
+  @@index([email])
+  @@map("roadmap_project_access")
 }
 
 model RoadmapAzureProjectState {
