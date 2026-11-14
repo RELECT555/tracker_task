@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { AlertCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import type { RoadmapWriteBackMode } from '@/entities/roadmap/api/roadmapApi';
+import { getErrorMessage } from '@/shared/lib/error-message';
 import { AdminCard } from '../AdminLayout';
 
 export const integrationColors = '[html:not(.dark)_&]:[--primary:239_75%_56%] [html:not(.dark)_&]:[--destructive:0_72%_44%] dark:[--destructive:0_80%_72%] dark:[--destructive-foreground:0_0%_5%]';
@@ -50,5 +51,5 @@ export function Chip({ tone = 'muted', children, title }: { tone?: 'muted' | 'ok
 }
 
 export function errorText(error: unknown) {
-  return error instanceof Error ? error.message : 'Не удалось выполнить запрос';
+  return getErrorMessage(error);
 }

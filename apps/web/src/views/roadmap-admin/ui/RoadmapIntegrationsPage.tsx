@@ -5,13 +5,13 @@ import { useQuery } from '@tanstack/react-query';
 import { BookOpen, FolderSync, ListFilter, Upload, Webhook } from 'lucide-react';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { cn } from '@/shared/lib/utils';
-import { Button } from '@/shared/ui/button';
-import { AdminAlert, AdminCard, AdminPage, AdminPageHeader } from './AdminLayout';
+import { QueryErrorNotice } from '@/shared/ui/error-notice';
+import { AdminCard, AdminPage, AdminPageHeader } from './AdminLayout';
 import { AzureConnectionPanel } from './integrations/AzureConnectionPanel';
 import { AzureSyncGuide } from './integrations/AzureSyncGuide';
 import { FaqAccordion } from './integrations/faq';
 import { FieldMappingPanel } from './integrations/FieldMappingPanel';
-import { errorText, integrationColors } from './integrations/parts';
+import { integrationColors } from './integrations/parts';
 import { SyncProjectsPanel } from './integrations/SyncProjectsPanel';
 import { WebhookPanel } from './integrations/WebhookPanel';
 import { WriteBackSettingsPanel } from './integrations/WriteBackSettingsPanel';
@@ -96,15 +96,8 @@ export function RoadmapIntegrationsPage() {
   }, [configured, focusProjects, section, overviewReady]);
 
   const loadingOverview = needsOverview && overviewQuery.isLoading;
-  const overviewFeedback = loadingOverview
-    ? <p role="status" className="flex items-center gap-2 px-1 py-3 text-sm text-muted-foreground">Загружаем данные о проектах…</p>
-    : needsOverview && overviewQuery.isError
-      ? (
-        <AdminAlert tone="error">
-          <p>Не удалось получить данные о проектах. {errorText(overviewQuery.error)}</p>
-          <Button type="button" size="sm" variant="outline" className="mt-2" disabled={overviewQuery.isFetching} onClick={() => void overviewQuery.refetch()}>Повторить</Button>
-        </AdminAlert>
-      ) : null;
+  const integrationQueries = [settingsQuery, ...(configured && needsOverview ? [overviewQuery] : [])];
+  const mappingShowsErrors = configured && overviewReady && section === 'azure-mapping';
 
   return (
     <AdminPage className={integrationColors}>
@@ -114,12 +107,10 @@ export function RoadmapIntegrationsPage() {
       />
 
       {settingsQuery.isLoading ? <p role="status" className="text-sm text-muted-foreground">Загружаем настройки подключения…</p> : null}
-      {settingsQuery.isError ? (
-        <AdminAlert tone="error">
-          <p>Не удалось загрузить настройки подключения. {errorText(settingsQuery.error)}</p>
-          <Button type="button" size="sm" variant="outline" className="mt-2" disabled={settingsQuery.isFetching} onClick={() => void settingsQuery.refetch()}>Повторить</Button>
-        </AdminAlert>
-      ) : null}
+      {!mappingShowsErrors && <QueryErrorNotice
+        title="Не удалось загрузить данные интеграции"
+        queries={integrationQueries}
+      />}
 
       {settings ? (
         <AzureConnectionPanel
@@ -162,13 +153,13 @@ export function RoadmapIntegrationsPage() {
 
       {settings && (configured || section === 'azure-help') ? (
         <div id={section} ref={contentRef} tabIndex={-1} className="scroll-mt-4 space-y-4 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
-          {overviewFeedback}
+          {loadingOverview ? <p role="status" className="flex items-center gap-2 px-1 py-3 text-sm text-muted-foreground">Загружаем данные о проектах…</p> : null}
           {section === 'azure-projects' && overview ? <SyncProjectsPanel overview={overview} /> : null}
           {configured && overview && (visitedEditors.writeBack || section === 'azure-write-back') ? (
             <div hidden={section !== 'azure-write-back'}><WriteBackSettingsPanel settings={settings.writeBack} overview={overview} /></div>
           ) : null}
           {configured && overview && (visitedEditors.mapping || section === 'azure-mapping') ? (
-            <div hidden={section !== 'azure-mapping'}><FieldMappingPanel overview={overview} /></div>
+            <div hidden={section !== 'azure-mapping'}><FieldMappingPanel overview={overview} queries={mappingShowsErrors ? integrationQueries : undefined} /></div>
           ) : null}
           {section === 'azure-webhook' ? <WebhookPanel webhookConfigured={settings.webhookConfigured} /> : null}
           {section === 'azure-help' ? (

@@ -1,20 +1,24 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, LoaderCircle, Plus, RotateCcw, Save, Upload } from 'lucide-react';
 import { evaluateWriteRules, migrateWriteBackSettingsV1, syncSettingsV2Schema, type FieldSource, type SyncSettingsV2, type WriteRule } from '@tracker/shared';
 import { roadmapApi, type RoadmapAzureField, type RoadmapWriteBackOverview } from '@/entities/roadmap/api/roadmapApi';
 import { Button } from '@/shared/ui/button';
+import { QueryErrorNotice } from '@/shared/ui/error-notice';
 import { Input } from '@/shared/ui/input';
 import { HelpHint } from './HelpHint';
-import { errorText, Panel } from './parts';
+import { Panel } from './parts';
 
 const SAMPLE = { role: 'Backend', title: 'Заявки', quarterKey: '2026-Q4', person: 'Иван Петров', personEmail: 'ivan.petrov@example.test', id: '1234', estimate: 40, remaining: 40, fields: { 'System.AreaPath': 'Roadmap' } };
 const SELECT_CLASS = 'h-9 w-full min-w-0 rounded-md border border-input bg-field px-2 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50';
 const FIELD_LABEL_CLASS = 'grid min-w-0 content-start gap-1.5 text-xs font-medium text-muted-foreground';
 
-export function FieldMappingPanel({ overview }: { overview?: RoadmapWriteBackOverview }) {
+export function FieldMappingPanel({ overview, queries = [] }: {
+  overview?: RoadmapWriteBackOverview;
+  queries?: ComponentProps<typeof QueryErrorNotice>['queries'];
+}) {
   const queryClient = useQueryClient();
   const projects = overview?.projects ?? [];
   const [selectedProjectId, setSelectedProjectId] = useState('');
@@ -25,11 +29,18 @@ export function FieldMappingPanel({ overview }: { overview?: RoadmapWriteBackOve
   const importRef = useRef<HTMLInputElement>(null);
   const settingsQuery = useQuery({ queryKey: ['roadmap', 'sync-settings-v2'], queryFn: roadmapApi.syncSettingsV2 });
   const settings = settingsQuery.data;
-  useEffect(() => { if (settings) setDraft(settings); }, [settings]);
+  const previousSettings = useRef<SyncSettingsV2 | undefined>(undefined);
+  useEffect(() => {
+    if (!settings) return;
+    const previous = previousSettings.current;
+    previousSettings.current = settings;
+    setDraft((current) => !current || JSON.stringify(current) === JSON.stringify(previous) ? settings : current);
+  }, [settings]);
+  const fieldsEnabled = Boolean(projectId && draft?.workItemType.trim());
   const fieldQuery = useQuery({
     queryKey: ['roadmap', 'azure-fields', projectId, draft?.workItemType.trim()],
     queryFn: () => roadmapApi.azureFields(projectId, draft?.workItemType.trim() ?? 'Task'),
-    enabled: Boolean(projectId && draft?.workItemType.trim()),
+    enabled: fieldsEnabled,
   });
   const fields = fieldQuery.data ?? [];
   const saveMutation = useMutation({
@@ -95,10 +106,12 @@ export function FieldMappingPanel({ overview }: { overview?: RoadmapWriteBackOve
       {settingsQuery.isLoading ? <p role="status" className="flex items-center gap-2 p-5 text-sm text-muted-foreground">
         <LoaderCircle aria-hidden="true" className="size-4 motion-safe:animate-spin" />Загружаем настройки…
       </p> : null}
-      {settingsQuery.error ? <div className="space-y-3 p-5">
-        <p role="alert" className="text-sm text-destructive">{errorText(settingsQuery.error)}</p>
-        <Button type="button" variant="outline" size="sm" disabled={settingsQuery.isFetching} onClick={() => void settingsQuery.refetch()}>Повторить загрузку</Button>
-      </div> : null}
+      <QueryErrorNotice
+        title={saveMutation.error ? 'Не удалось сохранить настройки полей' : 'Не удалось загрузить данные интеграции'}
+        queries={[...queries, settingsQuery, ...(fieldsEnabled ? [fieldQuery] : [])]}
+        errors={[saveMutation.error]}
+        className="mx-4 my-4 sm:mx-5"
+      />
       {draft ? <fieldset disabled={saveMutation.isPending} aria-label="Настройки сопоставления полей" className="min-w-0 divide-y divide-border">
         <div className="grid gap-4 px-4 py-4 sm:px-5 lg:grid-cols-3">
           <label className={FIELD_LABEL_CLASS}>
@@ -143,7 +156,6 @@ export function FieldMappingPanel({ overview }: { overview?: RoadmapWriteBackOve
             <Button type="button" size="sm" variant="outline" onClick={addRule} disabled={!availableField}><Plus aria-hidden="true" className="size-3.5" />Добавить правило записи</Button>
           </div>
           {fieldQuery.isLoading ? <p role="status" className="text-sm text-muted-foreground">Загружаем поля Azure…</p> : null}
-          {fieldQuery.error ? <p role="alert" className="text-sm text-destructive">{errorText(fieldQuery.error)}</p> : null}
           {draft.writeRules.length ? <div className="space-y-2">
             {draft.writeRules.map((rule, index) => (
               <WriteRuleRow
@@ -227,9 +239,9 @@ export function FieldMappingPanel({ overview }: { overview?: RoadmapWriteBackOve
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5">
-          {saveMutation.error ? <p role="alert" className="text-sm text-destructive">{errorText(saveMutation.error)}</p> : <p role="status" className="text-xs text-muted-foreground">
+          <p role="status" className="text-xs text-muted-foreground">
             {notice ?? (dirty ? 'Есть несохранённые изменения.' : 'Все изменения сохранены.')}
-          </p>}
+          </p>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="ghost" size="sm" onClick={() => update(migrateWriteBackSettingsV1({}))}><RotateCcw aria-hidden="true" className="size-3.5" />По умолчанию</Button>
             <Button type="button" size="sm" disabled={!dirty || saveMutation.isPending} onClick={() => saveMutation.mutate(draft)}>
