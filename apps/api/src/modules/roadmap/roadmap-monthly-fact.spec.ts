@@ -38,10 +38,12 @@ describe('Roadmap monthly fact', () => {
   afterEach(() => jest.useRealTimers());
 
   it('adds source deltas to their current parent hierarchy and counts each source once in the project total', async () => {
+    const epic = workItem('epic', '1', 'Epic', null);
+    epic.allocations.push({ id: 'legacy-epic-allocation', azureTaskId: '6' });
     const feature = workItem('feature', '2', 'Feature', '1');
     feature.allocations.push({ id: 'linked', azureTaskId: '4' }, { id: 'unlinked', azureTaskId: null });
     const { service, requestJson } = setup([
-      workItem('epic', '1', 'Epic', null),
+      epic,
       feature,
       workItem('story', '3', 'User Story', '2'),
       workItem('task', '4', 'Task', '3'),

@@ -77,6 +77,14 @@ function fixture(selectedProject = project, selectedOrganization = organizationU
 }
 
 describe('Roadmap work item creation', () => {
+  it('rejects an Epic assignee before contacting Azure', async () => {
+    const { service, integration } = fixture();
+    const epic = { ...input, type: 'Epic', parentExternalId: undefined } as const;
+
+    await expect(service.create(project.externalId, epic)).rejects.toThrow('На эпики нельзя назначать исполнителей.');
+    expect(integration.requestJson).not.toHaveBeenCalled();
+  });
+
   it('creates a Task in the selected project and saves its canonical link once for the same key', async () => {
     const { service, integration, prisma } = fixture();
     const result = {

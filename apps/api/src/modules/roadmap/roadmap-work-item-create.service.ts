@@ -107,6 +107,7 @@ export class RoadmapWorkItemCreateService {
     const payloadHash = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
     const existing = await this.findRequest(requestId);
     if (existing) return this.reuse(existing, externalId, dto, payloadHash, organization);
+    if (dto.type === 'Epic' && dto.personExternalId) throw new BadRequestException('На эпики нельзя назначать исполнителей.');
     const project = await this.getAzureProject(externalId, credentials);
     const operations = await this.buildOperations(project, dto, credentials);
 

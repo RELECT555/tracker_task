@@ -5,7 +5,7 @@ import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import { DEFAULT_WRITE_BACK_SETTINGS } from './roadmap-write-back.settings';
 
-function setup() {
+function setup(type = 'Feature') {
   const row: Record<string, unknown> = {
     id: 'allocation',
     azureSyncStatus: 'pending',
@@ -19,6 +19,7 @@ function setup() {
     quarterKey: '2026-Q4',
     estimatedHours: 2,
     workItem: {
+      type,
       title: 'Feature',
       externalId: '101',
       project: { id: 'project', externalId: 'azure-project' },
@@ -88,6 +89,18 @@ function setup() {
 }
 
 describe('Azure write-back claims', () => {
+  it('skips a queued legacy Epic allocation without writing to Azure', async () => {
+    const { row, requestJson, worker } = setup('Epic');
+
+    await worker()();
+
+    expect(requestJson).not.toHaveBeenCalled();
+    expect(row).toMatchObject({
+      azureSyncStatus: 'skipped',
+      azureSyncClaimId: null,
+    });
+  });
+
   it('lets one worker create the task and saves its link before importing', async () => {
     const { row, importer, worker, createPosts } = setup();
     importer.importWorkItems.mockImplementation(() => {

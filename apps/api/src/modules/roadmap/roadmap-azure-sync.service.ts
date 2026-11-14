@@ -65,6 +65,7 @@ const ORIGINAL_ESTIMATE = 'Microsoft.VSTS.Scheduling.OriginalEstimate';
 const REMAINING_WORK = 'Microsoft.VSTS.Scheduling.RemainingWork';
 const COMPLETED_WORK = 'Microsoft.VSTS.Scheduling.CompletedWork';
 const allocationContext = { role: true, workItem: { include: { project: true } } } as const;
+const nonEpicWorkItem = { type: { not: 'Epic', mode: 'insensitive' } } satisfies Prisma.RoadmapWorkItemWhereInput;
 
 /**
  * Two-way Azure DevOps sync: every Roadmap allocation is mirrored by an Azure DevOps work item
@@ -105,7 +106,7 @@ export class RoadmapAzureSyncService {
     this.assertProjectAllowed(settings, projectId);
     const allocations = await this.prisma.roadmapAllocation.findMany({
       where: {
-        workItem: { projectId },
+        workItem: { projectId, ...nonEpicWorkItem },
         ...(allocationIds?.length
           ? { id: { in: allocationIds } }
           : { OR: [{ azureSyncStatus: null }, { azureSyncStatus: { not: 'synced' } }] }),
@@ -126,8 +127,12 @@ export class RoadmapAzureSyncService {
 
   async pushAllocation(actorId: string, allocationId: string) {
     const settings = await this.assertWriteBackEnabled(actorId);
-    const allocation = await this.prisma.roadmapAllocation.findUnique({ where: { id: allocationId }, select: { workItem: { select: { projectId: true } } } });
+    const allocation = await this.prisma.roadmapAllocation.findUnique({
+      where: { id: allocationId },
+      select: { workItem: { select: { projectId: true, type: true } } },
+    });
     if (!allocation) throw new NotFoundException('Roadmap allocation was not found');
+    if (allocation.workItem.type.toLowerCase() === 'epic') throw new BadRequestException('На эпики нельзя назначать исполнителей.');
     this.assertProjectAllowed(settings, allocation.workItem.projectId);
     const result = await this.prisma.roadmapAllocation.updateMany({
       where: { id: allocationId, azureSyncClaimId: null },
@@ -142,7 +147,7 @@ export class RoadmapAzureSyncService {
     const settings = await this.integration.getWriteBackSettings();
     await this.assertCanManuallyPush(actorId, settings);
     const allocations = await this.prisma.roadmapAllocation.findMany({
-      where: { workItem: { projectId }, OR: [{ azureSyncStatus: null }, { azureSyncStatus: { not: 'synced' } }] },
+      where: { workItem: { projectId, ...nonEpicWorkItem }, OR: [{ azureSyncStatus: null }, { azureSyncStatus: { not: 'synced' } }] },
       include: allocationContext,
       orderBy: [{ quarterKey: 'asc' }, { personName: 'asc' }],
     });
@@ -192,9 +197,12 @@ export class RoadmapAzureSyncService {
     const [settings, projects, allocations, errors] = await Promise.all([
       this.integration.getWriteBackSettings(),
       this.prisma.roadmapProject.findMany({ orderBy: { name: 'asc' }, select: { id: true, externalId: true, name: true, url: true, syncedAt: true, azureState: true } }),
-      this.prisma.roadmapAllocation.findMany({ select: { azureSyncStatus: true, azureSyncedAt: true, workItem: { select: { projectId: true } } } }),
       this.prisma.roadmapAllocation.findMany({
-        where: { azureSyncStatus: 'error' },
+        where: { workItem: nonEpicWorkItem },
+        select: { azureSyncStatus: true, azureSyncedAt: true, workItem: { select: { projectId: true } } },
+      }),
+      this.prisma.roadmapAllocation.findMany({
+        where: { azureSyncStatus: 'error', workItem: nonEpicWorkItem },
         orderBy: { updatedAt: 'desc' },
         take: 50,
         include: { role: true, workItem: { select: { projectId: true, externalId: true, title: true } } },
@@ -351,7 +359,7 @@ export class RoadmapAzureSyncService {
         : { key: 'iteration', label: `Итерация для ${quarterLabel(currentQuarter)}`, status: 'warning', detail: 'Не найдена итерация с кварталом в названии или датами на весь квартал — задачи попадут в итерацию проекта по умолчанию' });
     }
 
-    const allocations = await this.prisma.roadmapAllocation.findMany({ where: { workItem: { projectId } }, include: allocationContext });
+    const allocations = await this.prisma.roadmapAllocation.findMany({ where: { workItem: { projectId, ...nonEpicWorkItem } }, include: allocationContext });
     const people = await this.peopleByExternalId(allocations.map((allocation) => allocation.personExternalId));
     const withoutEmail = new Set(allocations
       .filter((allocation) => !people.get(allocation.personExternalId)?.isMock && !(people.get(allocation.personExternalId)?.email ?? allocation.personEmail))
@@ -411,6 +419,7 @@ export class RoadmapAzureSyncService {
     });
     const pending = await this.prisma.roadmapAllocation.findMany({
       where: {
+        workItem: nonEpicWorkItem,
         azureSyncStatus: 'pending',
         azureSyncClaimId: null,
         ...(settings.mode === 'manual' ? { azureSyncRequested: true } : {}),
@@ -525,6 +534,10 @@ export class RoadmapAzureSyncService {
     };
 
     try {
+      if (allocation.workItem.type.toLowerCase() === 'epic') {
+        await finish({ azureSyncStatus: 'skipped', azureSyncError: null });
+        return;
+      }
       if (settings.projectIds && !settings.projectIds.includes(allocation.workItem.projectId)) {
         await finish({ azureSyncStatus: 'skipped', azureSyncError: 'Проект не включён в запись плана в настройках интеграции' });
         return;

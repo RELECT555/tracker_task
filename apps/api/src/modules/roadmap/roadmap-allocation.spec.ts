@@ -29,7 +29,9 @@ function setup() {
   const events: string[] = [];
   const tx = {
     roadmapWorkItem: {
-      findUnique: jest.fn().mockResolvedValue({ projectId: 'project' }),
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({ projectId: 'project', type: 'Feature' }),
     },
     roadmapRoleMember: {
       findFirst: jest
@@ -74,6 +76,41 @@ function setup() {
 }
 
 describe('Allocation transaction', () => {
+  it('rejects an Epic allocation before checking membership or queueing sync', async () => {
+    const { service, tx, onAllocationSaved } = setup();
+    tx.roadmapWorkItem.findUnique.mockResolvedValueOnce({
+      projectId: 'project',
+      type: 'EPIC',
+    });
+
+    await expect(service.saveAllocation(input)).rejects.toThrow(
+      'На эпики нельзя назначать исполнителей.',
+    );
+    expect(tx.roadmapRoleMember.findFirst).not.toHaveBeenCalled();
+    expect(onAllocationSaved).not.toHaveBeenCalled();
+  });
+
+  it('rejects changes to the monthly plan of an existing Epic allocation', async () => {
+    const { service, tx } = setup();
+    Object.assign(tx.roadmapAllocation, {
+      findUnique: jest.fn().mockResolvedValue({
+        id: 'allocation',
+        estimatedHours: 8,
+        periods: [],
+        workItem: { type: 'Epic' },
+      }),
+    });
+    const months = ['2026-10', '2026-11', '2026-12'].map((monthKey) => ({
+      monthKey,
+      hours: 1,
+    }));
+
+    await expect(
+      service.saveAllocationQuarter('allocation', input.quarterKey, months),
+    ).rejects.toThrow('На эпики нельзя назначать исполнителей.');
+    expect(tx.roadmapPeriodAllocation.deleteMany).not.toHaveBeenCalled();
+  });
+
   it('writes the allocation and months together, then queues Azure sync', async () => {
     const { service, tx, transaction, onAllocationSaved, events } = setup();
 
@@ -145,6 +182,7 @@ describe('Even allocation', () => {
         rows.map((row) => ({
           ...row,
           ...{ workItemId: 'work-item', roleId: 'role', quarterKey: '2026-Q4' },
+          workItem: { type: 'Feature' },
           periods: row.periods.map((period) => ({
             ...period,
             startsAt: new Date(period.startsAt),

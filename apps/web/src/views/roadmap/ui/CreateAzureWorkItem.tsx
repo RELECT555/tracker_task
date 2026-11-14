@@ -2,8 +2,9 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ExternalLink, Layers2, LoaderCircle, Minus, Plus } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Layers2, LoaderCircle, Minus, Plus, X } from 'lucide-react';
 import { roadmapApi, type CreatedAzureWorkItem, type CreateAzureWorkItemInput, type RoadmapPerson, type RoadmapProjectsResult, type RoadmapWorkItem } from '@/entities/roadmap/api/roadmapApi';
+import { RoadmapPersonAvatar } from '@/entities/roadmap/ui/RoadmapPersonAvatar';
 import { Button, buttonVariants } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
@@ -83,7 +84,7 @@ export function CreateAzureWorkItem({ externalProjectId, projectName, items, peo
       title,
       description: draft.description?.trim() || undefined,
       parentExternalId: draft.type !== 'Epic' ? draft.parentExternalId || undefined : undefined,
-      personExternalId: draft.personExternalId || undefined,
+      personExternalId: draft.type !== 'Epic' ? draft.personExternalId || undefined : undefined,
     };
 
     try {
@@ -134,9 +135,14 @@ export function CreateAzureWorkItem({ externalProjectId, projectName, items, peo
         className="m-auto max-h-none w-[min(32rem,calc(100vw-2rem))] overflow-visible rounded-xl border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/50"
       >
         <div className="max-h-[calc(100dvh-2rem-2px)] overflow-y-auto overscroll-contain rounded-[inherit]">
-          <div className="border-b border-border px-5 py-4">
-            <h2 id={`${id}-heading`} className="text-base font-semibold">Создать в Azure DevOps</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{projectName}</p>
+          <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
+            <div className="min-w-0">
+              <h2 id={`${id}-heading`} className="text-base font-semibold">Создать в Azure DevOps</h2>
+              <p className="mt-1 text-sm text-muted-foreground wrap-anywhere">{projectName}</p>
+            </div>
+            <Button type="button" variant="ghost" size="icon" className="-mr-2 -mt-1 size-8 shrink-0" aria-label="Закрыть" disabled={pending} onClick={() => dialog?.close()}>
+              <X aria-hidden="true" className="size-4" />
+            </Button>
           </div>
           {result ? (
             <div className="space-y-4 p-5">
@@ -214,14 +220,19 @@ export function CreateAzureWorkItem({ externalProjectId, projectName, items, peo
                     className="rounded-md"
                   />
                 </div>}
-                {assignees.length > 0 && <div className="space-y-1.5">
+                {draft.type !== 'Epic' && assignees.length > 0 && <div className="space-y-1.5">
                   <Label htmlFor={`${id}-person`}>Исполнитель</Label>
                   <SearchableSelect
                     id={`${id}-person`}
                     value={draft.personExternalId ?? ''}
                     options={[
                       { value: '', label: 'Без исполнителя', leading: noSelectionIcon },
-                      ...assignees.map((person) => ({ value: person.id, label: person.name, description: person.email })),
+                      ...assignees.map((person) => ({
+                        value: person.id,
+                        label: person.name,
+                        description: person.email,
+                        leading: <RoadmapPersonAvatar key={person.id} person={person} className="size-full rounded-[inherit] text-[10px] sm:size-full" />,
+                      })),
                     ]}
                     searchPlaceholder="Поиск по имени или email"
                     onChange={(value) => setDraft((old) => ({ ...old, personExternalId: value }))}

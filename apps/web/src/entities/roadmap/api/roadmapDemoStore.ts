@@ -175,7 +175,7 @@ function peopleWithRoles(state: DemoState): RoadmapPerson[] {
 }
 function planOf(state: DemoState): RoadmapProjectPlan {
   return { ...state.plan, roles: clone(rolesOf(state)), workItems: state.plan.workItems.map((item) => ({
-    ...item, allocations: item.allocations.map((allocation) => ({
+    ...item, allocations: item.type.toLowerCase() === 'epic' ? [] : item.allocations.map((allocation) => ({
       ...allocation, quarterKey: allocation.quarterKey ?? LEGACY_QUARTER_KEY, role: clone(roleOf(state, allocation.roleId)),
     })),
   })) };
@@ -189,6 +189,10 @@ function findWorkItem(state: DemoState, id: string) {
   const item = state.plan.workItems.find((candidate) => candidate.id === id || candidate.externalId === id);
   if (!item) throw new Error('Демо-задача не найдена. Обновите страницу и повторите действие.');
   return item;
+}
+
+function assertAssignableWorkItem(item: { type: string }) {
+  if (item.type.toLowerCase() === 'epic') throw new Error('На эпики нельзя назначать исполнителей.');
 }
 
 type Operation = { method: string; args: unknown[] };
@@ -275,6 +279,7 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
     case 'saveAllocation': {
       const input = arg0 as { allocationId?: string; workItemId: string; roleId: string; personExternalId: string; personName: string; personEmail?: string | null; quarterKey: string; estimatedHours: number; periods: Omit<RoadmapPeriod, 'id'>[] };
       const item = findWorkItem(state, input.workItemId);
+      assertAssignableWorkItem(item);
       const externalId = normalizePersonIds(state, [input.personExternalId])[0];
       const person = state.people.find((candidate) => candidate.externalId === externalId);
       const index = item.allocations.findIndex((allocation) => allocation.id === input.allocationId ||
@@ -293,6 +298,7 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
     case 'rebalanceAllocations': {
       const ids = Array.isArray(arg0) ? new Set<unknown>(arg0) : new Set();
       const item = state.plan.workItems.find((candidate) => candidate.allocations.some(({ id }) => ids.has(id)));
+      if (item) assertAssignableWorkItem(item);
       const first = item?.allocations.find(({ id }) => ids.has(id));
       const group = item?.allocations.filter((row) => row.roleId === first?.roleId
         && (row.quarterKey ?? LEGACY_QUARTER_KEY) === (first?.quarterKey ?? LEGACY_QUARTER_KEY)) ?? [];
@@ -310,8 +316,10 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
     }
     case 'saveAllocationQuarter': {
       const allocationId = String(arg0); const quarterKey = String(arg1); const months = arg2 as { monthKey: string; hours: number }[];
-      const allocation = state.plan.workItems.flatMap((item) => item.allocations).find((item) => item.id === allocationId);
-      if (!allocation) throw new Error('Демо-назначение не найдено.');
+      const item = state.plan.workItems.find((candidate) => candidate.allocations.some(({ id }) => id === allocationId));
+      const allocation = item?.allocations.find(({ id }) => id === allocationId);
+      if (!item || !allocation) throw new Error('Демо-назначение не найдено.');
+      assertAssignableWorkItem(item);
       const match = quarterKey.match(/^(\d{4})-Q([1-4])$/);
       if (!match) throw new Error('Некорректный квартал.');
       const year = Number(match[1]); const quarter = Number(match[2]);

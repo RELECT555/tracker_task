@@ -45,6 +45,12 @@ type RoadmapHierarchyItem = {
   type: string;
 };
 
+function assertAssignableWorkItem(type: string) {
+  if (type.toLowerCase() === 'epic') {
+    throw new BadRequestException('На эпики нельзя назначать исполнителей.');
+  }
+}
+
 function isPlanItem(item: RoadmapHierarchyItem) {
   return ['epic', 'feature'].includes(item.type.toLowerCase());
 }
@@ -274,7 +280,7 @@ export class RoadmapService {
       : null;
     const workItems = project.workItems.map((item) => {
       // Each allocation's fact is the Completed Work logged on the Azure DevOps Task that mirrors it.
-      const allocations = item.allocations.map((allocation) => {
+      const allocations = item.type.toLowerCase() === 'epic' ? [] : item.allocations.map((allocation) => {
         const task = allocation.azureTaskId ? itemByExternalId.get(allocation.azureTaskId) : undefined;
         return {
           ...allocation,
@@ -344,9 +350,12 @@ export class RoadmapService {
 
     const items = project.workItems;
     const itemByExternalId = new Map(items.map((item) => [item.externalId, item]));
-    const linkedAllocations = items.flatMap((item) => item.allocations).flatMap(({ id, azureTaskId }) =>
-      azureTaskId && itemByExternalId.has(azureTaskId) ? [{ id, azureTaskId }] : [],
-    );
+    const linkedAllocations = items
+      .filter((item) => item.type.toLowerCase() !== 'epic')
+      .flatMap((item) => item.allocations)
+      .flatMap(({ id, azureTaskId }) =>
+        azureTaskId && itemByExternalId.has(azureTaskId) ? [{ id, azureTaskId }] : [],
+      );
     const sourceIds = new Set([
       ...items.filter(isFactSource).map((item) => item.externalId),
       ...linkedAllocations.map((allocation) => allocation.azureTaskId),
@@ -745,9 +754,10 @@ export class RoadmapService {
     const allocation = await this.prisma.$transaction(async (tx) => {
       const workItem = await tx.roadmapWorkItem.findUnique({
         where: { id: dto.workItemId },
-        select: { projectId: true },
+        select: { projectId: true, type: true },
       });
       if (!workItem) throw new NotFoundException('Roadmap work item was not found');
+      assertAssignableWorkItem(workItem.type);
       const membership = await tx.roadmapRoleMember.findFirst({
         where: { roleId: dto.roleId, role: { projectId: workItem.projectId }, person: { externalId: dto.personExternalId, isActive: true } },
         include: { person: true },
@@ -821,7 +831,7 @@ export class RoadmapService {
     const changed = await this.prisma.$transaction(async (tx) => {
       const rows = await tx.roadmapAllocation.findMany({
         where: { id: { in: ids } },
-        include: { periods: { orderBy: [{ startsAt: 'asc' }, { id: 'asc' }] } },
+        include: { workItem: { select: { type: true } }, periods: { orderBy: [{ startsAt: 'asc' }, { id: 'asc' }] } },
         orderBy: { id: 'asc' },
       });
       const first = rows[0];
@@ -830,6 +840,7 @@ export class RoadmapService {
       )) {
         throw new ConflictException('Состав назначений изменился. Обновите план и повторите действие.');
       }
+      assertAssignableWorkItem(first.workItem.type);
       const group = { workItemId: first.workItemId, roleId: first.roleId, quarterKey: first.quarterKey };
       if (await tx.roadmapAllocation.count({ where: group }) !== ids.length) {
         throw new ConflictException('Состав назначений изменился. Обновите план и повторите действие.');
@@ -905,9 +916,10 @@ export class RoadmapService {
       return await this.prisma.$transaction(async (tx) => {
         const allocation = await tx.roadmapAllocation.findUnique({
           where: { id: allocationId },
-          select: { id: true, estimatedHours: true, periods: { select: { monthKey: true, hours: true } } },
+          select: { id: true, estimatedHours: true, workItem: { select: { type: true } }, periods: { select: { monthKey: true, hours: true } } },
         });
         if (!allocation) throw new NotFoundException('Roadmap allocation was not found');
+        assertAssignableWorkItem(allocation.workItem.type);
 
         const monthKeys = normalized.map((month) => month.monthKey);
         const alreadyPlannedThisQuarter = allocation.periods
