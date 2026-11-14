@@ -54,7 +54,7 @@ export function useAuth() {
       setTokens(data.accessToken, data.refreshToken);
       setHasToken(true);
       queryClient.setQueryData(['auth', 'me'], { user: data.user });
-      const target = variables.redirectTo ?? routes.roadmap;
+      const target = variables.redirectTo ?? routes.home;
       router.push(target);
       router.refresh();
     },

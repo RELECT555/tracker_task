@@ -7,10 +7,14 @@ import { useAuth } from '@/features/auth/model/useAuth';
 import { safeRedirectPath } from '@/shared/config/auth';
 import { routes } from '@/shared/config/routes';
 import { ApiError } from '@/shared/api/client';
+import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { SpecterOrb } from './SpecterOrb';
+
+const fieldClassName =
+  'h-12 rounded-lg border-white/10 bg-[#14151c] px-4 text-base text-slate-100 shadow-none autofill:inset-shadow-[0_0_0_100px_#14151c] autofill:[-webkit-text-fill-color:var(--color-slate-100)] focus-visible:border-violet-300/60 focus-visible:ring-violet-300/20 sm:text-sm dark:border-white/10';
 
 export function LoginPage() {
   const searchParams = useSearchParams();
@@ -18,7 +22,7 @@ export function LoginPage() {
   const [email, setEmail] = useState('admin@tracker.local');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
-  const redirectTo = safeRedirectPath(searchParams.get('redirect'), routes.roadmap);
+  const redirectTo = safeRedirectPath(searchParams.get('redirect'), routes.home);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,8 +73,8 @@ export function LoginPage() {
           <h1 id="login-title" className="text-[30px] leading-tight font-medium tracking-[-0.045em] sm:text-[34px]">Всё начинается здесь.</h1>
           <p id="login-description" className="mt-3 max-w-[320px] text-sm leading-6 text-slate-400">Войдите в аккаунт, чтобы продолжить<br className="hidden sm:block" /> работу над вашими проектами.</p>
 
-          <form onSubmit={handleSubmit} aria-describedby="login-description" aria-busy={isLoggingIn} className="mt-9 space-y-5">
-            <div className="space-y-2.5">
+          <form onSubmit={handleSubmit} aria-describedby="login-description" aria-busy={isLoggingIn} className="mt-9 space-y-5 scheme-dark">
+            <div className="grid gap-2.5">
               <Label htmlFor="email" className="text-[13px] font-normal text-slate-300">Рабочая почта</Label>
               <Input
                 id="email"
@@ -84,10 +88,10 @@ export function LoginPage() {
                 required
                 disabled={isLoggingIn}
                 aria-describedby={errorMessage ? 'login-error' : undefined}
-                className="h-12 rounded-lg border-white/10 bg-white/[0.025] px-4 text-base text-slate-100 shadow-none placeholder:text-slate-400 focus-visible:border-violet-300/60 focus-visible:ring-violet-300/20 sm:text-sm dark:border-white/10"
+                className={fieldClassName}
               />
             </div>
-            <div className="space-y-2.5">
+            <div className="grid gap-2.5">
               <Label htmlFor="password" className="text-[13px] font-normal text-slate-300">Пароль</Label>
               <div className="relative">
                 <Input
@@ -100,7 +104,7 @@ export function LoginPage() {
                   required
                   disabled={isLoggingIn}
                   aria-describedby={errorMessage ? 'login-error' : undefined}
-                  className="h-12 rounded-lg border-white/10 bg-white/[0.025] pr-12 pl-4 text-base text-slate-100 shadow-none placeholder:text-slate-400 focus-visible:border-violet-300/60 focus-visible:ring-violet-300/20 sm:text-sm dark:border-white/10"
+                  className={cn(fieldClassName, 'pr-12')}
                 />
                 <button
                   type="button"

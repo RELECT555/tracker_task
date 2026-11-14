@@ -65,9 +65,9 @@ const isEpic = (item: RoadmapWorkItem) => item.type.toLocaleLowerCase('ru-RU') =
 const isFeature = (item: RoadmapWorkItem) => item.type.toLocaleLowerCase('ru-RU') === 'feature';
 
 export type RoleShare = { roleId: string; hours: number };
-export type MonthColumn = { monthKey: string; inQuarter: boolean; total: number; byRole: RoleShare[] };
+export type MonthColumn = { monthKey: string; total: number; byRole: RoleShare[] };
 export type PersonRow = { id: string; name: string; email: string | null; roleIds: string[]; months: number[]; total: number; estimate: number; features: number };
-export type RoleRow = { id: string; name: string; color: string; quarterHours: number; estimate: number; people: number; features: number };
+export type RoleRow = { id: string; name: string; color: string; quarterHours: number; estimate: number };
 export type EpicRow = {
   id: string; title: string; state: string | null; group: StatusGroup; url: string | null;
   features: number; done: number; quarterHours: number; estimate: number; actual: number; byRole: RoleShare[];
@@ -103,11 +103,9 @@ export function buildAnalytics(plan: RoadmapProjectPlan, quarter: QuarterRef) {
   const quarterEstimate = quarterAll.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0);
   const quarterDistributed = quarterAll.reduce((sum, allocation) => sum + hoursInMonths(allocation, quarter.monthKeys), 0);
 
-  // Загрузка по месяцам года: все месячные периоды, независимо от квартала назначения.
-  const yearMonthKeys = Array.from({ length: 12 }, (_, index) => `${quarter.year}-${String(index + 1).padStart(2, '0')}`);
-  const months: MonthColumn[] = yearMonthKeys.map((monthKey) => {
-    const byRole = roleShares(allAllocations, (allocation) => hoursInMonths(allocation, [monthKey]));
-    return { monthKey, inQuarter: quarter.monthKeys.includes(monthKey), total: byRole.reduce((sum, role) => sum + role.hours, 0), byRole };
+  const months: MonthColumn[] = quarter.monthKeys.map((monthKey) => {
+    const byRole = roleShares(quarterAll, (allocation) => hoursInMonths(allocation, [monthKey]));
+    return { monthKey, total: byRole.reduce((sum, role) => sum + role.hours, 0), byRole };
   });
 
   // Статусы фич.
@@ -152,17 +150,16 @@ export function buildAnalytics(plan: RoadmapProjectPlan, quarter: QuarterRef) {
   })).sort((a, b) => b.total - a.total || b.estimate - a.estimate || a.name.localeCompare(b.name, 'ru'));
 
   // Роли.
-  const roles: RoleRow[] = plan.roles.map((role) => {
+  const roles: RoleRow[] = plan.roles.flatMap((role) => {
     const roleAllocations = quarterAll.filter((allocation) => allocation.roleId === role.id);
-    return {
+    if (!roleAllocations.length) return [];
+    return [{
       id: role.id,
       name: role.name,
       color: role.color,
       quarterHours: roleAllocations.reduce((sum, allocation) => sum + hoursInMonths(allocation, quarter.monthKeys), 0),
       estimate: roleAllocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0),
-      people: new Set(roleAllocations.map((allocation) => allocation.personExternalId)).size,
-      features: new Set(items.filter((item) => quarterAllocations(item).some((allocation) => allocation.roleId === role.id)).map((item) => item.id)).size,
-    };
+    }];
   }).sort((a, b) => b.quarterHours - a.quarterHours || b.estimate - a.estimate);
 
   // Эпики (плюс фичи без эпика отдельной строкой).
@@ -226,11 +223,3 @@ export const formatHours = (value: number) => `${numberFormat.format(value)} ч`
 export const percent = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
 /** Процент для подписи: ненулевая доля меньше 1% не показывается как «0%». */
 export const formatPercent = (part: number, whole: number) => (part > 0 && whole > 0 && percent(part, whole) === 0 ? '<1%' : `${percent(part, whole)}%`);
-
-export function niceMax(value: number) {
-  if (value <= 0) return 4;
-  const raw = value / 4;
-  const magnitude = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude).find((candidate) => candidate >= raw) ?? raw;
-  return step * 4;
-}

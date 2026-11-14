@@ -14,19 +14,15 @@ export const statusStyles = {
   removed: { color: 'hsl(var(--muted-foreground) / 0.5)', icon: CircleX },
 } satisfies Record<StatusGroup, { color: string; icon: typeof Circle }>;
 
-export function AnalyticsPanel({ title, description, aside, children }: {
+export function AnalyticsPanel({ title, description, children }: {
   title: string;
   description?: ReactNode;
-  aside?: ReactNode;
   children: ReactNode;
 }) {
   return <Card className={cn(styles.panel, 'min-w-0 border-border/70 shadow-none dark:border-border')}>
-    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-4 pb-4 pt-4 sm:px-5 sm:pt-5">
-      <div className="min-w-0">
-        <h2 className="text-[17px] font-semibold leading-tight tracking-tight text-foreground">{title}</h2>
-        {description ? <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p> : null}
-      </div>
-      {aside}
+    <div className="px-4 pb-4 pt-4 sm:px-5 sm:pt-5">
+      <h2 className="text-[17px] font-semibold leading-tight tracking-tight text-foreground">{title}</h2>
+      {description ? <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p> : null}
     </div>
     {children}
   </Card>;

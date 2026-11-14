@@ -33,7 +33,7 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
   const [projectId, setProjectId] = useState(initialProjectId ?? '');
   const [editor, setEditor] = useState<RoleEditor>();
   const [removalTarget, setRemovalTarget] = useState<RoadmapRole>();
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState<{ message: string; autoDismiss: boolean }>();
 
   const projects = new Map<string, string>();
   for (const project of projectsQuery.data?.data ?? []) {
@@ -100,7 +100,7 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
 
   function openEditor(role?: RoadmapRole) {
     if (!selectedProjectId || pending) return;
-    setStatus('');
+    setStatus(undefined);
     setEditor({ projectId: selectedProjectId, projectName, role });
   }
 
@@ -123,7 +123,7 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
                 if (nextProjectId === selectedProjectId) return;
                 setProjectId(nextProjectId);
                 setSearch('');
-                setStatus('');
+                setStatus(undefined);
                 add.reset();
                 remove.reset();
               }}
@@ -164,13 +164,13 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
           onEditRole={openEditor}
           onRemoveRole={(target) => {
             remove.reset();
-            setStatus('');
+            setStatus(undefined);
             setRemovalTarget(target);
           }}
           onAddRole={(templateId, withKeyboard = false) => {
             if (!canAdd || !availableTemplates.some((entry) => entry.id === templateId)) return;
             remove.reset();
-            setStatus('');
+            setStatus(undefined);
             add.mutate({ projectId: selectedProjectId, templateId, withKeyboard });
           }}
         />
@@ -186,7 +186,7 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
           onSaved={async (message, name) => {
             await refresh();
             if (!editor.role || !normalizeRoleName(name).includes(normalizeRoleName(search))) setSearch('');
-            setStatus(message);
+            setStatus({ message, autoDismiss: !editor.role });
           }}
         />
       )}

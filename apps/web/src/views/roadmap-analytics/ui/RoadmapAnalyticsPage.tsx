@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, CalendarClock, ChevronLeft, ChevronRight, CircleCheck, TrendingUp, UserX } from 'lucide-react';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
+import { useRoadmapProject } from '@/entities/roadmap/model/roadmap-project-selection';
 import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
 import { Button } from '@/shared/ui/button';
 import { Card } from '@/shared/ui/card';
@@ -12,18 +13,16 @@ import { ColorMark } from '@/shared/ui/color-mark';
 import { cn } from '@/shared/lib/utils';
 import { buildAnalytics, currentQuarterRef, formatHours, formatNumber, formatPercent, shiftQuarter, statusGroupLabels } from '../model/analytics';
 import type { AttentionItem, QuarterRef, RoadmapAnalytics, RoleRow } from '../model/analytics';
-import { AnalyticsPanel, EmptyState, Meter, plural, statusStyles, type RoleLookup } from './analytics-ui';
+import { AnalyticsPanel, EmptyState, plural, statusStyles, type RoleLookup } from './analytics-ui';
 import { EpicsCard, TeamLoadCard } from './AnalyticsTables';
 import { MonthlyLoadChart } from './MonthlyLoadChart';
 import styles from './analytics.module.css';
 
-function Metric({ label, value, unit, note, ratio, color, primary }: {
+function Metric({ label, value, unit, note, primary }: {
   label: string;
   value: string;
   unit?: string;
-  note: ReactNode;
-  ratio?: number;
-  color?: string;
+  note?: string;
   primary?: boolean;
 }) {
   return <div className={cn(styles.metric, primary && styles.primaryMetric)}>
@@ -31,14 +30,12 @@ function Metric({ label, value, unit, note, ratio, color, primary }: {
     <dd className="text-[24px] font-semibold leading-none tracking-tight tabular-nums text-foreground sm:text-[30px]">
       {value}{unit ? <> <span className="text-sm font-medium tracking-normal text-muted-foreground">{unit}</span></> : null}
     </dd>
-    <dd className="text-xs leading-relaxed text-muted-foreground">{note}</dd>
-    {ratio !== undefined ? <dd className="mt-auto pt-1"><Meter label={label} value={ratio} color={color} /></dd> : null}
+    {note ? <dd className="text-xs tabular-nums text-muted-foreground">{note}</dd> : null}
   </div>;
 }
 
 function Metrics({ analytics }: { analytics: RoadmapAnalytics }) {
   const { counts, quarter, hours, people } = analytics;
-  const topPerson = people[0];
   return <section aria-label="Ключевые показатели">
     <dl className={cn(styles.metrics, 'rounded-xl border border-border/70 dark:border-border')}>
       <Metric
@@ -46,38 +43,30 @@ function Metrics({ analytics }: { analytics: RoadmapAnalytics }) {
         label="Оценка на квартал"
         value={formatNumber(quarter.estimate)}
         unit="ч"
-        ratio={quarter.estimate > 0 ? quarter.distributed / quarter.estimate : undefined}
         note={quarter.estimate > 0 || quarter.distributed > 0
-          ? <>По месяцам <strong className="font-semibold text-foreground">{formatHours(quarter.distributed)}</strong>{quarter.estimate > 0 ? ` · ${formatPercent(quarter.distributed, quarter.estimate)}` : null}</>
-          : 'Оценок на квартал нет'}
+          ? `По месяцам ${formatHours(quarter.distributed)}`
+          : undefined}
       />
       <Metric
-        label="Покрытие фич"
+        label="Фичи с назначениями"
         value={formatNumber(counts.covered)}
         unit={`из ${formatNumber(counts.open)}`}
-        ratio={counts.open > 0 ? counts.covered / counts.open : undefined}
-        note={counts.open > 0 ? `С назначениями · ${formatPercent(counts.covered, counts.open)} открытых фич` : 'Открытых фич нет'}
       />
       <Metric
         label="Готовность проекта"
         value={counts.features > 0 ? formatPercent(counts.done, counts.features) : '—'}
-        ratio={counts.features > 0 ? counts.done / counts.features : undefined}
-        color={statusStyles.done.color}
-        note={counts.features > 0 ? `Закрыто ${counts.done} из ${counts.features} · ${counts.epics} ${plural(counts.epics, 'эпик', 'эпика', 'эпиков')}` : 'Фич пока нет'}
+        note={counts.features > 0 ? `Закрыто ${formatNumber(counts.done)} из ${formatNumber(counts.features)}` : undefined}
       />
       <Metric
         label="Факт по проекту"
         value={formatNumber(hours.actual)}
         unit="ч"
-        ratio={hours.estimate > 0 ? hours.actual / hours.estimate : undefined}
-        color={hours.estimate > 0 && hours.actual > hours.estimate ? 'var(--color-red-600)' : undefined}
-        note={hours.estimate > 0 ? `${formatPercent(hours.actual, hours.estimate)} от оценки ${formatHours(hours.estimate)}` : 'Оценок по фичам нет'}
+        note={hours.estimate > 0 ? `Оценка ${formatHours(hours.estimate)}` : undefined}
       />
       <Metric
         label="Команда квартала"
         value={formatNumber(people.length)}
         unit={plural(people.length, 'участник', 'участника', 'участников')}
-        note={topPerson ? `Макс. ${topPerson.total ? formatHours(topPerson.total) : `оценка ${formatHours(topPerson.estimate)}`} · ${topPerson.name}` : 'Назначений пока нет'}
       />
     </dl>
   </section>;
@@ -154,21 +143,28 @@ function AttentionCard({ items, quarter }: { items: AttentionItem[]; quarter: Qu
 }
 
 function RolesCard({ roles, quarter }: { roles: RoleRow[]; quarter: QuarterRef }) {
+  const listId = useId();
+  const [expanded, setExpanded] = useState(false);
+  const previewCount = 5;
+  const visibleRoles = expanded ? roles : roles.slice(0, previewCount);
   const total = roles.reduce((sum, role) => sum + role.quarterHours, 0);
-  return <AnalyticsPanel title="Часы по ролям" description={`${quarter.label} · ${formatHours(total)}`}>
-    {roles.length ? <ul className="divide-y divide-border/55 border-t border-border/55">
-      {roles.map((role) => <li key={role.id} className="px-4 py-2.5 sm:px-5">
-        <div className="flex items-baseline justify-between gap-2 text-[13px]">
+  return <AnalyticsPanel title="Часы по ролям" description={roles.length ? `${quarter.label} · ${formatHours(total)}` : quarter.label}>
+    {roles.length ? <>
+      <ul id={listId} className="divide-y divide-border/55 border-t border-border/55">
+        {visibleRoles.map((role) => <li key={role.id} className="flex items-start justify-between gap-3 px-4 py-2 text-[13px] sm:px-5">
           <span className="flex min-w-0 items-center gap-2 font-medium"><ColorMark color={role.color} size="sm" /><span className="wrap-anywhere">{role.name}</span></span>
-          <span className="shrink-0 font-semibold tabular-nums">{formatHours(role.quarterHours)} {total > 0 ? <span className="ml-1 text-xs font-normal text-muted-foreground">{formatPercent(role.quarterHours, total)}</span> : null}</span>
-        </div>
-        {role.quarterHours > 0 ? <div className="mt-2"><Meter value={role.quarterHours / total} color={role.color} label={`Доля часов роли «${role.name}»`} /></div> : null}
-        <p className="mt-1 text-xs text-muted-foreground">
-          {role.people} {plural(role.people, 'участник', 'участника', 'участников')} · {role.features} {plural(role.features, 'фича', 'фичи', 'фич')}
-          {Math.abs(role.estimate - role.quarterHours) >= 0.5 ? ` · оценка ${formatHours(role.estimate)}` : null}
-        </p>
-      </li>)}
-    </ul> : <EmptyState>В проекте пока нет ролей.</EmptyState>}
+          <span className="shrink-0 text-right font-semibold tabular-nums">
+            {formatHours(role.quarterHours)}
+            {Math.abs(role.estimate - role.quarterHours) >= 0.5 ? <span className="block text-xs font-normal text-muted-foreground">Оценка {formatHours(role.estimate)}</span> : null}
+          </span>
+        </li>)}
+      </ul>
+      {roles.length > previewCount ? <div className="border-t border-border/55 px-3 py-1.5 sm:px-4">
+        <Button type="button" variant="ghost" size="sm" aria-expanded={expanded} aria-controls={listId} onClick={() => setExpanded((value) => !value)}>
+          {expanded ? 'Свернуть список' : `Показать ещё ${roles.length - previewCount}`}
+        </Button>
+      </div> : null}
+    </> : <EmptyState>Нет назначений на этот квартал.</EmptyState>}
   </AnalyticsPanel>;
 }
 
@@ -197,14 +193,10 @@ function StatusCard({ statuses, total }: { statuses: RoadmapAnalytics['statuses'
 export function RoadmapAnalyticsPage() {
   const projectsQuery = useQuery({ queryKey: ['roadmap', 'azure-projects'], queryFn: roadmapApi.projects });
   const projects = projectsQuery.data?.data ?? [];
-  const [projectId, setProjectId] = useState('');
   const [quarter, setQuarter] = useState(currentQuarterRef);
-  const project = projects.find((item) => item.id === projectId) ?? projects.find((item) => item.imported) ?? projects[0];
+  const { project, ready: projectSelectionReady, selectProject } = useRoadmapProject(projects);
   const activeProjectId = project?.id ?? '';
   const roadmapProjectId = project?.roadmapId ?? '';
-  useEffect(() => {
-    if (activeProjectId) setProjectId(activeProjectId);
-  }, [activeProjectId]);
 
   const planQuery = useQuery({
     queryKey: ['roadmap', 'plan', roadmapProjectId],
@@ -223,13 +215,13 @@ export function RoadmapAnalyticsPage() {
     return lookup;
   }, [plan]);
   const error = projectsQuery.error ?? planQuery.error;
-  const loading = projectsQuery.isLoading || planQuery.isLoading;
+  const loading = !projectSelectionReady || projectsQuery.isLoading || planQuery.isLoading;
   const syncTimestamp = Date.parse(plan?.syncedAt ?? '');
   const syncedAt = Number.isFinite(syncTimestamp) ? new Date(syncTimestamp) : null;
   const contextKey = `${roadmapProjectId}-${quarter.key}`;
 
-  return <main className={cn(styles.dashboard, 'roadmap-scrollbar relative min-h-0 flex-1 overflow-auto overscroll-none px-3 py-4 sm:px-6 sm:py-6 lg:px-8')}>
-    <div className={cn(styles.content, 'mx-auto w-full max-w-[88rem] space-y-4')}>
+  return <main className={cn(styles.dashboard, 'roadmap-scrollbar relative min-h-0 flex-1 overflow-auto overscroll-none px-4 py-4 sm:px-6 sm:py-6 lg:px-8')}>
+    <div className={cn(styles.content, 'w-full space-y-4')}>
       <header className={styles.header}>
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold leading-tight tracking-tight text-foreground sm:text-[30px]">Аналитика</h1>
@@ -238,7 +230,7 @@ export function RoadmapAnalyticsPage() {
           </p> : null}
         </div>
         <QuarterSwitcher quarter={quarter} onShift={(offset) => setQuarter((current) => shiftQuarter(current, offset))} />
-        <AzureProjectPicker projects={projects} value={activeProjectId} onChange={setProjectId} disabled={projectsQuery.isLoading} placeholder="Выбрать проект" className={styles.projectPicker} />
+        <AzureProjectPicker projects={projects} value={activeProjectId} onChange={selectProject} disabled={projectsQuery.isLoading || !projectSelectionReady} placeholder="Выбрать проект" className={styles.projectPicker} />
       </header>
 
       <QueryErrorNotice title="Не удалось загрузить аналитику" queries={[projectsQuery, ...(roadmapProjectId ? [planQuery] : [])]} />
@@ -256,7 +248,7 @@ export function RoadmapAnalyticsPage() {
         <div className={styles.columns}>
           <TeamLoadCard key={contextKey} people={analytics.people} roles={roles} quarter={quarter} />
           <div className="min-w-0 space-y-4">
-            <RolesCard roles={analytics.roles} quarter={quarter} />
+            <RolesCard key={contextKey} roles={analytics.roles} quarter={quarter} />
             <StatusCard statuses={analytics.statuses} total={analytics.counts.features} />
           </div>
         </div>

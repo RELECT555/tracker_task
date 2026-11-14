@@ -29,6 +29,7 @@ import {
   type RoadmapWorkItem,
 } from '@/entities/roadmap/api/roadmapApi';
 import { isRoadmapDemoMode } from '@/entities/roadmap/api/roadmapDemo';
+import { useRoadmapProject } from '@/entities/roadmap/model/roadmap-project-selection';
 import { getRoadmapRoleFact } from '../model/roadmap-role-fact';
 import { useRoadmapColumnWidths, type ColumnWidthConfig } from '../model/use-roadmap-column-widths';
 import { CreateAzureWorkItem } from './CreateAzureWorkItem';
@@ -632,7 +633,6 @@ export function RoadmapPage() {
   const { user } = useAuth();
   const demoMode = isRoadmapDemoMode();
   const canConfigure = isAdminUser(user);
-  const [selectedAzureProjectId, setSelectedAzureProjectId] = useState('');
   const [view, setView] = useState<'roles' | 'periods'>('roles');
   const [focusMode, setFocusMode] = useState(false);
   const columnWidths = useRoadmapColumnWidths(user?.id);
@@ -669,11 +669,9 @@ export function RoadmapPage() {
   const roleCatalogQuery = useQuery({ queryKey: ['roadmap', 'admin', 'role-catalog'], queryFn: roadmapApi.roleCatalog, enabled: canConfigure });
   const projects = useMemo(() => projectsQuery.data?.data ?? [], [projectsQuery.data?.data]);
   const people = peopleQuery.data?.data ?? [];
+  const needsPeopleSync = canConfigure && peopleQuery.isSuccess && people.length === 0;
   const usingCachedProjects = projectsQuery.data?.source === 'cache';
-  const selectedProject = projects.find((project) => project.id === selectedAzureProjectId)
-    ?? projects.find((project) => project.imported && project.planSynced !== false)
-    ?? projects.find((project) => project.imported)
-    ?? projects[0];
+  const { project: selectedProject, ready: projectSelectionReady, selectProject } = useRoadmapProject(projects);
   const activeAzureProjectId = selectedProject?.id ?? '';
   const roadmapProjectId = selectedProject?.roadmapId ?? '';
   const {
@@ -686,10 +684,6 @@ export function RoadmapPage() {
   const projectIsSynced = Boolean(selectedProject?.imported && selectedProject.planSynced !== false);
   const canImportProject = Boolean(canConfigure && !demoMode && configured && selectedProject && !usingCachedProjects && !projectIsSynced);
   const roleSettingsHref = roadmapProjectId ? `${routes.roadmapAdminRoles}?projectId=${encodeURIComponent(roadmapProjectId)}` : routes.roadmapAdminRoles;
-
-  useEffect(() => {
-    if (activeAzureProjectId) setSelectedAzureProjectId(activeAzureProjectId);
-  }, [activeAzureProjectId]);
 
   const planQuery = useQuery({
     queryKey: ['roadmap', 'plan', roadmapProjectId],
@@ -999,12 +993,8 @@ export function RoadmapPage() {
               {azureEstimate}
               <div className="space-y-0.5">
                 {assignmentList}
-                {selectedMonth || !canEditPlan ? !allocations.length && !role.defaultPersonName && <span className="px-1.5 text-xs text-muted-foreground/50">—</span> : rolePeople.length ? actions : (
-                  <p className="px-1.5 py-1 text-[11px] text-muted-foreground">
-                    {people.length ? 'Нет участников роли' : 'Пользователи не синхронизированы'}
-                    {canConfigure ? <> · <Link href={people.length ? roleSettingsHref : routes.roadmapAdminUsers} className="text-primary hover:underline">{people.length ? 'добавить' : 'синхронизировать'}</Link></> : null}
-                  </p>
-                )}
+                {actions}
+                {!actions && !allocations.length && (selectedMonth || !role.defaultPersonName) ? <p className="px-1.5 py-1 text-xs text-muted-foreground/50">—</p> : null}
               </div>
             </td>
           );
@@ -1017,14 +1007,14 @@ export function RoadmapPage() {
 
   const loadQueries = [projectsQuery, ...(canConfigure ? [connectionQuery, peopleQuery, roleCatalogQuery] : []), ...(roadmapProjectId ? [planQuery] : [])];
   const mutationErrors = [isSelectedProjectSync ? syncMutation.error : null, saveMutation.error, saveQuarterMutation.error, splitMutation.error, addRoleMutation.error, setRoleDefaultMutation.error, pushAllocationMutation.error];
-  const loadingMessage = projectsQuery.isLoading
+  const loadingMessage = projectsQuery.isLoading || !projectSelectionReady
     ? 'Загружаем проекты Azure DevOps…'
     : planQuery.isLoading
       ? 'Загружаем план проекта…'
       : connectionQuery.isLoading
         ? 'Проверяем подключение к Azure DevOps…'
         : null;
-  const emptyPlanMessage = configured && !projectsQuery.isError && !roadmapProjectId
+  const emptyPlanMessage = projectSelectionReady && configured && !projectsQuery.isError && !roadmapProjectId
     ? selectedProject
       ? 'Загрузите выбранный проект, чтобы получить задачи, роли и оценки из Azure DevOps.'
       : 'Выберите проект Azure DevOps выше.'
@@ -1038,8 +1028,8 @@ export function RoadmapPage() {
             <AzureProjectPicker
               projects={projects}
               value={activeAzureProjectId}
-              onChange={setSelectedAzureProjectId}
-              disabled={projectsQuery.isLoading}
+              onChange={selectProject}
+              disabled={projectsQuery.isLoading || !projectSelectionReady}
               placeholder={demoMode ? 'Демо-проект' : configured ? 'Выбрать проект Azure DevOps' : 'Выбрать локальный проект'}
             />
             {plan && !canEditPlan ? <span className="text-sm text-muted-foreground">Только просмотр</span> : null}
@@ -1241,7 +1231,12 @@ export function RoadmapPage() {
                   {!demoMode && monthlyFactQuery.isError ? <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => void monthlyFactQuery.refetch()}>Повторить</Button> : null}
                 </div> : null}
 
-                {roles.length && !people.length && configured ? <div className="border-b border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">Чтобы назначать людей на роли, сначала синхронизируйте пользователей Azure DevOps в администрировании Roadmap.</div> : null}
+                {roles.length > 0 && needsPeopleSync && (configured || (canEditPlan && !selectedMonth)) ? (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                    <span>Чтобы назначать участников, синхронизируйте список пользователей Azure DevOps.</span>
+                    <Link href={routes.roadmapAdminUsers} className="rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Перейти к синхронизации</Link>
+                  </div>
+                ) : null}
 
                 {!epics.length && !features.length ? (
                   <div className="px-6 py-12 text-center text-sm text-muted-foreground">
@@ -1317,26 +1312,39 @@ export function RoadmapPage() {
                           {factColumnCount ? <th scope="colgroup" id="roadmap-fact-roles" colSpan={factColumnCount} className="border-l border-border/60 px-3 py-1.5">{selectedMonth ? 'Факт за месяц по ролям' : 'Факт по ролям'}</th> : null}
                         </tr>
                         {headerRowSpan === 2 ? <tr className="border-b border-border bg-muted/25">
-                          {planColumns.map((role) => <th scope="col" key={role.id} data-column-id={`plan:${role.id}`} className="relative border-l border-border/40 px-3 py-2.5">
-                            <div className="space-y-1.5">
-                              <div className="flex items-center gap-2 normal-case tracking-normal">
-                                <RoleMark name={role.name} color={role.color} size="sm" />
-                                <span className="min-w-0 truncate text-[13px] font-semibold text-foreground" title={role.name}>{role.name}</span>
-                                {role.azureEstimateField ? <span role="img" aria-label="Роль из Azure DevOps" className="shrink-0 text-primary" title="Роль из Azure DevOps"><RefreshCw aria-hidden="true" className="size-3.5" /></span> : null}
-                                {role.isMock && !/демо/i.test(role.name) ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium normal-case text-amber-700 dark:text-amber-300">демо</span> : null}
+                          {planColumns.map((role) => {
+                            const hasActiveMembers = (role.members ?? []).some((member) => member.personIsActive);
+                            return <th scope="col" key={role.id} data-column-id={`plan:${role.id}`} className="relative border-l border-border/40 px-3 py-2.5">
+                              <div className="space-y-1.5">
+                                <div className="flex items-center gap-2 normal-case tracking-normal">
+                                  <RoleMark name={role.name} color={role.color} size="sm" />
+                                  <span className="min-w-0 truncate text-[13px] font-semibold text-foreground" title={role.name}>{role.name}</span>
+                                  {role.azureEstimateField ? <span role="img" aria-label="Роль из Azure DevOps" className="shrink-0 text-primary" title="Роль из Azure DevOps"><RefreshCw aria-hidden="true" className="size-3.5" /></span> : null}
+                                  {role.isMock && !/демо/i.test(role.name) ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium normal-case text-amber-700 dark:text-amber-300">демо</span> : null}
+                                </div>
+                                {canConfigure && !selectedMonth && (hasActiveMembers || role.defaultPersonName) ? <Popover open={defaultRolePickerId === role.id} onOpenChange={(open) => setDefaultRolePickerId(open ? role.id : null)}>
+                                  <PopoverTrigger asChild><button type="button" className="flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[10px] font-medium normal-case text-muted-foreground transition-colors hover:bg-card hover:text-foreground"><Users className="h-3 w-3 shrink-0" /><span className="truncate">{role.defaultPersonName ? `По умолчанию: ${role.defaultPersonName}` : 'Закрепить человека по умолчанию'}</span></button></PopoverTrigger>
+                                  <PopoverContent align="start" side="bottom" sideOffset={6} collisionPadding={16} className="w-[min(300px,calc(100vw-2rem))] rounded-xl p-2">
+                                    <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Человек по умолчанию · {role.name}</p>
+                                    {(role.members ?? []).filter((member) => member.personIsActive).map((member) => <button key={member.personExternalId} type="button" disabled={setRoleDefaultMutation.isPending || role.defaultPersonExternalId === member.personExternalId} onClick={() => setRoleDefaultMutation.mutate({ roleId: role.id, personExternalId: member.personExternalId })} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-foreground hover:bg-muted disabled:opacity-60"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{member.personName.slice(0, 1)}</span><span className="min-w-0 flex-1"><span className="block truncate">{member.personName}</span><span className="block truncate text-[10px] text-muted-foreground">{member.personEmail}</span></span>{role.defaultPersonExternalId === member.personExternalId ? <Check className="h-4 w-4 text-primary" /> : null}</button>)}
+                                    {!hasActiveMembers ? <div className="px-2 py-3 text-sm text-muted-foreground">Сначала добавьте участника в эту роль в администрировании.</div> : null}
+                                    {role.defaultPersonExternalId ? <button type="button" disabled={setRoleDefaultMutation.isPending} onClick={() => setRoleDefaultMutation.mutate({ roleId: role.id, personExternalId: null })} className="mt-1 w-full rounded-lg border-t border-border px-2 py-2 text-left text-xs text-muted-foreground hover:text-foreground">Снять назначение по умолчанию</button> : null}
+                                  </PopoverContent>
+                                </Popover> : role.defaultPersonName ? <span className="block truncate text-[10px] font-medium normal-case text-muted-foreground">По умолчанию: {role.defaultPersonName}</span> : null}
+                                {!selectedMonth && !hasActiveMembers && (canConfigure || canEditPlan) ? (
+                                  canConfigure && !needsPeopleSync ? <Link
+                                    href={roleSettingsHref}
+                                    aria-label={`Добавить участников в роль «${role.name}»`}
+                                    className="inline-flex min-h-6 max-w-full items-center gap-1 rounded-md px-1.5 text-xs font-medium text-muted-foreground hover:bg-card hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                                  >
+                                    <Plus aria-hidden="true" className="size-3.5 shrink-0" />
+                                    <span>Добавить участников</span>
+                                  </Link> : <span className="block text-xs font-normal text-muted-foreground">Нет участников</span>
+                                ) : null}
                               </div>
-                              {canConfigure && !selectedMonth ? <Popover open={defaultRolePickerId === role.id} onOpenChange={(open) => setDefaultRolePickerId(open ? role.id : null)}>
-                                <PopoverTrigger asChild><button type="button" className="flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[10px] font-medium normal-case text-muted-foreground transition-colors hover:bg-card hover:text-foreground"><Users className="h-3 w-3 shrink-0" /><span className="truncate">{role.defaultPersonName ? `По умолчанию: ${role.defaultPersonName}` : 'Закрепить человека по умолчанию'}</span></button></PopoverTrigger>
-                                <PopoverContent align="start" side="bottom" sideOffset={6} collisionPadding={16} className="w-[min(300px,calc(100vw-2rem))] rounded-xl p-2">
-                                  <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Человек по умолчанию · {role.name}</p>
-                                  {(role.members ?? []).filter((member) => member.personIsActive).map((member) => <button key={member.personExternalId} type="button" disabled={setRoleDefaultMutation.isPending || role.defaultPersonExternalId === member.personExternalId} onClick={() => setRoleDefaultMutation.mutate({ roleId: role.id, personExternalId: member.personExternalId })} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-foreground hover:bg-muted disabled:opacity-60"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{member.personName.slice(0, 1)}</span><span className="min-w-0 flex-1"><span className="block truncate">{member.personName}</span><span className="block truncate text-[10px] text-muted-foreground">{member.personEmail}</span></span>{role.defaultPersonExternalId === member.personExternalId ? <Check className="h-4 w-4 text-primary" /> : null}</button>)}
-                                  {!(role.members ?? []).some((member) => member.personIsActive) ? <div className="px-2 py-3 text-sm text-muted-foreground">Сначала добавьте участника в эту роль в администрировании.</div> : null}
-                                  {role.defaultPersonExternalId ? <button type="button" disabled={setRoleDefaultMutation.isPending} onClick={() => setRoleDefaultMutation.mutate({ roleId: role.id, personExternalId: null })} className="mt-1 w-full rounded-lg border-t border-border px-2 py-2 text-left text-xs text-muted-foreground hover:text-foreground">Снять назначение по умолчанию</button> : null}
-                                </PopoverContent>
-                              </Popover> : role.defaultPersonName ? <span className="block truncate text-[10px] font-medium normal-case text-muted-foreground">По умолчанию: {role.defaultPersonName}</span> : null}
-                            </div>
-                            <ColumnResizeHandle columnId={`plan:${role.id}`} />
-                          </th>)}
+                              <ColumnResizeHandle columnId={`plan:${role.id}`} />
+                            </th>;
+                          })}
                           {factColumns.map((role) => <th scope="col" key={role.id} data-column-id={`fact:${role.id}`} className="relative border-l border-border/40 px-3 py-2.5 text-right text-xs font-semibold">
                             <span className="flex items-center justify-end gap-1.5"><RoleMark name={role.name} color={role.color} size="sm" /><span className="min-w-0 [overflow-wrap:anywhere]">{role.name}</span></span>
                             <ColumnResizeHandle columnId={`fact:${role.id}`} />

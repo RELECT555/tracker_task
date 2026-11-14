@@ -11,6 +11,7 @@ import styles from './role-assignment-board.module.css';
 import { setRoleDragImage } from './role-drag-image';
 
 const roleDragType = 'application/x-roadmap-role';
+const roleNoticeDuration = 4_000;
 const panelClass = 'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card';
 const plurals = new Intl.PluralRules('ru-RU');
 
@@ -31,6 +32,23 @@ function RoleSearch({ label, value, onChange }: { label: string; value: string; 
   );
 }
 
+function RoleSuccessNotice({ children, className, autoDismiss }: {
+  children: ReactNode;
+  className: string;
+  autoDismiss: boolean;
+}) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    if (!autoDismiss) return;
+    const timer = window.setTimeout(() => setVisible(false), roleNoticeDuration);
+    return () => window.clearTimeout(timer);
+  }, [autoDismiss]);
+
+  if (!visible) return null;
+  return <div className={className}><AdminAlert tone="success">{children}</AdminAlert></div>;
+}
+
 type RoleAssignmentBoardProps = {
   projectName: string;
   roles: RoadmapRole[];
@@ -40,7 +58,7 @@ type RoleAssignmentBoardProps = {
   addedRole?: Pick<RoadmapRole, 'id' | 'name'>;
   focusAddedRole?: boolean;
   removedRoleName?: string;
-  status: string;
+  status?: { message: string; autoDismiss: boolean };
   projectSearch: string;
   disabled: boolean;
   canAdd: boolean;
@@ -159,9 +177,11 @@ export function RoleAssignmentBoard({
             {availableRoles.length ? 'Роли не найдены.' : 'Для этого проекта нет доступных ролей в каталоге.'}
           </p>
         )}
-        {addedRole && <div className="mt-auto shrink-0 border-t border-border p-3">
-          <AdminAlert tone="success">Роль «{addedRole.name}» добавлена в проект.</AdminAlert>
-        </div>}
+        {addedRole && (
+          <RoleSuccessNotice key={addedRole.id} className="mt-auto shrink-0 border-t border-border p-3" autoDismiss>
+            Роль «{addedRole.name}» добавлена в проект.
+          </RoleSuccessNotice>
+        )}
       </section>
 
       <section
@@ -188,8 +208,16 @@ export function RoleAssignmentBoard({
             {roles.length > 0 && <div className="w-full @min-[26rem]:w-52"><RoleSearch label="Поиск по ролям проекта" value={projectSearch} onChange={onProjectSearchChange} /></div>}
           </div>
           <div className="flex min-h-0 flex-1 flex-col p-2">
-            {removedRoleName && <div className="mx-1 mb-2"><AdminAlert tone="success">Роль «{removedRoleName}» убрана из проекта.</AdminAlert></div>}
-            {status && <div className="mx-1 mb-2"><AdminAlert tone="success">{status}</AdminAlert></div>}
+            {removedRoleName && (
+              <RoleSuccessNotice key={removedRoleName} className="mx-1 mb-2" autoDismiss>
+                Роль «{removedRoleName}» убрана из проекта.
+              </RoleSuccessNotice>
+            )}
+            {status && (
+              <RoleSuccessNotice key={status.message} className="mx-1 mb-2" autoDismiss={status.autoDismiss}>
+                {status.message}
+              </RoleSuccessNotice>
+            )}
             {availableRoles.length > 0 && (
               <div className={cn(
                 'mx-1 mb-1.5 flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-center text-xs font-medium text-muted-foreground motion-safe:transition-colors motion-safe:duration-150 [@media(pointer:coarse)]:hidden',

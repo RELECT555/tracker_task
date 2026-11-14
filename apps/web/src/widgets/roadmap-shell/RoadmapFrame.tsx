@@ -5,7 +5,8 @@ import { usePathname } from 'next/navigation';
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from 'next-themes';
-import { ChartNoAxesCombined, ChevronDown, ChevronUp, GitBranch, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Settings2, Sun, type LucideIcon } from 'lucide-react';
+import { ChartNoAxesCombined, ChevronDown, ChevronUp, GitBranch, House, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Settings2, Sun, type LucideIcon } from 'lucide-react';
+import { RoadmapProjectSelection } from '@/entities/roadmap/model/roadmap-project-selection';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { roadmapAdminSections } from '@/shared/config/roadmap-admin-sections';
@@ -17,6 +18,7 @@ const ADMIN_LABEL = 'Администрирование';
 const RoadmapTopbarContext = createContext<HTMLDivElement | null>(null);
 
 const roadmapLinks = [
+  { href: routes.home, label: 'Главная', icon: House },
   { href: routes.roadmap, label: 'План проекта', icon: Rows3 },
   { href: routes.roadmapAnalytics, label: 'Аналитика', icon: ChartNoAxesCombined },
 ];
@@ -149,7 +151,8 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
     setTheme(order[(index + 1) % order.length]);
   };
   const breadcrumbs = [
-    { label: 'Roadmap', href: routes.roadmap },
+    { label: 'Главная', href: routes.home },
+    ...(isPlanPage ? [{ label: 'План проекта' }] : []),
     ...(isAdminSection ? [{ label: ADMIN_LABEL, href: isAdminHome ? undefined : routes.roadmapAdminHome }] : []),
     ...(pathname === routes.roadmapAnalytics ? [{ label: 'Аналитика' }] : []),
     ...(activeAdminSection ? [{ label: activeAdminSection.title }] : []),
@@ -159,7 +162,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
     <div className="roadmap-frame relative flex h-dvh overflow-clip bg-sidebar dark:bg-background">
       <aside id="roadmap-sidebar" className={cn('hidden h-full shrink-0 flex-col border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground md:flex', sidebarCollapsed ? 'w-16' : 'w-64')}>
         <div className={cn('flex h-16 shrink-0 items-center gap-2', sidebarCollapsed ? 'justify-center' : 'justify-between pl-5 pr-3')}>
-          <Link href={routes.roadmap} className={cn('flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-sidebar-primary', sidebarCollapsed && 'hidden')}>
+          <Link href={routes.home} className={cn('flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-sidebar-primary', sidebarCollapsed && 'hidden')}>
             <span className="flex size-9 items-center justify-center rounded-lg border border-sidebar-border/60 bg-sidebar-accent text-sidebar-primary">
               <GitBranch className="size-5" strokeWidth={1.7} aria-hidden="true" />
             </span>
@@ -260,7 +263,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
           </div>
         </header>
         <RoadmapTopbarContext.Provider value={topbarContent}>
-          {children}
+          {auth.user ? <RoadmapProjectSelection key={auth.user.id} userId={auth.user.id}>{children}</RoadmapProjectSelection> : null}
         </RoadmapTopbarContext.Provider>
       </div>
     </div>

@@ -1,4 +1,5 @@
 export const routes = {
+  home: '/',
   login: '/login',
   roadmap: '/roadmap',
   roadmapAnalytics: '/roadmap/analytics',
