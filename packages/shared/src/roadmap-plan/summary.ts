@@ -1,10 +1,13 @@
-import type { RoadmapMonthlyFact, RoadmapProjectPlan, RoadmapRole, RoadmapWorkItem } from '@/entities/roadmap/api/roadmapApi';
-import { getRoadmapRolePlan } from './roadmap-role-plan';
+import { getRoadmapRolePlan, type RoadmapMetricsItem, type RoadmapMetricsRole } from './role-plan';
 
 export interface RoadmapSummaryOptions {
   quarterKey: string;
   monthKey?: string;
-  monthlyFact?: RoadmapMonthlyFact;
+  monthlyFact?: {
+    workItems: Record<string, number>;
+    allocations: Record<string, number>;
+    totalHours: number;
+  };
   plannedRolesOnly?: boolean;
 }
 
@@ -20,9 +23,9 @@ export interface RoadmapSummaryTotals {
   participantIds: string[];
 }
 
-export interface RoadmapSummary extends RoadmapSummaryTotals {
-  items: RoadmapWorkItem[];
-  visibleRoles: RoadmapRole[];
+export interface RoadmapSummary<Item extends RoadmapMetricsItem, Role extends RoadmapMetricsRole> extends RoadmapSummaryTotals {
+  items: Item[];
+  visibleRoles: Role[];
   rolePlan: ReturnType<typeof getRoadmapRolePlan>;
 }
 
@@ -31,12 +34,12 @@ function finiteHours(value: number | string | null | undefined) {
   return Number.isFinite(hours) ? hours : 0;
 }
 
-function isPlanItem(item: RoadmapWorkItem) {
+function isPlanItem(item: RoadmapMetricsItem) {
   return ['epic', 'feature'].includes(item.type.toLowerCase());
 }
 
 /** Root facts are already rolled up by the API, including descendants through intermediate cards. */
-export function getRoadmapFactRoots(items: RoadmapWorkItem[]) {
+export function getRoadmapFactRoots<Item extends RoadmapMetricsItem>(items: Item[]) {
   const byExternalId = new Map(items.map((item) => [item.externalId, item]));
   return items.filter((item) => {
     if (!isPlanItem(item)) return false;
@@ -52,9 +55,12 @@ export function getRoadmapFactRoots(items: RoadmapWorkItem[]) {
 }
 
 /** Shared period projection keeps project rows and the selected-project summary on the same basis. */
-export function getRoadmapSummary(plan: RoadmapProjectPlan, options: RoadmapSummaryOptions): RoadmapSummary {
+export function getRoadmapSummary<Item extends RoadmapMetricsItem, Role extends RoadmapMetricsRole>(
+  plan: { workItems: Item[]; roles: Role[] },
+  options: RoadmapSummaryOptions,
+): RoadmapSummary<Item, Role> {
   const { quarterKey, monthKey, monthlyFact, plannedRolesOnly = false } = options;
-  const items = plan.workItems.map((item): RoadmapWorkItem => {
+  const items = plan.workItems.map((item): Item => {
     // Epic assignments are historical data; only descendant cards contribute to planning.
     const allocations = item.type.toLowerCase() === 'epic' ? [] : item.allocations;
     if (!monthKey) return { ...item, allocations: allocations.filter((allocation) => allocation.quarterKey === quarterKey) };
@@ -126,5 +132,47 @@ export function aggregateRoadmapSummaries(summaries: RoadmapSummaryTotals[]): Ro
     participants: participantIds.length,
     participantIds,
     roleKeys,
+  };
+}
+
+export type RoadmapSummaryMetrics = Omit<RoadmapSummaryTotals, 'roleKeys' | 'participantIds'>;
+
+export interface RoadmapPortfolioInput {
+  projectIds: string[];
+  quarterKey: string;
+  monthKey?: string;
+  plannedRolesOnly?: boolean;
+  includeMonthlyFact?: boolean;
+}
+
+export interface RoadmapProjectOverview {
+  metrics: RoadmapSummaryMetrics;
+  canExpand: boolean;
+}
+
+export interface RoadmapPortfolio {
+  projects: Record<string, RoadmapProjectOverview>;
+  totals?: RoadmapSummaryMetrics;
+  factIncomplete: boolean;
+}
+
+function summaryMetrics({ epics, features, planHours, actualHours, roles, participants }: RoadmapSummaryTotals): RoadmapSummaryMetrics {
+  return { epics, features, planHours, actualHours, roles, participants };
+}
+
+export function buildRoadmapPortfolio(
+  entries: { id: string; summary: RoadmapSummaryTotals & { rolePlan: { byUnattached: ReadonlyMap<string, number> } } }[],
+  input: RoadmapPortfolioInput,
+): RoadmapPortfolio {
+  const summaries = entries.map(({ summary }) => summary);
+  return {
+    projects: Object.fromEntries(entries.map(({ id, summary }) => [id, {
+      metrics: summaryMetrics(summary),
+      canExpand: Boolean(summary.epics || summary.features || [...summary.rolePlan.byUnattached.values()].some((hours) => hours > 0)),
+    }])),
+    totals: entries.length === input.projectIds.length
+      ? summaryMetrics(aggregateRoadmapSummaries(summaries))
+      : undefined,
+    factIncomplete: Boolean(input.monthKey && input.includeMonthlyFact !== false && summaries.some(({ actualHours }) => actualHours === null)),
   };
 }

@@ -1,15 +1,6 @@
 import assert from 'node:assert/strict';
-import { registerHooks } from 'node:module';
 import test from 'node:test';
-
-// The application uses extensionless TypeScript imports; resolve the one dependency for Node's native TS runner.
-const hooks = registerHooks({
-  resolve(specifier, context, nextResolve) {
-    return nextResolve(specifier === './roadmap-role-plan' ? `${specifier}.ts` : specifier, context);
-  },
-});
-const { getRoadmapSummary, aggregateRoadmapSummaries } = await import('./roadmap-summary.ts');
-hooks.deregister();
+import { getRoadmapSummary, aggregateRoadmapSummaries } from '@tracker/shared';
 
 const member = (id, personIsActive = true) => ({ personExternalId: id, personName: id, personEmail: null, personIsActive });
 const role = (id, members = [], name = id) => ({ id, name, color: '#000000', azureEstimateField: `Custom.${id}`, members });

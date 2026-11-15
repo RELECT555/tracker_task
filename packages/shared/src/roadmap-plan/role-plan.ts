@@ -1,8 +1,34 @@
-import type { RoadmapRole, RoadmapWorkItem } from '@/entities/roadmap/api/roadmapApi';
+/** The fields required by the plan calculations in the browser and API. */
+export interface RoadmapMetricsAllocation {
+  id: string;
+  roleId: string;
+  personExternalId: string;
+  quarterKey: string;
+  estimatedHours: number | string;
+  periods: { monthKey?: string | null; hours: number | string }[];
+}
+
+export interface RoadmapMetricsItem {
+  id: string;
+  externalId: string;
+  parentExternalId: string | null;
+  type: string;
+  actualHours: number | string | null;
+  azureCustomFields: Record<string, unknown> | null;
+  allocations: RoadmapMetricsAllocation[];
+}
+
+export interface RoadmapMetricsRole {
+  id: string;
+  name: string;
+  azureEstimateField?: string | null;
+  defaultPersonExternalId?: string | null;
+  members?: { personExternalId: string; personIsActive: boolean }[];
+}
 
 type RoleHours = Map<string, number>;
 
-export function azureRoleEstimate(item: RoadmapWorkItem, role: RoadmapRole) {
+export function azureRoleEstimate(item: RoadmapMetricsItem, role: RoadmapMetricsRole) {
   const value = role.azureEstimateField ? item.azureCustomFields?.[role.azureEstimateField] : undefined;
   if (typeof value !== 'number' && typeof value !== 'string') return null;
   if (typeof value === 'string' && !value.trim()) return null;
@@ -11,7 +37,7 @@ export function azureRoleEstimate(item: RoadmapWorkItem, role: RoadmapRole) {
 }
 
 /** Uses the same role totals for cells, collapsed epics, the project total and filtering. */
-export function getRoadmapRolePlan(items: RoadmapWorkItem[], roles: RoadmapRole[], includeAzureEstimates = true) {
+export function getRoadmapRolePlan(items: RoadmapMetricsItem[], roles: RoadmapMetricsRole[], includeAzureEstimates = true) {
   const byItem = new Map<string, RoleHours>();
   const byProject: RoleHours = new Map();
   const byUnattached: RoleHours = new Map();
@@ -19,11 +45,11 @@ export function getRoadmapRolePlan(items: RoadmapWorkItem[], roles: RoadmapRole[
   const planItemIds = new Set(planItems.map((item) => item.id));
   const knownRoleIds = new Set(roles.map((role) => role.id));
   const byExternalId = new Map(items.map((item) => [item.externalId, item]));
-  const childrenById = new Map<string, RoadmapWorkItem[]>();
+  const childrenById = new Map<string, RoadmapMetricsItem[]>();
   const localHoursByItem = new Map<string, RoleHours>();
   const explicitRolesByItem = new Map<string, Set<string>>();
-  const roots: RoadmapWorkItem[] = [];
-  const parentPlanItem = (item: RoadmapWorkItem) => {
+  const roots: RoadmapMetricsItem[] = [];
+  const parentPlanItem = (item: RoadmapMetricsItem) => {
     let parent = item.parentExternalId ? byExternalId.get(item.parentExternalId) : undefined;
     const visited = new Set([item.externalId]);
     while (parent && !visited.has(parent.externalId) && !planItemIds.has(parent.id)) {
@@ -54,7 +80,7 @@ export function getRoadmapRolePlan(items: RoadmapWorkItem[], roles: RoadmapRole[
     if (owner) localHoursByItem.set(owner.id, localHours);
   }
 
-  const aggregate = (item: RoadmapWorkItem, visited = new Set<string>()): RoleHours => {
+  const aggregate = (item: RoadmapMetricsItem, visited = new Set<string>()): RoleHours => {
     const cached = byItem.get(item.id);
     if (cached) return cached;
     if (visited.has(item.id)) return new Map();

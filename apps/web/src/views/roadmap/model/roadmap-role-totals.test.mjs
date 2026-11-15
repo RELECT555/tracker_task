@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getRoadmapRolePlan } from './roadmap-role-plan.ts';
+import { getRoadmapRolePlan } from '@tracker/shared';
 import { getRoadmapRoleFact } from './roadmap-role-fact.ts';
 
 const member = (id, email = `${id}@example.test`) => ({ personExternalId: id, personEmail: email, personName: id, personIsActive: true });
