@@ -1556,7 +1556,8 @@ function PlanSyncInfo({ autoRefresh, syncedAt, writeBackMode, errorCount }: {
               : 'ещё не было'}
           </dd>
           {autoRefresh ? <>
-            <dt className="text-muted-foreground">Автообновление</dt>
+            {/* The API imports Azure changes on a 5-minute cron; the page itself re-reads local data every minute. */}
+            <dt className="text-muted-foreground">Импорт из Azure</dt>
             <dd className="text-foreground">каждые 5 мин</dd>
           </> : null}
           {writeBackMode ? <>
