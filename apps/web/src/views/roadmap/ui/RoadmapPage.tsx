@@ -996,7 +996,7 @@ export function RoadmapPage() {
     const featureCountForm = isEpic ? FEATURE_COUNT_PLURALS.select(childCount) : null;
     return (
       <tr key={item.id} data-row-kind={isEpic ? 'epic' : 'feature'} className={`group/row align-top transition-colors ${isEpic ? 'border-t border-border bg-[color-mix(in_srgb,var(--color-muted)_30%,var(--color-card))] hover:bg-[color-mix(in_srgb,var(--color-muted)_45%,var(--color-card))]' : 'border-t border-border/50 bg-card hover:bg-[color-mix(in_srgb,var(--color-muted)_15%,var(--color-card))]'}`}>
-        <th scope="row" style={pinnedCellStyle('name')} className={cn('py-2 text-left font-normal', pinnedCellClass('name'), isEpic ? 'px-3 pr-5 inset-shadow-[2px_0_0] inset-shadow-primary/40 sm:px-4 sm:pr-5' : isChild ? cn('relative px-0 before:pointer-events-none before:absolute before:left-2 before:top-0 before:border-l-2 before:border-border/80 after:pointer-events-none after:absolute after:left-2 after:top-[calc(var(--plan-pad-y)+10px)] after:w-5 after:border-t-2 after:border-border/80', isLastChild ? 'before:h-[calc(var(--plan-pad-y)+11px)]' : 'before:bottom-0') : 'px-3 sm:px-4')} data-plan-connector={isChild ? '' : undefined}>
+        <th scope="row" style={pinnedCellStyle('name')} className={cn('py-2 text-left font-normal', pinnedCellClass('name'), isEpic ? 'px-3 pr-5 inset-shadow-[2px_0_0] inset-shadow-primary/40 sm:px-4 sm:pr-5' : isChild ? cn('relative pl-0 pr-5 before:pointer-events-none before:absolute before:left-2 before:top-0 before:border-l-2 before:border-border/80 after:pointer-events-none after:absolute after:left-2 after:top-[calc(var(--plan-pad-y)+10px)] after:w-5 after:border-t-2 after:border-border/80', isLastChild ? 'before:h-[calc(var(--plan-pad-y)+11px)]' : 'before:bottom-0') : 'pl-3 pr-5 sm:pl-4 sm:pr-5')} data-plan-connector={isChild ? '' : undefined}>
           {isEpic ? (
             <div className={cn('-ml-1 grid items-start gap-x-2', canCreateWorkItem ? 'grid-cols-[1.75rem_1rem_minmax(0,1fr)_2rem]' : 'grid-cols-[1.75rem_1rem_minmax(0,1fr)]')}>
               <Button
@@ -1038,9 +1038,7 @@ export function RoadmapPage() {
               ><Plus aria-hidden="true" className="size-4" /></Button> : null}
             </div>
           ) : (
-            <div data-plan-name className={isChild
-              ? 'pl-7'
-              : 'pl-3'}>
+            <div data-plan-name className={cn(isChild ? 'pl-7' : 'pl-3', canCreateWorkItem && 'pr-10')}>
               <div className="flex min-w-0 items-start gap-2">
                 <AzureWorkItemIcon type={item.type} className="mt-0.5" />
                 {canOpenCard
