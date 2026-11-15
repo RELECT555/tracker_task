@@ -8,6 +8,7 @@ import { cn } from '@/shared/lib/utils';
 import { QueryErrorNotice } from '@/shared/ui/error-notice';
 import { AdminCard, AdminPage, AdminPageHeader } from './AdminLayout';
 import { AzureConnectionPanel } from './integrations/AzureConnectionPanel';
+import { ConnectionSkeleton, ProjectsOverviewSkeleton } from './integrations/IntegrationSkeletons';
 import { AzureSyncGuide } from './integrations/AzureSyncGuide';
 import { FaqAccordion } from './integrations/faq';
 import { FieldMappingPanel } from './integrations/FieldMappingPanel';
@@ -106,7 +107,7 @@ export function RoadmapIntegrationsPage() {
         description="Управляйте подключением Azure DevOps и обменом данными с Roadmap."
       />
 
-      {settingsQuery.isLoading ? <p role="status" className="text-sm text-muted-foreground">Загружаем настройки подключения…</p> : null}
+      {settingsQuery.isLoading ? <ConnectionSkeleton /> : null}
       {!mappingShowsErrors && <QueryErrorNotice
         title="Не удалось загрузить данные интеграции"
         queries={integrationQueries}
@@ -153,7 +154,7 @@ export function RoadmapIntegrationsPage() {
 
       {settings && (configured || section === 'azure-help') ? (
         <div id={section} ref={contentRef} tabIndex={-1} className="scroll-mt-4 space-y-4 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
-          {loadingOverview ? <p role="status" className="flex items-center gap-2 px-1 py-3 text-sm text-muted-foreground">Загружаем данные о проектах…</p> : null}
+          {loadingOverview ? <ProjectsOverviewSkeleton /> : null}
           {section === 'azure-projects' && overview ? <SyncProjectsPanel overview={overview} /> : null}
           {configured && overview && (visitedEditors.writeBack || section === 'azure-write-back') ? (
             <div hidden={section !== 'azure-write-back'}><WriteBackSettingsPanel settings={settings.writeBack} overview={overview} /></div>

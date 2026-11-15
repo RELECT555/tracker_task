@@ -1,5 +1,6 @@
 import type { RoadmapSummaryMetrics } from '@tracker/shared';
 import { cn } from '@/shared/lib/utils';
+import { Skeleton } from '@/shared/ui/skeleton';
 
 const countFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
 
@@ -21,7 +22,7 @@ export function RoadmapSummaryStrip({ summary, month, loading = false }: {
     {metrics.map(({ label, value, hours, description }, index) => <div key={label} title={description} className={cn('min-w-0 px-3', index % 3 ? 'border-l border-border' : index ? 'sm:border-l sm:border-border' : undefined)}>
       <dt className="truncate text-xs text-muted-foreground">{label}</dt>
       <dd className="mt-1 whitespace-nowrap text-lg font-semibold leading-tight tabular-nums text-foreground sm:text-xl">
-        {value == null ? <span className="text-muted-foreground">—</span> : <>{countFormat.format(value)}{hours ? <span className="ml-1 text-xs font-normal text-muted-foreground">ч</span> : null}</>}
+        {value == null ? loading ? <Skeleton className="my-1 h-5 w-12 sm:h-6" /> : <span className="text-muted-foreground">—</span> : <>{countFormat.format(value)}{hours ? <span className="ml-1 text-xs font-normal text-muted-foreground">ч</span> : null}</>}
       </dd>
     </div>)}
   </dl>;

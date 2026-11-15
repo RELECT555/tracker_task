@@ -38,6 +38,7 @@ import { getTableAppearanceProps } from '../model/table-appearance';
 import { TableAppearanceSettings } from './TableAppearanceSettings';
 import './table-appearance.css';
 import { ColumnResizeHandle, planColumnOffset, ResizablePlanTable, type PlanColumn } from './ResizablePlanTable';
+import { PlanTableSkeleton, PortfolioTableSkeleton } from './PlanTableSkeleton';
 
 const AzurePushPreview = dynamic(() => import('@/entities/roadmap/ui/AzurePushPreview').then((module) => module.AzurePushPreview), {
   loading: () => <p role="status" className="p-3 text-sm text-muted-foreground">Загружаем предварительный просмотр…</p>,
@@ -46,7 +47,7 @@ const CreateAzureWorkItem = dynamic(() => import('./CreateAzureWorkItem').then((
   loading: () => <p role="status" className="fixed bottom-4 right-4 z-50 rounded-lg border border-border bg-card px-3 py-2 text-sm">Загружаем форму…</p>,
 });
 const AllProjectsPlanTable = dynamic(() => import('./AllProjectsPlanTable').then((module) => module.AllProjectsPlanTable), {
-  loading: () => <p role="status" className="p-4 text-sm text-muted-foreground">Загружаем таблицу…</p>,
+  loading: () => <PortfolioTableSkeleton />,
 });
 
 const NAME_COLUMN = { defaultWidth: 440, minWidth: 280, grow: true };
@@ -1513,12 +1514,12 @@ export function RoadmapPage() {
                 /> : null}
               </section>
             </>
-          ) : loadingMessage || emptyPlanMessage ? (
-            <div role={loadingMessage ? 'status' : undefined} className="rounded-xl border border-border bg-card px-6 py-12 text-center">
-              {loadingMessage ? <RefreshCw aria-hidden="true" className="mx-auto h-6 w-6 text-muted-foreground motion-safe:animate-spin" /> : <ArrowDownToLine aria-hidden="true" className="mx-auto h-7 w-7 text-muted-foreground" />}
-              <p className="mt-3 text-sm text-muted-foreground">
-                {loadingMessage ?? emptyPlanMessage}
-              </p>
+          ) : loadingMessage ? (
+            <PlanTableSkeleton label={loadingMessage} />
+          ) : emptyPlanMessage ? (
+            <div className="rounded-xl border border-border bg-card px-6 py-12 text-center">
+              <ArrowDownToLine aria-hidden="true" className="mx-auto h-7 w-7 text-muted-foreground" />
+              <p className="mt-3 text-sm text-muted-foreground">{emptyPlanMessage}</p>
             </div>
           ) : null}
         </div>

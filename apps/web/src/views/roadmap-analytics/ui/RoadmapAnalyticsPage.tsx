@@ -11,6 +11,7 @@ import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { Button } from '@/shared/ui/button';
+import { Skeleton, SkeletonStatus } from '@/shared/ui/skeleton';
 import { Card } from '@/shared/ui/card';
 import { QueryErrorNotice } from '@/shared/ui/error-notice';
 import { ColorMark } from '@/shared/ui/color-mark';
@@ -239,11 +240,10 @@ export function RoadmapAnalyticsPage() {
 
       <QueryErrorNotice title="Не удалось загрузить аналитику" queries={[localQuery, projectsQuery, ...(roadmapProjectId ? [planQuery] : [])]} />
 
-      {loading ? <div className="space-y-4" role="status">
-        <span className="sr-only">Загрузка аналитики</span>
-        <div className="h-40 rounded-xl border border-border/70 bg-card motion-safe:animate-pulse" />
-        <div className={styles.columns}><div className="h-80 rounded-xl border border-border/70 bg-card motion-safe:animate-pulse" /><div className="h-80 rounded-xl border border-border/70 bg-card motion-safe:animate-pulse" /></div>
-      </div> : analytics ? <>
+      {loading ? <SkeletonStatus label="Загрузка аналитики" className="space-y-4">
+        <Skeleton className="h-40 rounded-xl border border-border/70 bg-card dark:bg-card" />
+        <div className={styles.columns}><Skeleton className="h-80 rounded-xl border border-border/70 bg-card dark:bg-card" /><Skeleton className="h-80 rounded-xl border border-border/70 bg-card dark:bg-card" /></div>
+      </SkeletonStatus> : analytics ? <>
         <Metrics analytics={analytics} />
         <div className={styles.columns} key={contextKey}>
           <MonthlyLoadChart months={analytics.months} roles={roles} quarter={quarter} />

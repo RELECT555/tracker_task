@@ -17,6 +17,7 @@ import { AdminPage } from './AdminLayout';
 import { RemoveRoleDialog } from './roles/RemoveRoleDialog';
 import { RoleAssignmentBoard } from './roles/RoleAssignmentBoard';
 import { RoleEditorDialog } from './roles/RoleEditorDialog';
+import { RolesPageSkeleton } from './roles/RolesPageSkeleton';
 
 const adminRolesQueryKey = ['roadmap', 'admin', 'roles'] as const;
 
@@ -117,7 +118,7 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
         queries={[rolesQuery, projectsQuery, catalogQuery]}
         errors={[addError]}
       />
-      {loading ? <p role="status" className="text-sm text-muted-foreground">Загружаем проекты и роли…</p> : projectOptions.length > 0 ? (
+      {loading ? <RolesPageSkeleton /> : projectOptions.length > 0 ? (
         <div className="flex shrink-0 flex-wrap items-end gap-3">
           <div className="w-full min-w-0 sm:max-w-sm">
             <label htmlFor={fieldId} className="mb-1.5 block text-sm font-medium text-foreground">Проект</label>

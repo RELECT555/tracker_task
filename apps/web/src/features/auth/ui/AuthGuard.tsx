@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { routes } from '@/shared/config/routes';
 
-export function AuthGuard({ children }: { children: React.ReactNode }) {
+export function AuthGuard({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { hasToken, isAuthenticated, profileError } = useAuth();
@@ -18,6 +18,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [hasToken, pathname, router]);
 
   if (!isAuthenticated) {
+    // Каркас показываем, пока сессия проверяется; ошибку — по-прежнему текстом.
+    if (fallback && !(hasToken && profileError)) return fallback;
     return (
       <div role="status" className="flex min-h-screen items-center justify-center px-4 text-center text-sm text-muted-foreground">
         {hasToken && profileError ? 'Не удалось проверить сессию. Обновите страницу и попробуйте снова.' : 'Проверка авторизации…'}

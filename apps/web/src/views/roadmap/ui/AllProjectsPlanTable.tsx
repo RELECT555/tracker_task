@@ -9,6 +9,7 @@ import { isRoadmapDemoMode } from '@/entities/roadmap/api/roadmapDemo';
 import { AzureWorkItemIcon } from '@/entities/roadmap/ui/AzureWorkItemIcon';
 import { QueryErrorNotice } from '@/shared/ui/error-notice';
 import { cn } from '@/shared/lib/utils';
+import { Skeleton, SkeletonStatus } from '@/shared/ui/skeleton';
 
 type ProjectSummary = RoadmapSummary<RoadmapWorkItem, RoadmapRole>;
 
@@ -36,7 +37,10 @@ function hours(value: number | null) {
   return value === null ? '—' : `${numberFormat.format(value)} ч`;
 }
 
-function Metrics({ summary, showFact = true }: { summary?: RoadmapSummaryMetrics; showFact?: boolean }) {
+function Metrics({ summary, showFact = true, loading = false }: { summary?: RoadmapSummaryMetrics; showFact?: boolean; loading?: boolean }) {
+  if (!summary && loading) {
+    return <>{Array.from({ length: showFact ? 6 : 5 }, (_, index) => <td key={index} className={metricClass}><Skeleton className="ml-auto h-3 w-8" /></td>)}</>;
+  }
   return <>
     <td className={cn(metricClass, 'text-muted-foreground')}>{summary ? numberFormat.format(summary.epics) : '—'}</td>
     <td className={cn(metricClass, 'text-muted-foreground')}>{summary ? numberFormat.format(summary.features) : '—'}</td>
@@ -168,7 +172,15 @@ function ProjectPlanDetails({
     quarterKey, monthKey, monthlyFact, plannedRolesOnly,
   }) : undefined, [plan, quarterKey, monthKey, monthlyFact, plannedRolesOnly]);
   const columns = showFact ? 7 : 6;
-  if (planQuery.isPending) return <tr><td colSpan={columns} className="px-4 py-3 text-sm text-muted-foreground" role="status">Загружаем детали проекта…</td></tr>;
+  if (planQuery.isPending) return <tr><td colSpan={columns} className="p-0">
+    <SkeletonStatus label="Загружаем детали проекта">
+      {['w-1/2', 'w-2/5', 'w-1/3'].map((width, index) => <div key={index} className="flex items-center gap-3 border-t border-border/60 py-3 pl-12 pr-4">
+        <Skeleton className="size-3.5 shrink-0 rounded" />
+        <Skeleton className={`h-3 ${width}`} />
+        <Skeleton className="ml-auto h-3 w-10" />
+      </div>)}
+    </SkeletonStatus>
+  </td></tr>;
   if (!summary) return <tr><td colSpan={columns} className="px-4 py-3">
     <QueryErrorNotice title="Не удалось загрузить детали проекта" queries={[planQuery]} />
   </td></tr>;
@@ -278,11 +290,11 @@ export function AllProjectsPlanTable({
                 <div className="min-w-0 flex-1">
                   <p data-plan-title title={project.name} className="break-words text-sm font-semibold leading-snug text-foreground [overflow-wrap:anywhere]">{project.name}</p>
                   {summary ? <button type="button" onClick={() => onSelectProject(project.id)} aria-label={`Открыть план проекта ${project.name}`} className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Открыть план<ArrowUpRight aria-hidden="true" className="size-3" /></button>
-                    : <p className="mt-1 text-xs text-muted-foreground">{loading ? 'Загружаем сводку…' : 'Сводка недоступна'}</p>}
+                    : loading ? <Skeleton className="mt-2 h-2.5 w-24" /> : <p className="mt-1 text-xs text-muted-foreground">Сводка недоступна</p>}
                 </div>
               </div>
             </th>
-            <Metrics summary={summary?.metrics} showFact={showFact} />
+            <Metrics summary={summary?.metrics} showFact={showFact} loading={loading} />
           </tr>
           {expanded && summary ? <ProjectPlanDetails
             {...period}

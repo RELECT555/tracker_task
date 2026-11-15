@@ -11,6 +11,7 @@ import { ColorMark } from '@/shared/ui/color-mark';
 import { QueryErrorNotice } from '@/shared/ui/error-notice';
 import { Input } from '@/shared/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
+import { Skeleton, SkeletonStatus } from '@/shared/ui/skeleton';
 import { AdminAlert, AdminPage, AdminPageHeader, StatusPill } from './AdminLayout';
 
 const MAX_VISIBLE_ROLES = 3;
@@ -75,6 +76,34 @@ function UserRoles({ person }: { person: RoadmapPerson }) {
         </li>
       ) : null}
     </ul>
+  );
+}
+
+function UserListSkeleton() {
+  return (
+    <SkeletonStatus label="Загружаем участников">
+      <div aria-hidden="true" className={cn('hidden border-b border-border bg-muted/30 px-5 py-3 @min-[42rem]:grid', directoryColumns)}>
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-3 w-28" />
+        <Skeleton className="ml-auto h-3 w-12" />
+      </div>
+      <ul className="divide-y divide-border/70">
+        {['w-40', 'w-32', 'w-48', 'w-36', 'w-44', 'w-28'].map((width, index) => <li key={index} className={cn('grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2.5 px-3 py-3 sm:px-5 @min-[42rem]:py-3.5', directoryColumns)}>
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+            <Skeleton className="size-9 shrink-0 rounded-full sm:size-10" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className={cn('h-3.5 max-w-full', width)} />
+              <Skeleton className="h-3 w-32 max-w-full opacity-60" />
+            </div>
+          </div>
+          <div className="col-span-2 flex gap-1.5 pl-[2.875rem] sm:pl-[3.25rem] @min-[42rem]:col-span-1 @min-[42rem]:pl-0">
+            <Skeleton className="h-6 w-28 rounded-full" />
+            {index % 2 ? null : <Skeleton className="h-6 w-24 rounded-full" />}
+          </div>
+          <Skeleton className="col-start-2 row-start-1 h-6 w-20 justify-self-end rounded-full @min-[42rem]:col-start-3" />
+        </li>)}
+      </ul>
+    </SkeletonStatus>
   );
 }
 
@@ -246,10 +275,7 @@ export function RoadmapUsersPage() {
             <p role="status" className="border-b border-border px-3 py-2 text-xs text-muted-foreground sm:px-5">Найдено: <span className="font-medium tabular-nums text-foreground">{visibleUsers.length}</span></p>
           ) : null}
           {usersQuery.isPending ? (
-            <div role="status" className="flex items-center justify-center gap-2 px-5 py-12 text-sm text-muted-foreground">
-              <RefreshCw aria-hidden="true" className="size-4 motion-safe:animate-spin" />
-              Загружаем участников…
-            </div>
+            <UserListSkeleton />
           ) : visibleUsers.length ? (
             <>
               <div aria-hidden="true" className={cn('hidden border-b border-border bg-muted/30 px-5 py-2.5 text-xs font-medium text-muted-foreground @min-[42rem]:grid', directoryColumns)}>

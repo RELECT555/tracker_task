@@ -186,7 +186,30 @@ html:has(.roadmap-frame) {
   to { opacity: 1; transform: none; }
 }
 
+/* Скелетоны: проявляются после короткой задержки и мягко пульсируют. */
+.roadmap-skeleton-group {
+  animation: roadmap-skeleton-appear 180ms ease-out 150ms both;
+}
+
+.roadmap-skeleton {
+  animation: roadmap-skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes roadmap-skeleton-appear {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes roadmap-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .roadmap-skeleton {
+    animation: none;
+  }
+
   .roadmap-nav-indicator {
     transition: opacity 160ms ease;
   }
