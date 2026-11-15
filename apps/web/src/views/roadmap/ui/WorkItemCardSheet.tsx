@@ -448,7 +448,7 @@ function EditableTitle({ id, value, editable, saving, onSave }: { id: string; va
         if (event.key === 'Enter') { event.preventDefault(); commit(); }
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setDraft(null); }
       }}
-      className="-mx-2 w-[calc(100%+1rem)] resize-none rounded-md border border-input bg-background px-2 py-0.5 text-xl font-semibold leading-snug tracking-tight focus-visible:outline-2 focus-visible:outline-ring"
+      className="-mx-2 w-[calc(100%+1rem)] resize-none rounded-md border border-input bg-card px-2 py-0.5 text-xl font-semibold leading-snug tracking-tight focus-visible:outline-2 focus-visible:outline-ring"
     />
     <p className="mt-1 text-xs text-muted-foreground">Enter — сохранить, Esc — отменить</p>
   </div>;
@@ -479,7 +479,7 @@ function EditableTags({ value, editable, saving, onSave }: { value: string[]; ed
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setDraft(null); }
     }}
     placeholder="Тег, ещё тег"
-    className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-ring"
+    className="h-8 w-full rounded-md border border-input bg-card px-2 text-sm focus-visible:outline-2 focus-visible:outline-ring"
   />;
 }
 
@@ -487,7 +487,7 @@ function DescriptionTab({ item, saving, onSave }: { item: WorkItemCard; saving: 
   const [draft, setDraft] = useState<string | null>(null);
   if (draft !== null) {
     return <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); void onSave(draft).then(() => setDraft(null), () => undefined); }}>
-      <textarea autoFocus aria-label="Описание" value={draft} onChange={(event) => setDraft(event.target.value)} rows={10} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm leading-relaxed focus-visible:outline-2 focus-visible:outline-ring" />
+      <textarea autoFocus aria-label="Описание" value={draft} onChange={(event) => setDraft(event.target.value)} rows={10} className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm leading-relaxed focus-visible:outline-2 focus-visible:outline-ring" />
       <div className="flex items-center gap-2">
         <Button type="submit" size="sm" disabled={saving}>{saving ? 'Сохраняем…' : 'Сохранить'}</Button>
         <Button type="button" size="sm" variant="ghost" disabled={saving} onClick={() => setDraft(null)}>Отмена</Button>
@@ -604,7 +604,7 @@ function DiscussionTab({ item, projectId }: { item: WorkItemCard; projectId: str
   });
   const send = () => { if (text.trim() && !comment.isPending) comment.mutate(text); };
   return <div className="space-y-5">
-    {item.canEdit ? <form className="rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring/40" onSubmit={(event) => { event.preventDefault(); send(); }}>
+    {item.canEdit ? <form className="rounded-lg border border-input bg-card focus-within:ring-2 focus-within:ring-ring/40" onSubmit={(event) => { event.preventDefault(); send(); }}>
       <textarea aria-label="Комментарий" value={text} onChange={(event) => setText(event.target.value)} rows={text ? 3 : 2} maxLength={10000} placeholder="Написать комментарий…" className="block w-full resize-none rounded-t-lg bg-transparent px-3 py-2 text-sm outline-none"
         onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); send(); } }} />
       <div className="flex items-center justify-between gap-2 px-2 pb-2">
