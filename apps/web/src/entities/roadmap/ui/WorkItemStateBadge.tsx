@@ -21,6 +21,15 @@ const toneClasses: Record<StateTone, string> = {
   neutral: 'bg-muted/50 text-foreground/70 ring-border',
 };
 
+const dotClasses: Record<StateTone, string> = {
+  new: 'bg-slate-400',
+  active: 'bg-sky-500',
+  resolved: 'bg-amber-500',
+  done: 'bg-emerald-500',
+  removed: 'bg-rose-500',
+  neutral: 'bg-muted-foreground/60',
+};
+
 export function workItemStateTone(state: string): StateTone {
   const normalized = state.trim().toLowerCase();
   for (const tone of Object.keys(stateTones) as StateTone[]) {
@@ -29,8 +38,18 @@ export function workItemStateTone(state: string): StateTone {
   return 'neutral';
 }
 
-export function WorkItemStateBadge({ state, className }: { state?: string | null; className?: string }) {
+/** `dot` is the quieter form for dense child rows: a colored dot and plain text instead of a pill. */
+export function WorkItemStateBadge({ state, className, variant = 'pill' }: { state?: string | null; className?: string; variant?: 'pill' | 'dot' }) {
   if (!state?.trim()) return null;
+  if (variant === 'dot') {
+    const tone = workItemStateTone(state);
+    return (
+      <span className={cn('inline-flex items-center gap-1.5 text-[11px] leading-4 whitespace-nowrap text-muted-foreground', tone === 'removed' && 'line-through decoration-rose-700/40', className)}>
+        <span aria-hidden="true" className={cn('size-1.5 shrink-0 rounded-full', dotClasses[tone])} />
+        {state}
+      </span>
+    );
+  }
   return (
     <span className={cn('inline-flex items-center rounded-full px-2 py-px text-[10.5px] leading-4 font-medium whitespace-nowrap ring-1 ring-inset', toneClasses[workItemStateTone(state)], className)}>
       {state}

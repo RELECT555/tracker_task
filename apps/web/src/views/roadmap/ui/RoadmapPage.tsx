@@ -1047,8 +1047,8 @@ export function RoadmapPage() {
               <AzureWorkItemIcon type={item.type} className="mt-0.5" />
               <div data-plan-name className="col-start-3 min-w-0">
                 {canOpenCard
-                  ? <button type="button" data-plan-title title={`${item.title} — открыть карточку`} aria-haspopup="dialog" onClick={() => showCard({ projectId: roadmapProjectId, externalId: item.externalId })} className="block w-full rounded-sm text-left text-sm leading-5 font-medium text-foreground underline-offset-2 [overflow-wrap:anywhere] hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{item.title}</button>
-                  : <div data-plan-title title={item.title} className="text-sm leading-5 font-medium text-foreground [overflow-wrap:anywhere]">{item.title}</div>}
+                  ? <button type="button" data-plan-title title={`${item.title} — открыть карточку`} aria-haspopup="dialog" onClick={() => showCard({ projectId: roadmapProjectId, externalId: item.externalId })} className="block w-full rounded-sm text-left text-sm leading-5 font-semibold text-foreground underline-offset-2 [overflow-wrap:anywhere] hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{item.title}</button>
+                  : <div data-plan-title title={item.title} className="text-sm leading-5 font-semibold text-foreground [overflow-wrap:anywhere]">{item.title}</div>}
                 <div data-plan-meta className="mt-1.5 grid grid-cols-[2.75rem_4.25rem_auto] items-center justify-start gap-x-1.5 gap-y-1.5 text-xs leading-4 text-muted-foreground">
                   <span className="min-w-0 tabular-nums [overflow-wrap:anywhere]" title={`Epic #${item.externalId}`}><span className="sr-only">Epic </span>#{item.externalId}</span>
                   <WorkItemStateBadge state={item.state} className="w-full justify-center" />
@@ -1074,20 +1074,20 @@ export function RoadmapPage() {
               <div className="flex min-w-0 items-start gap-2">
                 <AzureWorkItemIcon type={item.type} className="mt-0.5" />
                 {canOpenCard
-                  ? <button type="button" data-plan-title title={`${item.title} — открыть карточку`} aria-haspopup="dialog" onClick={() => showCard({ projectId: roadmapProjectId, externalId: item.externalId })} className="min-w-0 rounded-sm text-left text-sm leading-snug underline-offset-2 [overflow-wrap:anywhere] hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{item.title}</button>
+                  ? <button type="button" data-plan-title title={`${item.title} — открыть карточку`} aria-haspopup="dialog" onClick={() => showCard({ projectId: roadmapProjectId, externalId: item.externalId })} className="min-w-0 rounded-sm text-left text-sm leading-snug text-foreground/90 underline-offset-2 [overflow-wrap:anywhere] hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{item.title}</button>
                   : <span data-plan-title title={item.title} className="min-w-0 text-sm leading-snug [overflow-wrap:anywhere]">{item.title}</span>}
               </div>
               <div data-plan-meta className="mt-1 grid grid-cols-[2.75rem_auto] items-center justify-start gap-x-1.5 gap-y-1 pl-6 text-[11px] text-muted-foreground">
                 <span className="tabular-nums" title={`Feature #${item.externalId}`}><span className="sr-only">Feature </span>#{item.externalId}</span>
-                <WorkItemStateBadge state={item.state} className="justify-self-start" />
+                <WorkItemStateBadge state={item.state} variant="dot" className="justify-self-start" />
               </div>
             </div>
           )}
         </th>
-        <td data-tone="plan" style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:plan'), itemHours ? 'font-medium text-foreground' : EMPTY_VALUE_CLASS)}>
+        <td data-tone="plan" style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:plan'), itemHours ? (isEpic ? 'font-semibold text-foreground' : 'text-foreground/90') : EMPTY_VALUE_CLASS)}>
           {cellHours(itemHours)}
         </td>
-        {preferences.showFact ? <td data-tone="fact" style={pinnedCellStyle('summary:fact')} className={cn('relative whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:fact'), Number(actualHours) ? 'font-medium text-foreground' : EMPTY_VALUE_CLASS)}>
+        {preferences.showFact ? <td data-tone="fact" style={pinnedCellStyle('summary:fact')} className={cn('relative whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:fact'), Number(actualHours) ? (isEpic ? 'font-semibold text-foreground' : 'text-foreground/90') : EMPTY_VALUE_CLASS)}>
           {cellHours(actualHours)}
           {preferences.showFactProgress ? <FactProgress planned={itemHours} actual={Number(actualHours ?? 0)} /> : null}
         </td> : null}
