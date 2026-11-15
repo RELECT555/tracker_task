@@ -1,11 +1,19 @@
 import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { ArrayUnique, IsArray, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { ArrayUnique, IsArray, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { AdminRoleGuard } from '../admin/presentation/guards/admin-role.guard';
 import { RoadmapService } from './roadmap.service';
+
+class RoleMemberAllocationDto {
+  @IsString() @MinLength(1) personExternalId!: string;
+  @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(100) allocationPercent!: number;
+}
 
 class AssignRoadmapRoleDto {
   @IsOptional() @IsString() @MinLength(1) personExternalId?: string | null;
   @IsOptional() @IsArray() @ArrayUnique() @IsString({ each: true }) personExternalIds?: string[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => RoleMemberAllocationDto)
+  memberAllocations?: RoleMemberAllocationDto[];
 }
 
 class CreateRoadmapRoleDto {

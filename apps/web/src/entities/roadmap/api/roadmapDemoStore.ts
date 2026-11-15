@@ -73,7 +73,7 @@ function createRole(role: typeof roleSeed[number]): RoadmapRole {
     members: role.members.map((externalId) => {
       const person = peopleSeed.find((candidate) => candidate.externalId === externalId)!;
       return { personExternalId: person.externalId, personName: person.name, personEmail: person.email,
-        personIsActive: true, personIsMock: true };
+        personIsActive: true, personIsMock: true, allocationPercent: 100 / role.members.length };
     }),
   };
 }
@@ -146,7 +146,43 @@ function roleOf(state: DemoState, id: string) {
 function normalizePersonIds(state: DemoState, ids: string[]) {
   return ids.map((id) => state.people.find((person) => person.id === id || person.externalId === id)?.externalId ?? id);
 }
+function equalMemberShares(ids: string[]) {
+  if (!ids.length) return new Map<string, number>();
+  const base = Math.floor(10_000 / ids.length);
+  const remainder = 10_000 % ids.length;
+  return new Map(ids.map((id, index) => [id, (base + Number(index < remainder)) / 100]));
+}
 function applyRoleAssignment(state: DemoState, role: RoadmapRole, assignment: RoadmapRoleAssignment) {
+  if (assignment.memberAllocations !== undefined) {
+    const allocations = assignment.memberAllocations.map((member) => ({
+      ...member, personExternalId: normalizePersonIds(state, [member.personExternalId])[0],
+    }));
+    const ids = new Set(allocations.map((member) => member.personExternalId));
+    if (ids.size !== allocations.length) throw new Error('Сотрудник не может быть указан дважды.');
+    if (allocations.some(({ allocationPercent }) => !Number.isFinite(allocationPercent) || allocationPercent < 0 || allocationPercent > 100
+      || Math.abs(allocationPercent * 100 - Math.round(allocationPercent * 100)) > 1e-8)) {
+      throw new Error('Укажите процент участия от 0 до 100 с точностью до двух знаков.');
+    }
+    if (allocations.length && allocations.reduce((sum, member) => sum + Math.round(member.allocationPercent * 100), 0) !== 10_000) {
+      throw new Error('Сумма процентов участия должна быть равна 100%.');
+    }
+    const members = allocations.map(({ personExternalId, allocationPercent }) => {
+      const person = state.people.find((item) => item.externalId === personExternalId);
+      const existing = role.members?.some((member) => member.personExternalId === personExternalId);
+      if (!person || (person.isActive === false && !existing)) throw new Error('Выбранный сотрудник недоступен.');
+      return {
+        personExternalId, allocationPercent, personName: person.name, personEmail: person.email,
+        personIsActive: person.isActive ?? true, personIsMock: person.isMock,
+      };
+    });
+    role.members = members;
+    role.defaultPersonExternalId = null;
+    role.defaultPersonName = null;
+    role.defaultPersonEmail = null;
+    role.defaultPersonIsMock = false;
+    return;
+  }
+  if (assignment.personExternalIds === undefined && assignment.personExternalId === undefined) return;
   const members = new Set(normalizePersonIds(state,
     assignment.personExternalIds ?? role.members?.map((member) => member.personExternalId) ?? [],
   ));
@@ -156,9 +192,18 @@ function applyRoleAssignment(state: DemoState, role: RoadmapRole, assignment: Ro
     : state.people.find((item) => defaultId && item.isActive && (item.id === defaultId || item.externalId === defaultId));
   if (defaultId && !person) throw new Error('Выбранный сотрудник недоступен.');
   if (person) members.add(person.externalId);
+  const previousMembers = role.members ?? [];
+  if ([...members].some((id) => !state.people.some((item) => item.externalId === id
+    && (item.isActive !== false || previousMembers.some((member) => member.personExternalId === id))))) {
+    throw new Error('Выбранный сотрудник недоступен.');
+  }
+  const membershipChanged = previousMembers.length !== members.size || previousMembers.some((member) => !members.has(member.personExternalId));
+  const equalShares = equalMemberShares([...members]);
   role.members = state.people.filter((item) => members.has(item.externalId)).map((item) => ({
     personExternalId: item.externalId, personName: item.name, personEmail: item.email,
     personIsActive: item.isActive ?? true, personIsMock: item.isMock,
+    allocationPercent: (!membershipChanged ? previousMembers.find((member) => member.personExternalId === item.externalId)?.allocationPercent : undefined)
+      ?? equalShares.get(item.externalId) ?? 0,
   }));
   role.defaultPersonExternalId = person?.externalId ?? null;
   role.defaultPersonName = person?.name ?? null;
@@ -256,20 +301,13 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
     }
     case 'setRoleMembers': {
       const role = roleOf(state, arg0);
-      role.members = normalizePersonIds(state, arg1).flatMap((externalId) => {
-        const person = state.people.find((item) => item.externalId === externalId);
-        return person ? [{ personExternalId: person.externalId, personName: person.name,
-          personEmail: person.email, personIsActive: person.isActive ?? true, personIsMock: true }] : [];
-      });
+      applyRoleAssignment(state, role, { personExternalIds: arg1 });
       return clone(role);
     }
     case 'setRoleDefaultPerson': {
       const role = roleOf(state, arg0);
-      const externalId = arg1 ? normalizePersonIds(state, [arg1])[0] : null;
-      const person = state.people.find((item) => item.externalId === externalId);
-      role.defaultPersonExternalId = person?.externalId ?? null;
-      role.defaultPersonName = person?.name ?? null; role.defaultPersonEmail = person?.email ?? null;
-      role.defaultPersonIsMock = Boolean(person); return clone(role);
+      applyRoleAssignment(state, role, { personExternalId: arg1 });
+      return clone(role);
     }
     case 'deleteRole': {
       state.roles = state.roles.filter((item) => item.id !== arg0);

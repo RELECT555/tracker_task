@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, ExternalLink, Maximize2, Minus, Minimize2, Pencil, Plus, RefreshCw, Users, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, ExternalLink, Maximize2, Minus, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
@@ -59,6 +59,14 @@ function needsAzurePush(allocation: RoadmapAllocation) {
 function azureRoleEstimate(item: RoadmapWorkItem, role: RoadmapRole) {
   const value = role.azureEstimateField ? item.azureCustomFields?.[role.azureEstimateField] : undefined;
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function memberParticipation(role: RoadmapRole, personExternalId: string) {
+  const members = role.members ?? [];
+  const index = members.findIndex((member) => member.personExternalId === personExternalId);
+  if (index < 0) return 0;
+  return members[index].allocationPercent
+    ?? (Math.floor(10_000 / members.length) + Number(index < 10_000 % members.length)) / 100;
 }
 
 function AzureSyncMark({ allocation }: { allocation: RoadmapAllocation }) {
@@ -237,8 +245,8 @@ function QuarterAssignmentButton({ item, roles, saving, roleSettingsHref, onSave
     if (!nextOpen) return;
     const firstRole = availableRoles[0];
     setRoleId(firstRole?.id ?? '');
-    const defaultMember = firstRole?.members?.find((member) => member.personIsActive && member.personExternalId === firstRole.defaultPersonExternalId && !item.allocations.some((allocation) => allocation.roleId === firstRole.id && allocation.personExternalId === member.personExternalId));
-    setPersonId(defaultMember?.personExternalId ?? '');
+    const availableMembers = firstRole?.members?.filter((member) => member.personIsActive && !item.allocations.some((allocation) => allocation.roleId === firstRole.id && allocation.personExternalId === member.personExternalId)) ?? [];
+    setPersonId(availableMembers.length === 1 ? availableMembers[0].personExternalId : '');
     setHours('');
   };
 
@@ -275,8 +283,8 @@ function QuarterAssignmentButton({ item, roles, saving, roleSettingsHref, onSave
               onChange={(nextRoleId) => {
                 const nextRole = availableRoles.find((role) => role.id === nextRoleId);
                 setRoleId(nextRoleId);
-                const nextDefault = nextRole?.members?.find((member) => member.personIsActive && member.personExternalId === nextRole.defaultPersonExternalId && !item.allocations.some((allocation) => allocation.roleId === nextRole.id && allocation.personExternalId === member.personExternalId));
-                setPersonId(nextDefault?.personExternalId ?? '');
+                const availableMembers = nextRole?.members?.filter((member) => member.personIsActive && !item.allocations.some((allocation) => allocation.roleId === nextRole.id && allocation.personExternalId === member.personExternalId)) ?? [];
+                setPersonId(availableMembers.length === 1 ? availableMembers[0].personExternalId : '');
               }}
             />
           </div>
@@ -512,7 +520,7 @@ function AllocationEditor({
   role,
   people,
   initial,
-  defaultPersonExternalId,
+  initialPersonExternalId,
   triggerLabel,
   triggerClassName,
   quarterLabel,
@@ -527,7 +535,7 @@ function AllocationEditor({
   initial?: RoadmapAllocation;
   /** Shows the linked Azure DevOps Task when plan write-back is enabled. */
   azure?: { onRetry?: (allocationId: string) => void; retrying: boolean };
-  defaultPersonExternalId?: string | null;
+  initialPersonExternalId?: string;
   triggerLabel?: string;
   triggerClassName?: string;
   quarterLabel: string;
@@ -574,7 +582,7 @@ function AllocationEditor({
   };
 
   const startEditing = () => {
-    setPersonId(initial?.personExternalId ?? defaultPersonExternalId ?? '');
+    setPersonId(initial?.personExternalId ?? initialPersonExternalId ?? '');
     setHours(initial ? String(initial.estimatedHours) : '');
   };
 
@@ -583,7 +591,7 @@ function AllocationEditor({
       <PopoverTrigger asChild>
         {trigger ?? <Button type="button" variant={initial ? 'ghost' : 'outline'} size="sm" className={triggerClassName ?? (initial ? 'mt-1 h-7 gap-1 px-2 text-xs text-muted-foreground' : 'mt-2 h-8 gap-1.5 px-2.5 text-xs')} aria-label={initial ? `Изменить оценку: ${selectedPerson?.name ?? initial.personExternalId}` : triggerLabel ?? 'Назначить участника'}>
           {initial ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-          {initial ? 'Изменить назначение' : triggerLabel ?? (defaultPersonExternalId ? 'Задать оценку' : 'Добавить участника')}
+          {initial ? 'Изменить назначение' : triggerLabel ?? (initialPersonExternalId ? 'Задать оценку' : 'Добавить участника')}
         </Button>}
       </PopoverTrigger>
       <PopoverContent align="start" side="bottom" sideOffset={8} collisionPadding={16} className="max-h-[min(80vh,680px)] w-[min(390px,calc(100vw-2rem))] overflow-y-auto rounded-xl p-0">
@@ -646,7 +654,6 @@ export function RoadmapPage() {
   const [selectedMonthKey, setSelectedMonthKey] = useState('');
   const [expandedEpics, setExpandedEpics] = useState<Set<string>>(() => new Set());
   const [rolePickerOpen, setRolePickerOpen] = useState(false);
-  const [defaultRolePickerId, setDefaultRolePickerId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!focusMode) return;
@@ -773,13 +780,6 @@ export function RoadmapPage() {
       await queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', projectId] });
     },
   });
-  const setRoleDefaultMutation = useMutation({
-    mutationFn: ({ roleId, personExternalId }: { roleId: string; personExternalId: string | null }) => roadmapApi.setRoleDefaultPerson(roleId, personExternalId),
-    onSuccess: async () => {
-      setDefaultRolePickerId(null);
-      await queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] });
-    },
-  });
   const splitMutation = useMutation({
     mutationFn: roadmapApi.rebalanceAllocations,
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
@@ -805,7 +805,6 @@ export function RoadmapPage() {
   const displayedAllocations = (selectedMonth ? [...epics, ...features] : plannedItems).flatMap((item) => item.allocations);
   const assignedPeopleCount = new Set([
     ...displayedAllocations.filter((allocation) => !selectedMonth || Number(allocation.estimatedHours) > 0).map((allocation) => allocation.personExternalId),
-    ...(!selectedMonth ? roles.flatMap((role) => role.defaultPersonExternalId ? [role.defaultPersonExternalId] : []) : []),
   ]).size;
   const totalHours = displayedAllocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours), 0);
   const factRoots = [...epics, ...standaloneFeatures];
@@ -951,6 +950,7 @@ export function RoadmapPage() {
           const rolePeople = (role.members ?? []).filter((member) => member.personIsActive).map((member) => ({
             id: member.personExternalId, name: member.personName, email: member.personEmail, isMock: member.personIsMock,
           }));
+          const unassignedPeople = !selectedMonth ? rolePeople.filter((person) => !allocations.some((allocation) => allocation.personExternalId === person.id)) : [];
           const canEdit = canEditPlan && !selectedMonth && rolePeople.length > 0;
           const editorProps = {
             item, role, people: rolePeople, quarterLabel: currentQuarterLabel, saving: saveMutation.isPending, onSave: saveAllocation,
@@ -979,13 +979,17 @@ export function RoadmapPage() {
                 ? <AllocationEditor key={allocation.id} {...editorProps} initial={allocation} trigger={<button type="button" className={chipClassName} aria-label={`Изменить оценку: ${allocation.personName}`}>{line}</button>} />
                 : <div key={allocation.id}>{line}</div>;
             })}
-            {!selectedMonth && !allocations.length && role.defaultPersonExternalId && role.defaultPersonName ? (canEdit
-              ? <AllocationEditor {...editorProps} defaultPersonExternalId={role.defaultPersonExternalId} trigger={<button type="button" className={chipClassName} title="Человек по умолчанию для роли. Нажмите, чтобы задать оценку">{personLine({ name: role.defaultPersonName, email: role.defaultPersonEmail, hours: 'оценить', placeholder: true })}</button>} />
-              : personLine({ name: role.defaultPersonName, email: role.defaultPersonEmail, hours: '—', placeholder: true })) : null}
+            {unassignedPeople.map((person) => {
+              const participation = memberParticipation(role, person.id);
+              const line = personLine({ name: person.name, email: person.email, hours: `${participation.toLocaleString('ru-RU')}%`, placeholder: true });
+              return canEdit
+                ? <AllocationEditor key={person.id} {...editorProps} initialPersonExternalId={person.id} trigger={<button type="button" className={chipClassName} aria-label={`Задать оценку: ${person.name}`} title={`Участие в роли: ${participation.toLocaleString('ru-RU')}%. Нажмите, чтобы задать оценку`}>{line}</button>} />
+                : <div key={person.id} title="Участие в роли; оценка ещё не задана">{line}</div>;
+            })}
           </>;
-          const hasContent = allocations.length > 0 || Boolean(role.defaultPersonName);
+          const hasContent = allocations.length > 0 || unassignedPeople.length > 0;
           const actions = canEdit ? <div className={`flex items-center gap-0.5 ${hasContent ? 'opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100 [@media(hover:none)]:opacity-100' : ''}`}>
-            <AllocationEditor {...editorProps} defaultPersonExternalId={null} trigger={<button type="button" className="inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"><Plus className="h-3 w-3" />{hasContent ? 'Участник' : 'Назначить'}</button>} />
+            {unassignedPeople.length > 0 ? <AllocationEditor {...editorProps} people={unassignedPeople} trigger={<button type="button" className="inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"><Plus className="h-3 w-3" />{hasContent ? 'Участник' : 'Назначить'}</button>} /> : null}
             {allocations.length > 1 ? <button type="button" disabled={saveMutation.isPending || splitMutation.isPending} title="Распределить часы поровну между участниками" onClick={() => splitMutation.mutate(allocations.map(({ id }) => id))} className="inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-50"><Equal className="h-3 w-3" />{splitMutation.isPending ? 'Делим…' : 'Поровну'}</button> : null}
           </div> : null;
           return (
@@ -994,7 +998,6 @@ export function RoadmapPage() {
               <div className="space-y-0.5">
                 {assignmentList}
                 {actions}
-                {!actions && !allocations.length && (selectedMonth || !role.defaultPersonName) ? <p className="px-1.5 py-1 text-xs text-muted-foreground/50">—</p> : null}
               </div>
             </td>
           );
@@ -1006,7 +1009,7 @@ export function RoadmapPage() {
   }
 
   const loadQueries = [projectsQuery, ...(canConfigure ? [connectionQuery, peopleQuery, roleCatalogQuery] : []), ...(roadmapProjectId ? [planQuery] : [])];
-  const mutationErrors = [isSelectedProjectSync ? syncMutation.error : null, saveMutation.error, saveQuarterMutation.error, splitMutation.error, addRoleMutation.error, setRoleDefaultMutation.error, pushAllocationMutation.error];
+  const mutationErrors = [isSelectedProjectSync ? syncMutation.error : null, saveMutation.error, saveQuarterMutation.error, splitMutation.error, addRoleMutation.error, pushAllocationMutation.error];
   const loadingMessage = projectsQuery.isLoading || !projectSelectionReady
     ? 'Загружаем проекты Azure DevOps…'
     : planQuery.isLoading
@@ -1320,27 +1323,23 @@ export function RoadmapPage() {
                                   <RoleMark name={role.name} color={role.color} size="sm" />
                                   <span className="min-w-0 truncate text-[13px] font-semibold text-foreground" title={role.name}>{role.name}</span>
                                   {role.azureEstimateField ? <span role="img" aria-label="Роль из Azure DevOps" className="shrink-0 text-primary" title="Роль из Azure DevOps"><RefreshCw aria-hidden="true" className="size-3.5" /></span> : null}
+                                  {canConfigure ? <Link href={roleSettingsHref} aria-label={`Добавить участников в роль «${role.name}»`} title={`Участники роли «${role.name}»`} className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-card hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"><UserRoundPlus aria-hidden="true" className="size-4" /></Link> : null}
                                   {role.isMock && !/демо/i.test(role.name) ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium normal-case text-amber-700 dark:text-amber-300">демо</span> : null}
                                 </div>
-                                {canConfigure && !selectedMonth && (hasActiveMembers || role.defaultPersonName) ? <Popover open={defaultRolePickerId === role.id} onOpenChange={(open) => setDefaultRolePickerId(open ? role.id : null)}>
-                                  <PopoverTrigger asChild><button type="button" className="flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[10px] font-medium normal-case text-muted-foreground transition-colors hover:bg-card hover:text-foreground"><Users className="h-3 w-3 shrink-0" /><span className="truncate">{role.defaultPersonName ? `По умолчанию: ${role.defaultPersonName}` : 'Закрепить человека по умолчанию'}</span></button></PopoverTrigger>
-                                  <PopoverContent align="start" side="bottom" sideOffset={6} collisionPadding={16} className="w-[min(300px,calc(100vw-2rem))] rounded-xl p-2">
-                                    <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Человек по умолчанию · {role.name}</p>
-                                    {(role.members ?? []).filter((member) => member.personIsActive).map((member) => <button key={member.personExternalId} type="button" disabled={setRoleDefaultMutation.isPending || role.defaultPersonExternalId === member.personExternalId} onClick={() => setRoleDefaultMutation.mutate({ roleId: role.id, personExternalId: member.personExternalId })} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-foreground hover:bg-muted disabled:opacity-60"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{member.personName.slice(0, 1)}</span><span className="min-w-0 flex-1"><span className="block truncate">{member.personName}</span><span className="block truncate text-[10px] text-muted-foreground">{member.personEmail}</span></span>{role.defaultPersonExternalId === member.personExternalId ? <Check className="h-4 w-4 text-primary" /> : null}</button>)}
-                                    {!hasActiveMembers ? <div className="px-2 py-3 text-sm text-muted-foreground">Сначала добавьте участника в эту роль в администрировании.</div> : null}
-                                    {role.defaultPersonExternalId ? <button type="button" disabled={setRoleDefaultMutation.isPending} onClick={() => setRoleDefaultMutation.mutate({ roleId: role.id, personExternalId: null })} className="mt-1 w-full rounded-lg border-t border-border px-2 py-2 text-left text-xs text-muted-foreground hover:text-foreground">Снять назначение по умолчанию</button> : null}
+                                {!selectedMonth && role.members?.length ? <Popover>
+                                  <PopoverTrigger asChild><button type="button" className="flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-medium normal-case text-muted-foreground transition-colors hover:bg-card hover:text-foreground"><Users aria-hidden="true" className="size-3.5 shrink-0" /><span className="truncate">Участники: {role.members.length}</span></button></PopoverTrigger>
+                                  <PopoverContent align="start" side="bottom" sideOffset={6} collisionPadding={16} className="w-[min(320px,calc(100vw-2rem))] rounded-xl p-2">
+                                    <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Участие в роли · {role.name}</p>
+                                    <ul className="max-h-64 overflow-y-auto">
+                                      {role.members.map((member) => <li key={member.personExternalId} className="flex items-center gap-2 px-2 py-2 text-sm">
+                                        <span className="min-w-0 flex-1"><span className="block truncate">{member.personName}</span><span className="block truncate text-xs text-muted-foreground">{member.personIsActive ? member.personEmail : 'Неактивен'}</span></span>
+                                        <span className="shrink-0 font-medium tabular-nums">{memberParticipation(role, member.personExternalId).toLocaleString('ru-RU')}%</span>
+                                      </li>)}
+                                    </ul>
+                                    {canConfigure ? <Link href={roleSettingsHref} className="mt-1 block rounded-lg border-t border-border px-2 py-2 text-sm text-primary hover:bg-muted">Настроить состав и участие</Link> : null}
                                   </PopoverContent>
-                                </Popover> : role.defaultPersonName ? <span className="block truncate text-[10px] font-medium normal-case text-muted-foreground">По умолчанию: {role.defaultPersonName}</span> : null}
-                                {!selectedMonth && !hasActiveMembers && (canConfigure || canEditPlan) ? (
-                                  canConfigure && !needsPeopleSync ? <Link
-                                    href={roleSettingsHref}
-                                    aria-label={`Добавить участников в роль «${role.name}»`}
-                                    className="inline-flex min-h-6 max-w-full items-center gap-1 rounded-md px-1.5 text-xs font-medium text-muted-foreground hover:bg-card hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                                  >
-                                    <Plus aria-hidden="true" className="size-3.5 shrink-0" />
-                                    <span>Добавить участников</span>
-                                  </Link> : <span className="block text-xs font-normal text-muted-foreground">Нет участников</span>
-                                ) : null}
+                                </Popover> : null}
+                                {!hasActiveMembers && !canConfigure ? <span className="block text-xs font-normal text-muted-foreground">Нет участников</span> : null}
                               </div>
                               <ColumnResizeHandle columnId={`plan:${role.id}`} />
                             </th>;

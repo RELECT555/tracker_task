@@ -36,11 +36,16 @@ export interface RoadmapRole {
   defaultPersonName?: string | null;
   defaultPersonEmail?: string | null;
   defaultPersonIsMock?: boolean;
-  members?: { personExternalId: string; personName: string; personEmail: string | null; personIsActive: boolean; personIsMock?: boolean }[];
+  members?: { personExternalId: string; personName: string; personEmail: string | null; personIsActive: boolean; personIsMock?: boolean; allocationPercent?: number }[];
 }
 
 export type RoadmapRoleTemplate = Pick<RoadmapRole, 'id' | 'name' | 'color' | 'isMock' | 'azureEstimateField'>;
-export type RoadmapRoleAssignment = { personExternalId?: string | null; personExternalIds?: string[] };
+export type RoadmapRoleMemberAllocation = { personExternalId: string; allocationPercent: number };
+export type RoadmapRoleAssignment = {
+  personExternalId?: string | null;
+  personExternalIds?: string[];
+  memberAllocations?: RoadmapRoleMemberAllocation[];
+};
 
 export interface RoadmapPerson {
   id: string;

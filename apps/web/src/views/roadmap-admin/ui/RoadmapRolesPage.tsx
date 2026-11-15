@@ -105,7 +105,7 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
   }
 
   return (
-    <AdminPage className="lg:flex lg:h-full lg:flex-col lg:gap-6 lg:space-y-0">
+    <AdminPage>
       <QueryErrorNotice
         title={addError ? 'Не удалось добавить роль' : 'Не удалось загрузить роли и проекты'}
         queries={[rolesQuery, projectsQuery, catalogQuery]}
@@ -150,6 +150,7 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
           projectName={projectName}
           roles={projectRoles}
           availableRoles={availableTemplates}
+          catalogSize={catalog.length}
           catalogNotice={catalogQuery.isLoading ? <p role="status" className="text-sm text-muted-foreground">Загружаем каталог…</p>
             : catalogQuery.isError && !catalogQuery.data ? <p className="text-sm text-muted-foreground">Каталог временно недоступен.</p> : undefined}
           addingRoleId={add.isPending ? add.variables.templateId : undefined}

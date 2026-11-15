@@ -544,12 +544,13 @@ model RoadmapPerson {
 }
 
 model RoadmapRoleMember {
-  id        String        @id @default(uuid()) @db.Uuid
-  roleId    String        @map("role_id") @db.Uuid
-  personId  String        @map("person_id") @db.Uuid
-  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz()
-  role      RoadmapRole   @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  person    RoadmapPerson @relation(fields: [personId], references: [id], onDelete: Cascade)
+  id                String        @id @default(uuid()) @db.Uuid
+  roleId            String        @map("role_id") @db.Uuid
+  personId          String        @map("person_id") @db.Uuid
+  allocationPercent Decimal       @default(100) @map("allocation_percent") @db.Decimal(5, 2)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  role              RoadmapRole   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  person            RoadmapPerson @relation(fields: [personId], references: [id], onDelete: Cascade)
 
   @@unique([roleId, personId])
   @@index([personId])

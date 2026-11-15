@@ -53,6 +53,7 @@ type RoleAssignmentBoardProps = {
   projectName: string;
   roles: RoadmapRole[];
   availableRoles: RoadmapRoleTemplate[];
+  catalogSize: number;
   catalogNotice?: ReactNode;
   addingRoleId?: string;
   addedRole?: Pick<RoadmapRole, 'id' | 'name'>;
@@ -69,12 +70,11 @@ type RoleAssignmentBoardProps = {
 };
 
 export function RoleAssignmentBoard({
-  projectName, roles, availableRoles, catalogNotice, addingRoleId, addedRole, focusAddedRole, removedRoleName, status,
+  projectName, roles, availableRoles, catalogSize, catalogNotice, addingRoleId, addedRole, focusAddedRole, removedRoleName, status,
   projectSearch, disabled, canAdd, onProjectSearchChange, onEditRole, onRemoveRole, onAddRole,
 }: RoleAssignmentBoardProps) {
   const id = useId();
   const projectHeading = useRef<HTMLHeadingElement>(null);
-  const projectList = useRef<HTMLUListElement>(null);
   const addedRoleButton = useRef<HTMLButtonElement>(null);
   const [catalogSearch, setCatalogSearch] = useState('');
   const [draggedRoleId, setDraggedRoleId] = useState<string>();
@@ -86,18 +86,10 @@ export function RoleAssignmentBoard({
   const draggedRole = canAdd ? availableRoles.find((role) => role.id === draggedRoleId) : undefined;
 
   useEffect(() => {
-    const list = projectList.current;
     const current = addedRoleButton.current;
-    if (!list || !current) return;
-    if (focusAddedRole) {
-      current.focus({ preventScroll: true });
-      current.scrollIntoView({ block: 'nearest' });
-      return;
-    }
-    const bounds = list.getBoundingClientRect();
-    const row = current.getBoundingClientRect();
-    if (row.top < bounds.top) list.scrollTop += row.top - bounds.top;
-    else if (row.bottom > bounds.bottom) list.scrollTop += row.bottom - bounds.bottom;
+    if (!current) return;
+    if (focusAddedRole) current.focus({ preventScroll: true });
+    current.scrollIntoView({ block: 'nearest' });
   }, [addedRole?.id, focusAddedRole]);
 
   useEffect(() => {
@@ -125,19 +117,20 @@ export function RoleAssignmentBoard({
   }
 
   return (
-    <div className="grid gap-4 lg:min-h-80 lg:flex-1 lg:grid-cols-[clamp(16rem,24%,21rem)_minmax(0,1fr)]">
+    <div className="grid items-start gap-5 lg:grid-cols-[clamp(16rem,24%,21rem)_minmax(0,1fr)]">
       <section aria-labelledby={`${id}-catalog`} className={panelClass}>
         <div className="shrink-0 space-y-3 border-b border-border px-4 py-3.5">
           <div className="flex items-center gap-2">
             <BookOpen aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
-            <h2 id={`${id}-catalog`} className="flex-1 text-sm font-semibold">Каталог ролей</h2>
-            {availableRoles.length > 0 && <span className="text-xs tabular-nums text-muted-foreground">{availableRoles.length} доступно</span>}
+            <h2 id={`${id}-catalog`} className="flex-1 text-balance text-sm font-semibold">Добавить из каталога</h2>
+            {availableRoles.length > 0 && <span className="text-xs tabular-nums text-muted-foreground">{availableRoles.length}</span>}
           </div>
+          <p className="text-pretty text-xs leading-relaxed text-muted-foreground">Общие роли, которые ещё не добавлены в этот проект.</p>
           {availableRoles.length > 0 && <RoleSearch label="Поиск в каталоге ролей" value={catalogSearch} onChange={setCatalogSearch} />}
         </div>
         {catalogNotice && <div className="shrink-0 px-4 py-3">{catalogNotice}</div>}
         {visibleCatalog.length > 0 ? (
-          <ul aria-label="Доступные роли" className="roadmap-scrollbar min-h-0 flex-1 space-y-1 p-2 lg:overflow-y-auto">
+          <ul aria-label="Роли для добавления из каталога" className="space-y-2 p-3">
             {visibleCatalog.map((role) => (
               <li
                 key={role.id}
@@ -173,9 +166,19 @@ export function RoleAssignmentBoard({
             ))}
           </ul>
         ) : !catalogNotice && (
-          <p role="status" className="px-4 py-5 text-sm text-muted-foreground">
-            {availableRoles.length ? 'Роли не найдены.' : 'Для этого проекта нет доступных ролей в каталоге.'}
-          </p>
+          <div role="status" className="space-y-2 px-4 py-5 text-pretty text-sm">
+            <p className="font-medium">
+              {availableRoles.length ? 'Роли не найдены.' : catalogSize ? 'Все роли каталога уже в проекте' : 'Каталог пока пуст'}
+            </p>
+            {!availableRoles.length && !catalogSize && roles.some((role) => role.azureEstimateField) && (
+              <p className="text-xs leading-relaxed text-muted-foreground">Роли из Azure DevOps уже показаны в разделе «Роли проекта».</p>
+            )}
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {availableRoles.length ? 'Попробуйте другое название.' : catalogSize
+                ? 'Участников и параметры можно настроить в разделе «Роли проекта».'
+                : 'Создайте роль кнопкой «Новая роль» — она появится в проекте и станет доступна в каталоге для других проектов.'}
+            </p>
+          </div>
         )}
         {addedRole && (
           <RoleSuccessNotice key={addedRole.id} className="mt-auto shrink-0 border-t border-border p-3" autoDismiss>
@@ -194,12 +197,12 @@ export function RoleAssignmentBoard({
           onDrop={handleDrop}
           className={cn('@container motion-safe:transition-colors motion-safe:duration-150', panelClass, draggedRole && 'border-primary/55', draggedRole && overProject && 'ring-2 ring-primary/25')}
         >
-          <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-3 border-b border-border px-4 py-3">
+          <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-3 border-b border-border px-5 py-4">
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
               <Layers3 aria-hidden="true" className="size-4 shrink-0 text-primary" />
               <div className="min-w-0">
                 <div className="flex items-baseline gap-1.5">
-                  <h2 ref={projectHeading} id={`${id}-project`} tabIndex={-1} className="rounded-sm text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Роли проекта</h2>
+                  <h2 ref={projectHeading} id={`${id}-project`} tabIndex={-1} className="rounded-sm text-balance text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Роли проекта</h2>
                   <span className="text-xs tabular-nums text-muted-foreground">{roles.length}</span>
                 </div>
                 <p className="mt-0.5 break-words text-xs text-muted-foreground">{projectName}</p>
@@ -207,7 +210,7 @@ export function RoleAssignmentBoard({
             </div>
             {roles.length > 0 && <div className="w-full @min-[26rem]:w-52"><RoleSearch label="Поиск по ролям проекта" value={projectSearch} onChange={onProjectSearchChange} /></div>}
           </div>
-          <div className="flex min-h-0 flex-1 flex-col p-2">
+          <div className="flex min-h-0 flex-col p-4 @min-[50rem]:p-5">
             {removedRoleName && (
               <RoleSuccessNotice key={removedRoleName} className="mx-1 mb-2" autoDismiss>
                 Роль «{removedRoleName}» убрана из проекта.
@@ -225,14 +228,14 @@ export function RoleAssignmentBoard({
                 draggedRole && overProject && 'border-primary bg-primary/15',
               )}>
                 <ArrowDownToLine aria-hidden="true" className={cn('size-4 shrink-0 motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out', draggedRole && overProject && 'motion-safe:translate-y-0.5')} />
-                <span className="min-w-0 wrap-anywhere">{draggedRole && overProject ? `Отпустите, чтобы добавить «${draggedRole.name}»` : 'Перетащите роль сюда'}</span>
+                <span className="min-w-0 wrap-anywhere">{draggedRole && overProject ? `Отпустите, чтобы добавить «${draggedRole.name}»` : 'Перетащите роль из каталога сюда или нажмите «Добавить»'}</span>
               </div>
             )}
             {visibleRoles.length > 0 ? (
-              <ul ref={projectList} aria-label="Роли проекта" className="roadmap-scrollbar grid min-h-0 flex-1 auto-rows-max grid-cols-1 gap-1 lg:overflow-y-auto @min-[30rem]:grid-cols-2 @min-[50rem]:grid-cols-3">
+              <ul aria-label="Роли проекта" className="grid grid-cols-1 gap-4 @min-[38rem]:grid-cols-2 @min-[50rem]:grid-cols-3">
                 {visibleRoles.map((role) => (
                   <li key={role.id} className={cn(
-                    'relative flex min-w-0 items-center rounded-lg border border-transparent pr-1 hover:bg-muted/50 focus-within:bg-muted/50',
+                    'relative flex min-w-0 flex-col justify-between rounded-xl border border-border bg-background/40 hover:bg-muted/40 focus-within:bg-muted/40',
                     role.id === addedRole?.id && styles.addedRole,
                   )}>
                     <button
@@ -244,32 +247,35 @@ export function RoleAssignmentBoard({
                       title="Настроить роль"
                       disabled={disabled}
                       onClick={() => onEditRole(role)}
-                      className="flex min-h-12 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                      className="flex min-h-16 min-w-0 items-start gap-3 rounded-lg p-4 pb-2 text-left text-sm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
                     >
-                      <RoleMark name={role.name} color={role.color} size="sm" />
+                      <RoleMark name={role.name} color={role.color} />
                       <span className="min-w-0 flex-1">
-                        <span className="block break-words font-medium">{role.name}</span>
-                        <span id={`${id}-members-${role.id}`} className="block text-xs text-muted-foreground">{memberCount(role)}</span>
+                        <span className="block break-words text-pretty font-medium leading-5">{role.name}</span>
                       </span>
+                      <Settings2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    </button>
+                    <div className="flex items-center gap-2 px-4 pb-2">
+                      <span id={`${id}-members-${role.id}`} className="min-w-0 flex-1 text-xs text-muted-foreground">{memberCount(role)}</span>
                       {role.azureEstimateField && (
-                        <span role="img" aria-label="Роль из Azure DevOps" className="shrink-0 text-primary" title="Роль из Azure DevOps">
+                        <span role="img" aria-label="Роль из Azure DevOps" className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" title="Роль из Azure DevOps">
                           <RefreshCw aria-hidden="true" className="size-3.5" />
+                          <span aria-hidden="true">Azure</span>
                         </span>
                       )}
-                      <Settings2 aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
-                    </button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Убрать роль «${role.name}» из проекта`}
-                      title="Убрать роль из проекта"
-                      disabled={disabled}
-                      onClick={() => onRemoveRole(role)}
-                      className="size-9 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive [@media(pointer:coarse)]:size-11"
-                    >
-                      <Trash2 aria-hidden="true" className="size-4" />
-                    </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Убрать роль «${role.name}» из проекта`}
+                        title="Убрать роль из проекта"
+                        disabled={disabled}
+                        onClick={() => onRemoveRole(role)}
+                        className="size-9 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive [@media(pointer:coarse)]:size-11"
+                      >
+                        <Trash2 aria-hidden="true" className="size-4" />
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>

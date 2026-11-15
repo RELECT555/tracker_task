@@ -57,7 +57,11 @@ async function main() {
       : await prisma.roadmapRole.create({ data: { projectId: project.id, name: role.name, color: role.color, isMock: true } });
     await prisma.roadmapRoleMember.deleteMany({ where: { roleId: projectRole.id } });
     await prisma.roadmapRoleMember.createMany({
-      data: role.people.map((externalId) => ({ roleId: projectRole.id, personId: peopleByExternalId.get(externalId)! })),
+      data: role.people.map((externalId, index) => ({
+        roleId: projectRole.id,
+        personId: peopleByExternalId.get(externalId)!,
+        allocationPercent: (Math.floor(10000 / role.people.length) + (index < 10000 % role.people.length ? 1 : 0)) / 100,
+      })),
       skipDuplicates: true,
     });
   }
