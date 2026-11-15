@@ -10,6 +10,7 @@ import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import { RoadmapWebhookController } from './roadmap-webhook.controller';
 import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
+import { RoadmapWorkItemCardService } from './roadmap-work-item-card.service';
 import { RoadmapWorkItemCreateService } from './roadmap-work-item-create.service';
 import { RoadmapProjectAccessController } from './roadmap-project-access.controller';
 import { RoadmapProjectAccessService } from './roadmap-project-access.service';
@@ -33,6 +34,7 @@ import { RoadmapTablePreferencesService } from './roadmap-table-preferences.serv
     RoadmapAzureSyncService,
     RoadmapAzureCatalogService,
     RoadmapWorkItemCreateService,
+    RoadmapWorkItemCardService,
     RoadmapProjectAccessService,
     RoadmapTablePreferencesService,
     AdminRoleGuard,

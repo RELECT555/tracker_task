@@ -1,10 +1,12 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
   HttpCode,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Put,
   Query,
@@ -43,6 +45,9 @@ import {
   type RoadmapWorkItemCreateInput,
 } from './roadmap-work-item-create.service';
 import { RoadmapProjectAccessService } from './roadmap-project-access.service';
+import { RoadmapWorkItemCardService } from './roadmap-work-item-card.service';
+
+const AZURE_ID = /^[1-9]\d{0,9}$/;
 
 class PeriodDto {
   @IsOptional() @Matches(/^\d{4}-(0[1-9]|1[0-2])$/) monthKey?: string;
@@ -122,6 +127,24 @@ class CreateRoadmapWorkItemDto {
   personExternalId?: string;
 }
 
+class UpdateWorkItemCardDto {
+  @IsNumber() @Min(1) rev!: number;
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(255) title?: string;
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(100) state?: string;
+  @IsOptional() @IsString() @MaxLength(255) assignedTo?: string | null;
+  @IsOptional() @IsString() @MaxLength(32000) description?: string;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  @MaxLength(100, { each: true })
+  tags?: string[];
+}
+
+class WorkItemCommentDto {
+  @IsString() @MinLength(1) @MaxLength(10000) text!: string;
+}
+
 @Controller('roadmap')
 export class RoadmapController {
   constructor(
@@ -129,7 +152,63 @@ export class RoadmapController {
     private readonly azureSync: RoadmapAzureSyncService,
     private readonly workItemCreate: RoadmapWorkItemCreateService,
     private readonly access: RoadmapProjectAccessService,
+    private readonly workItemCard: RoadmapWorkItemCardService,
   ) {}
+
+  @Get('projects/:projectId/work-items/:externalId/azure')
+  async workItemCardView(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('externalId') externalId: string,
+  ) {
+    const canEdit = await this.access.require(actor, { projectId }, 'read');
+    return this.workItemCard.getCard(
+      projectId,
+      this.azureId(externalId),
+      actor.id,
+      canEdit,
+    );
+  }
+
+  @Patch('projects/:projectId/work-items/:externalId/azure')
+  async updateWorkItemCard(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('externalId') externalId: string,
+    @Body() dto: UpdateWorkItemCardDto,
+  ) {
+    const canEdit = await this.access.require(actor, { projectId }, 'edit');
+    return this.workItemCard.update(
+      projectId,
+      this.azureId(externalId),
+      dto,
+      actor,
+      canEdit,
+    );
+  }
+
+  @Post('projects/:projectId/work-items/:externalId/azure/comments')
+  async addWorkItemComment(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('externalId') externalId: string,
+    @Body() dto: WorkItemCommentDto,
+  ) {
+    const canEdit = await this.access.require(actor, { projectId }, 'edit');
+    return this.workItemCard.addComment(
+      projectId,
+      this.azureId(externalId),
+      dto.text,
+      actor,
+      canEdit,
+    );
+  }
+
+  private azureId(value: string) {
+    if (!AZURE_ID.test(value))
+      throw new BadRequestException('Некорректный номер элемента Azure DevOps');
+    return value;
+  }
 
   @Get('connection')
   @UseGuards(AdminRoleGuard)

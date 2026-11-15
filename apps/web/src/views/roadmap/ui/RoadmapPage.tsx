@@ -52,6 +52,7 @@ const AzurePushPreview = dynamic(() => import('@/entities/roadmap/ui/AzurePushPr
 const CreateAzureWorkItem = dynamic(() => import('./CreateAzureWorkItem').then((module) => module.CreateAzureWorkItem), {
   loading: () => <p role="status" className="fixed bottom-4 right-4 z-50 rounded-lg border border-border bg-card px-3 py-2 text-sm">Загружаем форму…</p>,
 });
+const WorkItemCardSheet = dynamic(() => import('./WorkItemCardSheet').then((module) => module.WorkItemCardSheet));
 const AllProjectsPlanTable = dynamic(() => import('./AllProjectsPlanTable').then((module) => module.AllProjectsPlanTable), {
   loading: () => <PortfolioTableSkeleton />,
 });
@@ -590,7 +591,7 @@ function AllocationEditor({
         side="bottom"
         sideOffset={8}
         collisionPadding={16}
-        className="max-h-[min(80vh,680px)] w-[min(380px,calc(100vw-2rem))] overflow-y-auto rounded-xl p-0"
+        className="max-h-[min(80vh,680px)] w-[min(340px,calc(100vw-2rem))] overflow-y-auto rounded-xl p-0"
         onOpenAutoFocus={(event) => {
           // Land on the field that still needs input instead of the close button.
           event.preventDefault();
@@ -603,65 +604,66 @@ function AllocationEditor({
         }}
       >
         <form onSubmit={submit}>
-          <div className="flex items-start gap-3 px-4 pb-3 pt-4">
+          <div className="flex items-center gap-2 px-3 pb-2 pt-2.5">
             <RoleMark name={role.name} color={role.color} size="sm" />
             <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-semibold leading-5 text-foreground">{initial ? 'Оценка участника' : 'Назначить участника'}</h3>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground" title={`${role.name} · ${item.title}`}>
+              <h3 className="text-[13px] font-semibold leading-4 text-foreground">{initial ? 'Оценка участника' : 'Назначить участника'}</h3>
+              <p className="truncate text-[11px] leading-4 text-muted-foreground" title={`${role.name} · ${item.title}`}>
                 <span className="font-medium text-foreground/80">{role.name}</span> · {item.title}
               </p>
             </div>
-            <Button type="button" variant="ghost" size="icon" className="-mr-2 -mt-1 size-8 shrink-0 text-muted-foreground hover:text-foreground" aria-label="Закрыть" onClick={() => setOpen(false)}><X aria-hidden="true" className="size-4" /></Button>
+            <Button type="button" variant="ghost" size="icon" className="-mr-1 size-7 shrink-0 text-muted-foreground hover:text-foreground" aria-label="Закрыть" onClick={() => setOpen(false)}><X aria-hidden="true" className="size-4" /></Button>
           </div>
-          <div className="space-y-4 border-t border-border px-4 py-4">
-            <div data-allocation-person className="space-y-1.5">
-              <span className="block text-xs font-medium text-foreground">Участник</span>
-              <SearchableSelect
-                ariaLabel="Участник"
-                value={personId}
-                onChange={setPersonId}
-                placeholder="Выберите участника"
-                searchPlaceholder="Найти участника…"
-                emptyLabel="Участник не найден"
-                options={people.map((person) => ({ value: person.id, label: person.name, description: person.email, badge: person.isMock ? 'демо' : undefined }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <div className="flex items-baseline justify-between gap-2">
-                <label htmlFor={`allocation-hours-${item.id}-${role.id}`} className="text-xs font-medium text-foreground">Оценка</label>
-                <span className="rounded-full bg-muted px-2 py-px text-[11px] font-medium tabular-nums text-muted-foreground">{quarterLabel}</span>
-              </div>
-              <div className="relative">
-                <input
-                  id={`allocation-hours-${item.id}-${role.id}`}
-                  name="allocation-hours"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.5"
-                  value={hours}
-                  onChange={(event) => setHours(event.target.value)}
-                  placeholder="0"
-                  className="h-10 w-full rounded-lg border border-input bg-field pl-3 pr-9 text-sm font-medium tabular-nums text-foreground shadow-sm outline-none transition-colors placeholder:font-normal placeholder:text-muted-foreground hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          <div className="space-y-2 border-t border-border px-3 py-3">
+            <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] items-end gap-2">
+              <div data-allocation-person className="min-w-0 space-y-1">
+                <span className="block text-[11px] font-medium text-muted-foreground">Участник</span>
+                <SearchableSelect
+                  ariaLabel="Участник"
+                  value={personId}
+                  onChange={setPersonId}
+                  placeholder="Выберите…"
+                  searchPlaceholder="Найти участника…"
+                  emptyLabel="Участник не найден"
+                  className="min-h-9"
+                  options={people.map((person) => ({ value: person.id, label: person.name, description: person.email, badge: person.isMock ? 'демо' : undefined }))}
                 />
-                <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">ч</span>
               </div>
-              {sourceEstimate !== null ? <button
-                type="button"
-                onClick={() => setHours(String(sourceEstimate))}
-                className="inline-flex h-7 items-center gap-1.5 rounded-md border border-dashed border-border px-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                title="Оценка роли в Azure DevOps на всю задачу. Нажмите, чтобы подставить"
-              >
-                <Cloud aria-hidden="true" className="size-3.5" />
-                Оценка Azure: <span className="font-medium tabular-nums text-foreground">{sourceEstimate} ч</span>
-              </button> : null}
+              <div className="space-y-1">
+                <label htmlFor={`allocation-hours-${item.id}-${role.id}`} className="block truncate text-[11px] font-medium text-muted-foreground" title={`Оценка на ${quarterLabel}`}>
+                  Часы · <span className="tabular-nums">{quarterLabel}</span>
+                </label>
+                <div className="relative">
+                  <input
+                    id={`allocation-hours-${item.id}-${role.id}`}
+                    name="allocation-hours"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.5"
+                    value={hours}
+                    onChange={(event) => setHours(event.target.value)}
+                    placeholder="0"
+                    className="h-9 w-full rounded-lg border border-input bg-field pl-2.5 pr-6 text-sm font-medium tabular-nums text-foreground shadow-sm outline-none transition-colors placeholder:font-normal placeholder:text-muted-foreground hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                  <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">ч</span>
+                </div>
+              </div>
             </div>
+            {sourceEstimate !== null ? <button
+              type="button"
+              onClick={() => setHours(String(sourceEstimate))}
+              className="inline-flex h-6 items-center gap-1.5 rounded-md border border-dashed border-border px-2 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              title="Оценка роли в Azure DevOps на всю задачу. Нажмите, чтобы подставить"
+            >
+              <Cloud aria-hidden="true" className="size-3.5" />
+              Оценка Azure: <span className="font-medium tabular-nums text-foreground">{sourceEstimate} ч</span>
+            </button> : null}
             {initial && azure ? <AzureTaskPanel allocation={initial} retrying={azure.retrying} onRetry={azure.onRetry ? () => azure.onRetry?.(initial.id) : undefined} /> : null}
           </div>
-          <div className="flex items-center justify-end gap-2 border-t border-border bg-muted/30 px-4 py-3">
-            {!personId ? <span className="mr-auto text-xs text-muted-foreground">Выберите участника</span> : null}
-            <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => setOpen(false)}>Отмена</Button>
-            <Button type="submit" size="sm" className="h-8 gap-1.5" disabled={!personId || saving}><Check aria-hidden="true" className="size-4" />{saving ? 'Сохраняем…' : 'Сохранить'}</Button>
+          <div className="flex items-center justify-end gap-1.5 border-t border-border px-3 py-2">
+            <Button type="button" variant="ghost" size="sm" className="h-7 px-2.5 text-xs" onClick={() => setOpen(false)}>Отмена</Button>
+            <Button type="submit" size="sm" className="h-7 gap-1 px-2.5 text-xs" disabled={!personId || saving} title={!personId ? 'Выберите участника' : undefined}><Check aria-hidden="true" className="size-3.5" />{saving ? 'Сохраняем…' : 'Сохранить'}</Button>
           </div>
         </form>
       </PopoverContent>
@@ -818,6 +820,32 @@ export function RoadmapPage() {
     mutationFn: roadmapApi.pushAllocationToAzure,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
   });
+  // The Azure card is addressable (`?item=<Azure id>&itemProject=<Roadmap project>`), so a link can be
+  // shared. The card keeps its own project, so switching the plan's project does not break it.
+  const canOpenCard = !demoMode && Boolean(plan);
+  const [card, setCard] = useState<{ projectId: string | null; externalId: string } | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const externalId = params.get('item');
+    const projectId = params.get('itemProject');
+    if (externalId && /^[1-9]\d{0,9}$/.test(externalId)) {
+      setCard({ externalId, projectId: projectId && /^[0-9a-f-]{36}$/i.test(projectId) ? projectId : null });
+    }
+  }, []);
+  const cardProjectId = card?.projectId ?? roadmapProjectId;
+  const cardPlan = plan && plan.id === cardProjectId ? plan : undefined;
+  function showCard(next: { projectId: string; externalId: string } | null) {
+    setCard(next);
+    const url = new URL(window.location.href);
+    if (next) {
+      url.searchParams.set('item', next.externalId);
+      url.searchParams.set('itemProject', next.projectId);
+    } else {
+      url.searchParams.delete('item');
+      url.searchParams.delete('itemProject');
+    }
+    window.history.replaceState(window.history.state, '', url);
+  }
   const addRoleMutation = useMutation({
     mutationFn: ({ projectId, templateId }: { projectId: string; templateId: string }) => roadmapApi.addRoleFromCatalog(projectId, templateId),
     onSuccess: async (_, { projectId }) => {
@@ -983,7 +1011,9 @@ export function RoadmapPage() {
               </Button>
               <AzureWorkItemIcon type={item.type} className="mt-0.5" />
               <div data-plan-name className="col-start-3 min-w-0">
-                <div data-plan-title title={item.title} className="text-sm leading-5 font-semibold text-foreground [overflow-wrap:anywhere]">{item.title}</div>
+                {canOpenCard
+                  ? <button type="button" data-plan-title title={`${item.title} — открыть карточку`} aria-haspopup="dialog" onClick={() => showCard({ projectId: roadmapProjectId, externalId: item.externalId })} className="block w-full rounded-sm text-left text-sm leading-5 font-semibold text-foreground underline-offset-2 [overflow-wrap:anywhere] hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{item.title}</button>
+                  : <div data-plan-title title={item.title} className="text-sm leading-5 font-semibold text-foreground [overflow-wrap:anywhere]">{item.title}</div>}
                 <div data-plan-meta className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-4 text-muted-foreground">
                   <span className="min-w-0 tabular-nums [overflow-wrap:anywhere]" title={`Epic #${item.externalId}`}><span className="sr-only">Epic </span>#{item.externalId}</span>
                   <WorkItemStateBadge state={item.state} />
@@ -1010,7 +1040,9 @@ export function RoadmapPage() {
               : 'pl-3'}>
               <div className="flex min-w-0 items-start gap-2">
                 <AzureWorkItemIcon type={item.type} className="mt-0.5" />
-                <span data-plan-title title={item.title} className="min-w-0 text-sm leading-snug [overflow-wrap:anywhere]">{item.title}</span>
+                {canOpenCard
+                  ? <button type="button" data-plan-title title={`${item.title} — открыть карточку`} aria-haspopup="dialog" onClick={() => showCard({ projectId: roadmapProjectId, externalId: item.externalId })} className="min-w-0 rounded-sm text-left text-sm leading-snug underline-offset-2 [overflow-wrap:anywhere] hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{item.title}</button>
+                  : <span data-plan-title title={item.title} className="min-w-0 text-sm leading-snug [overflow-wrap:anywhere]">{item.title}</span>}
               </div>
               <div data-plan-meta className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-6 text-[11px] text-muted-foreground">
                 <span className="tabular-nums" title={`Feature #${item.externalId}`}><span className="sr-only">Feature </span>#{item.externalId}</span>
@@ -1306,6 +1338,14 @@ export function RoadmapPage() {
                     </Popover>
                     <Link href={roleSettingsHref} className="inline-flex h-8 items-center gap-1.5 rounded-r-[5px] px-2.5 text-xs font-medium text-foreground hover:bg-muted/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"><Users aria-hidden="true" className="size-3.5" />Роли и участники</Link>
                     </div> : null}
+                    {!demoMode && cardProjectId ? <WorkItemCardSheet
+                      projectId={cardProjectId}
+                      externalId={card?.externalId ?? null}
+                      onNavigate={(externalId) => showCard(externalId ? { projectId: cardProjectId, externalId } : null)}
+                      planItems={cardPlan?.workItems ?? []}
+                      onRetryAllocation={cardPlan && canPushToAzure ? (allocationId) => pushAllocationMutation.mutate(allocationId) : undefined}
+                      retrying={pushAllocationMutation.isPending}
+                    /> : null}
                     {!demoMode && roadmapProjectId ? <AgentPanel
                       key={roadmapProjectId}
                       projectId={roadmapProjectId}
