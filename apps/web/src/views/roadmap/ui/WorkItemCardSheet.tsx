@@ -578,7 +578,7 @@ function ChildrenTab({ item, onOpen }: { item: WorkItemCard; onOpen: (externalId
               <AzureWorkItemIcon type={child.type} className="mt-0.5" />
               <span className="text-sm [overflow-wrap:anywhere]">{child.title}</span>
             </span>
-            <span className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+            <span className="mt-1 flex flex-wrap items-center gap-x-2 pl-6 text-xs text-muted-foreground">
               <span className="tabular-nums">{child.type} {child.id}</span>
               <span aria-hidden="true">·</span>
               <span>{child.assignedTo?.name ?? 'не назначен'}</span>
