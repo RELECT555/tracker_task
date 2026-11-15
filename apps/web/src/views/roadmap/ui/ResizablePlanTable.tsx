@@ -153,18 +153,68 @@ type DragSession = {
   runway: HTMLDivElement;
   handle: HTMLDivElement;
   property: string;
+  col: HTMLTableColElement | null;
+  /** Table width when the drag began; the preview offsets it by the width delta. */
+  tableStartWidth: number;
+  /** Pinned cells whose sticky offset reads the column's width variable. */
+  dependents: HTMLElement[];
+  /** Last previewed width, or null while nothing has been painted yet. */
+  painted: number | null;
   cursor: string;
   userSelect: string;
   removeListeners: () => void;
 };
 
+/**
+ * Pinned cells read the width variable for their sticky offset. Only those near
+ * the viewport are overridden during the preview: rows far outside it cannot be
+ * seen, and every override costs a style and layout pass. Release resets all of them.
+ */
+function visibleDependents(table: HTMLTableElement, property: string) {
+  const scroller = table.parentElement;
+  const bounds = scroller?.getBoundingClientRect();
+  const margin = 240;
+  const top = Math.max(bounds?.top ?? 0, 0) - margin;
+  const bottom = Math.min(bounds?.bottom ?? window.innerHeight, window.innerHeight) + margin;
+  return Array.from(table.querySelectorAll<HTMLElement>(`[style*="${property}"]`)).filter((element) => {
+    if (element.tagName === 'COL') return false;
+    const rect = element.getBoundingClientRect();
+    return rect.bottom >= top && rect.top <= bottom;
+  });
+}
+
 function paintWidth(drag: DragSession, width: number) {
   // Reserve scroll extent before shrinking the table, otherwise the browser
   // clamps scrollLeft immediately and makes the handle stop following the mouse.
   reserveRunway(drag.table, drag.runway);
-  drag.table.style.setProperty(drag.property, `${width}px`);
+  drag.painted = width;
+  // The width variable is inherited: changing it on the table restyles every
+  // descendant, which costs far more than a frame on large plans. The preview
+  // writes literal widths instead and only the few pinned cells that read the
+  // variable get a local override. The variable itself is set once on release.
+  if (drag.col) drag.col.style.width = `${width}px`;
+  const tableWidth = `${drag.tableStartWidth + width - drag.startWidth}px`;
+  drag.table.style.width = tableWidth;
+  drag.table.style.minWidth = tableWidth;
+  drag.table.style.maxWidth = tableWidth;
+  for (const element of drag.dependents) element.style.setProperty(drag.property, `${width}px`);
   drag.handle.setAttribute('aria-valuenow', String(width));
   drag.handle.setAttribute('aria-valuetext', `${width} пикселей`);
+}
+
+/** Hands the previewed width back to the variable-driven layout without a visual jump. */
+function settleWidth(drag: DragSession) {
+  for (const element of drag.dependents) element.style.removeProperty(drag.property);
+  const { table, col } = drag;
+  // A removed column must not recreate its obsolete CSS variable on cleanup.
+  if (!col || !table.contains(col)) return;
+  if (drag.painted !== null) table.style.setProperty(drag.property, `${drag.painted}px`);
+  col.style.width = `var(${drag.property})`;
+  const total = Array.from(table.querySelectorAll('col'), (entry) => `var(${widthProperty(entry.dataset.columnId ?? '')})`).join(' + ');
+  const tableWidth = total ? `calc(${total})` : '0px';
+  table.style.width = tableWidth;
+  table.style.minWidth = tableWidth;
+  table.style.maxWidth = tableWidth;
 }
 
 function restoreCommittedWidth(drag: DragSession) {
@@ -179,6 +229,7 @@ function restoreCommittedWidth(drag: DragSession) {
 function releaseDrag(drag: DragSession) {
   if (drag.frame !== null) cancelAnimationFrame(drag.frame);
   drag.removeListeners();
+  settleWidth(drag);
   document.body.style.cursor = drag.cursor;
   document.body.style.userSelect = drag.userSelect;
   delete drag.handle.dataset.resizing;
@@ -240,7 +291,8 @@ export function ColumnResizeHandle({ columnId }: { columnId: string }) {
       event.stopPropagation();
       const handle = event.currentTarget;
       const table = tableRef.current;
-      const startWidth = Number.parseFloat(table.style.getPropertyValue(widthProperty(columnId))) || width;
+      const property = widthProperty(columnId);
+      const startWidth = Number.parseFloat(table.style.getPropertyValue(property)) || width;
       handle.focus({ preventScroll: true });
       const drag: DragSession = {
         pointerId: event.pointerId,
@@ -253,7 +305,11 @@ export function ColumnResizeHandle({ columnId }: { columnId: string }) {
         table,
         runway: runwayRef.current,
         handle,
-        property: widthProperty(columnId),
+        property,
+        col: Array.from(table.querySelectorAll('col')).find((entry) => entry.dataset.columnId === columnId) ?? null,
+        tableStartWidth: table.getBoundingClientRect().width,
+        dependents: visibleDependents(table, property),
+        painted: null,
         cursor: document.body.style.cursor,
         userSelect: document.body.style.userSelect,
         removeListeners: () => {},
