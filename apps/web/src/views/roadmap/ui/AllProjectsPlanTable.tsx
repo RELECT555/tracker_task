@@ -145,10 +145,10 @@ function Metrics({ summary, showFact = true, loading = false }: { summary?: Road
     <td className={cn(metricClass, 'text-muted-foreground')}>{summary ? numberFormat.format(summary.features) : '—'}</td>
     <td className={cn(metricClass, 'font-medium text-foreground')}>{summary ? hours(summary.planHours) : '—'}</td>
     {showFact ? <>
-      <td className={cn(metricClass, summary?.actualHours ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground')}>{summary ? hours(summary.actualHours) : '—'}</td>
+      <td className={cn(metricClass, summary?.actualHours ? 'font-medium text-foreground' : 'text-muted-foreground')}>{summary ? hours(summary.actualHours) : '—'}</td>
       <td className={metricClass}>{percent === null ? <span className="text-muted-foreground">—</span> : <span className="inline-flex items-center justify-end gap-2" title={`Факт — ${percent}% от плана`}>
         <span aria-hidden="true" className="h-1.5 w-12 overflow-hidden rounded-full bg-muted">
-          <span className={cn('block h-full rounded-full', percent > 100 ? 'bg-amber-500' : 'bg-emerald-500')} style={{ width: `${Math.min(percent, 100)}%` }} />
+          <span className={cn('block h-full rounded-full', percent > 100 ? 'bg-amber-500' : 'bg-muted-foreground/50')} style={{ width: `${Math.min(percent, 100)}%` }} />
         </span>
         <span className={cn('w-10 text-right', percent > 100 ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-foreground')}>{percent}%</span>
       </span>}</td>
@@ -313,7 +313,7 @@ function ProjectPlanDetails({
             <div className="min-w-0">
               <p data-plan-title title={item.title} className={cn('break-words text-sm leading-snug [overflow-wrap:anywhere]', epic && 'font-medium')}>{item.title}</p>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                <span className="tabular-nums">{epic ? 'Epic' : 'Feature'} #{item.externalId}</span>
+                <span className="tabular-nums" title={`${epic ? 'Epic' : 'Feature'} #${item.externalId}`}><span className="sr-only">{epic ? 'Epic' : 'Feature'} </span>#{item.externalId}</span>
                 <WorkItemStateBadge state={item.state} />
               </div>
             </div>

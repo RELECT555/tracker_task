@@ -33,6 +33,7 @@ import { isRoadmapDemoMode } from '@/entities/roadmap/api/roadmapDemo';
 import { ALL_ROADMAP_PROJECTS, useRoadmapProject } from '@/entities/roadmap/model/roadmap-project-selection';
 import { useRoadmapCatalog } from '@/entities/roadmap/model/use-roadmap-catalog';
 import { RoadmapSummaryStrip } from './RoadmapSummaryStrip';
+import { PlanNotice } from './PlanNotice';
 import { getRoadmapRoleFact } from '../model/roadmap-role-fact';
 import { type ColumnWidthsApi, type ColumnWidthConfig } from '../model/use-roadmap-column-widths';
 import { useRoadmapTablePreferences } from '../model/use-roadmap-table-preferences';
@@ -352,10 +353,10 @@ function QuarterPlanningGrid({
           {epic ? <button type="button" aria-expanded={expandedEpics.has(item.id)} aria-label={`${expandedEpics.has(item.id) ? 'Свернуть' : 'Развернуть'} эпик ${item.title}`} onClick={() => onToggleEpic(item.id)} className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted"><ChevronRight className={`h-4 w-4 transition-transform ${expandedEpics.has(item.id) ? 'rotate-90' : ''}`} /></button> : null}
           <AzureWorkItemIcon type={item.type} />
           <span className="min-w-0 flex-1 truncate" title={item.title}>{item.title}</span>
-          {item.actualHours !== null ? <span className="shrink-0 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-emerald-700 dark:text-emerald-300" title="Фактическое время из Azure DevOps">Факт {Number(item.actualHours)} ч</span> : null}
+          {item.actualHours !== null ? <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground" title="Фактическое время из Azure DevOps">Факт {Number(item.actualHours)} ч</span> : null}
           {roles.map((role) => {
             const hours = azureRoleEstimate(item, role);
-            return hours !== null ? <span key={role.id} className="max-w-44 shrink-0 truncate rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-sky-700 dark:text-sky-300" title={`План Azure · ${role.name}: ${hours} ч`}>{role.name}: {hours} ч</span> : null;
+            return hours !== null ? <span key={role.id} className="max-w-44 shrink-0 truncate rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground" title={`План Azure · ${role.name}: ${hours} ч`}>{role.name}: {hours} ч</span> : null;
           })}
           <span className="shrink-0 rounded-full bg-background/70 px-2 py-0.5 text-[10px] font-normal text-muted-foreground">{itemAllocations.length} назн.</span>
           {canEditPlan && !epic ? <QuarterAssignmentButton item={item} roles={roles} saving={saving} roleSettingsHref={roleSettingsHref} onSave={onAddAssignment} /> : null}
@@ -584,20 +585,39 @@ function AllocationEditor({
           {initial ? 'Изменить назначение' : triggerLabel ?? (initialPersonExternalId ? 'Задать оценку' : 'Добавить участника')}
         </Button>}
       </PopoverTrigger>
-      <PopoverContent align="start" side="bottom" sideOffset={8} collisionPadding={16} className="max-h-[min(80vh,680px)] w-[min(390px,calc(100vw-2rem))] overflow-y-auto rounded-xl p-0">
+      <PopoverContent
+        align="start"
+        side="bottom"
+        sideOffset={8}
+        collisionPadding={16}
+        className="max-h-[min(80vh,680px)] w-[min(380px,calc(100vw-2rem))] overflow-y-auto rounded-xl p-0"
+        onOpenAutoFocus={(event) => {
+          // Land on the field that still needs input instead of the close button.
+          event.preventDefault();
+          const content = event.currentTarget as HTMLElement;
+          const target = initial || initialPersonExternalId
+            ? content.querySelector<HTMLInputElement>('input[name="allocation-hours"]')
+            : content.querySelector<HTMLButtonElement>('[data-allocation-person] button');
+          target?.focus();
+          if (target instanceof HTMLInputElement) target.select();
+        }}
+      >
         <form onSubmit={submit}>
-          <div className="flex items-start justify-between border-b border-border px-4 py-3">
-            <div>
-              <h3 className="text-sm font-semibold">{initial ? 'Оценка участника' : 'Назначение участника'}</h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">{role.name} · {item.title} · {quarterLabel}</p>
+          <div className="flex items-start gap-3 px-4 pb-3 pt-4">
+            <RoleMark name={role.name} color={role.color} size="sm" />
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-semibold leading-5 text-foreground">{initial ? 'Оценка участника' : 'Назначить участника'}</h3>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground" title={`${role.name} · ${item.title}`}>
+                <span className="font-medium text-foreground/80">{role.name}</span> · {item.title}
+              </p>
             </div>
-            <Button type="button" variant="ghost" size="icon" className="-mr-2 -mt-1 h-8 w-8" aria-label="Закрыть" onClick={() => setOpen(false)}><X className="h-4 w-4" /></Button>
+            <Button type="button" variant="ghost" size="icon" className="-mr-2 -mt-1 size-8 shrink-0 text-muted-foreground hover:text-foreground" aria-label="Закрыть" onClick={() => setOpen(false)}><X aria-hidden="true" className="size-4" /></Button>
           </div>
-          <div className="space-y-4 p-4">
-            <label className="block space-y-1.5 text-xs font-medium text-muted-foreground">
-              Участник
+          <div className="space-y-4 border-t border-border px-4 py-4">
+            <div data-allocation-person className="space-y-1.5">
+              <span className="block text-xs font-medium text-foreground">Участник</span>
               <SearchableSelect
-                ariaLabel="Человек из Azure DevOps"
+                ariaLabel="Участник"
                 value={personId}
                 onChange={setPersonId}
                 placeholder="Выберите участника"
@@ -605,20 +625,43 @@ function AllocationEditor({
                 emptyLabel="Участник не найден"
                 options={people.map((person) => ({ value: person.id, label: person.name, description: person.email, badge: person.isMock ? 'демо' : undefined }))}
               />
-            </label>
-            <label className="block space-y-1.5 text-xs font-medium text-muted-foreground">
-              Оценка на {quarterLabel}
-              <div className="relative">
-                <input type="number" min="0" step="0.5" value={hours} onChange={(event) => setHours(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 pr-12 text-sm text-foreground" placeholder="0" />
-                <span className="absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">часов</span>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <label htmlFor={`allocation-hours-${item.id}-${role.id}`} className="text-xs font-medium text-foreground">Оценка</label>
+                <span className="rounded-full bg-muted px-2 py-px text-[11px] font-medium tabular-nums text-muted-foreground">{quarterLabel}</span>
               </div>
-            </label>
-            {sourceEstimate !== null ? <p className="text-xs text-muted-foreground">План по роли в Azure DevOps: {sourceEstimate} ч на всю задачу.</p> : null}
+              <div className="relative">
+                <input
+                  id={`allocation-hours-${item.id}-${role.id}`}
+                  name="allocation-hours"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.5"
+                  value={hours}
+                  onChange={(event) => setHours(event.target.value)}
+                  placeholder="0"
+                  className="h-10 w-full rounded-lg border border-input bg-field pl-3 pr-9 text-sm font-medium tabular-nums text-foreground shadow-sm outline-none transition-colors placeholder:font-normal placeholder:text-muted-foreground hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+                <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">ч</span>
+              </div>
+              {sourceEstimate !== null ? <button
+                type="button"
+                onClick={() => setHours(String(sourceEstimate))}
+                className="inline-flex h-7 items-center gap-1.5 rounded-md border border-dashed border-border px-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                title="Оценка роли в Azure DevOps на всю задачу. Нажмите, чтобы подставить"
+              >
+                <Cloud aria-hidden="true" className="size-3.5" />
+                Оценка Azure: <span className="font-medium tabular-nums text-foreground">{sourceEstimate} ч</span>
+              </button> : null}
+            </div>
             {initial && azure ? <AzureTaskPanel allocation={initial} retrying={azure.retrying} onRetry={azure.onRetry ? () => azure.onRetry?.(initial.id) : undefined} /> : null}
           </div>
-          <div className="flex justify-end gap-2 border-t border-border bg-muted/20 px-4 py-3">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>Отмена</Button>
-            <Button type="submit" size="sm" disabled={!personId || saving}><Check className="mr-1.5 h-4 w-4" />{saving ? 'Сохранение…' : 'Сохранить'}</Button>
+          <div className="flex items-center justify-end gap-2 border-t border-border bg-muted/30 px-4 py-3">
+            {!personId ? <span className="mr-auto text-xs text-muted-foreground">Выберите участника</span> : null}
+            <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => setOpen(false)}>Отмена</Button>
+            <Button type="submit" size="sm" className="h-8 gap-1.5" disabled={!personId || saving}><Check aria-hidden="true" className="size-4" />{saving ? 'Сохраняем…' : 'Сохранить'}</Button>
           </div>
         </form>
       </PopoverContent>
@@ -888,7 +931,7 @@ export function RoadmapPage() {
   const renderFactCell = (hours: number | null, key: string) => (
     <td key={key} className={cn(
       'whitespace-nowrap border-l border-border/40 px-3 py-2.5 text-right text-sm tabular-nums',
-      hours ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground',
+      hours ? 'text-foreground' : 'text-muted-foreground',
     )}>{cellHours(hours)}</td>
   );
 
@@ -933,15 +976,16 @@ export function RoadmapPage() {
                 aria-label={`${collapsed ? 'Развернуть' : 'Свернуть'} эпик ${item.title}`}
                 disabled={!childCount}
                 onClick={onToggle}
+                data-plan-toggle
                 className="-mt-1 size-7 text-muted-foreground hover:text-foreground focus-visible:ring-ring motion-reduce:transition-none motion-reduce:active:scale-100"
               >
                 {collapsed ? <ChevronRight aria-hidden="true" className="size-4" /> : <ChevronDown aria-hidden="true" className="size-4" />}
               </Button>
               <AzureWorkItemIcon type={item.type} className="mt-0.5" />
-              <div className="col-start-3 min-w-0">
+              <div data-plan-name className="col-start-3 min-w-0">
                 <div data-plan-title title={item.title} className="text-sm leading-5 font-semibold text-foreground [overflow-wrap:anywhere]">{item.title}</div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-4 text-muted-foreground">
-                  <span className="min-w-0 tabular-nums [overflow-wrap:anywhere]">Epic #{item.externalId}</span>
+                <div data-plan-meta className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-4 text-muted-foreground">
+                  <span className="min-w-0 tabular-nums [overflow-wrap:anywhere]" title={`Epic #${item.externalId}`}><span className="sr-only">Epic </span>#{item.externalId}</span>
                   <WorkItemStateBadge state={item.state} />
                   <span className="rounded-full bg-muted px-2 py-px whitespace-nowrap font-medium tabular-nums text-foreground/70">
                     {childCount} {featureCountForm === 'one' ? 'фича' : featureCountForm === 'few' ? 'фичи' : 'фич'}
@@ -952,6 +996,7 @@ export function RoadmapPage() {
                 type="button"
                 variant="ghost"
                 size="icon"
+                data-plan-action
                 className="self-center size-8 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100"
                 aria-label={`Создать фичу в эпике ${item.title}`}
                 title="Создать фичу"
@@ -960,15 +1005,15 @@ export function RoadmapPage() {
               ><Plus aria-hidden="true" className="size-4" /></Button> : null}
             </div>
           ) : (
-            <div className={isChild
+            <div data-plan-name className={isChild
               ? `relative pl-7 before:absolute before:left-2 before:top-[-8px] before:border-l-2 before:border-border/80 after:absolute after:left-2 after:top-3 after:w-5 after:border-t-2 after:border-border/80 ${isLastChild ? 'before:h-5' : 'before:bottom-[-8px]'}`
               : 'pl-3'}>
               <div className="flex min-w-0 items-start gap-2">
                 <AzureWorkItemIcon type={item.type} className="mt-0.5" />
                 <span data-plan-title title={item.title} className="min-w-0 text-sm leading-snug [overflow-wrap:anywhere]">{item.title}</span>
               </div>
-              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-6 text-[11px] text-muted-foreground">
-                <span className="tabular-nums">Feature #{item.externalId}</span>
+              <div data-plan-meta className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-6 text-[11px] text-muted-foreground">
+                <span className="tabular-nums" title={`Feature #${item.externalId}`}><span className="sr-only">Feature </span>#{item.externalId}</span>
                 <WorkItemStateBadge state={item.state} />
               </div>
             </div>
@@ -977,7 +1022,7 @@ export function RoadmapPage() {
         <td style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:plan'), itemHours ? 'font-medium text-foreground' : 'text-muted-foreground')}>
           {cellHours(itemHours)}
         </td>
-        {preferences.showFact ? <td style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:fact'), Number(actualHours) ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground')}>
+        {preferences.showFact ? <td style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:fact'), Number(actualHours) ? 'font-medium text-foreground' : 'text-muted-foreground')}>
           {cellHours(actualHours)}
         </td> : null}
         {detailRoles.map((role) => {
@@ -1107,6 +1152,13 @@ export function RoadmapPage() {
     /> : null}
   </div>;
 
+  const planSyncInfo = plan ? <PlanSyncInfo
+    autoRefresh={!demoMode && configured && !usingCachedProjects && projectIsSynced}
+    syncedAt={plan.syncedAt}
+    writeBackMode={writeBackEnabled ? (plan.azure?.mode === 'manual' ? 'manual' : 'auto') : null}
+    errorCount={azureErrorCount}
+  /> : null;
+
   return (
     <main className="roadmap-scrollbar relative min-h-0 flex-1 overflow-auto overscroll-none px-4 py-5 sm:px-6 lg:px-8">
         <div className="mx-auto flex min-h-full w-full flex-col gap-5">
@@ -1121,6 +1173,7 @@ export function RoadmapPage() {
                 disabled={catalogLoading || !projectSelectionReady}
                 placeholder={plan?.name ?? (demoMode ? 'Демо-проект' : configured ? 'Выбрать проект Azure DevOps' : 'Выбрать локальный проект')}
               />
+              {!isAllProjects ? planSyncInfo : null}
               {plan && !canEditPlan ? <span className="text-sm text-muted-foreground">Только просмотр</span> : null}
               {plan && createdTasks.length > 0 ? <CreatedTasksPanel items={createdTasks} /> : null}
               {canImportProject && <Button
@@ -1141,44 +1194,34 @@ export function RoadmapPage() {
             projects={isAllProjects && !overviewLoading ? overviewProjects.length : undefined}
           /> : null}
 
-          {demoMode ? (
-            <section role="status" className="rounded-xl border border-primary/20 bg-primary/[0.035] p-4 text-sm text-foreground">
-              <p className="font-medium">Демо-роадмап на Vercel</p>
-              <p className="mt-1 text-muted-foreground">Здесь можно менять назначения, роли и часы в демонстрационном проекте.</p>
-            </section>
-          ) : connectionQuery.data?.configured === false ? (
-            <section className="rounded-xl border border-primary/20 bg-primary/[0.035] p-5">
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-primary/10 p-2 text-primary"><ArrowDownToLine className="h-5 w-5" /></div>
-                <div>
-                  <h2 className="font-medium text-foreground">Azure DevOps не подключён</h2>
-                  <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-                    {canConfigure
-                      ? 'Откройте администрирование Roadmap, чтобы подключить организацию и настроить импорт.'
-                      : 'Попросите администратора Roadmap настроить интеграцию с Azure DevOps.'}
-                  </p>
-                  {canConfigure ? (
-                    <Link href={routes.roadmapAdmin} className="mt-3 inline-flex h-9 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90">
-                      Открыть интеграции
-                    </Link>
-                  ) : null}
-                </div>
-              </div>
-            </section>
-          ) : null}
-          {!demoMode && usingCachedProjects ? <div role="status" className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">Azure DevOps временно недоступен. Показаны ранее импортированные проекты из локальной базы; планирование и демо-назначения доступны.</div> : null}
-          <QueryErrorNotice
-            title={mutationErrors.some(Boolean) ? 'Не удалось выполнить действие' : 'Не удалось загрузить данные проекта'}
-            queries={loadQueries}
-            errors={mutationErrors}
-          />
-          {!canConfigure && projectsQuery.isSuccess && !projects.length ? <p role="status" className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">У вас пока нет доступа к проектам.</p> : null}
-          {syncResult ? (
-            <div role="status" className="space-y-1 rounded-lg border border-border bg-card px-4 py-3 text-sm">
-              <p>Задач из Azure DevOps: {syncResult.importedWorkItems}.{!syncResult.roleSyncWarning && syncResult.importedRoles !== undefined ? ` Ролей из Azure DevOps: ${syncResult.importedRoles}.` : null}</p>
-              {syncResult.roleSyncWarning ? <p className="text-amber-800 dark:text-amber-200">{syncResult.roleSyncWarning}</p> : null}
-            </div>
-          ) : null}
+          {/* One stack for page-level messages: same card shape, the tone alone tells info, warning and error apart. */}
+          <div className="flex flex-col gap-2 empty:hidden">
+            {demoMode ? (
+              <PlanNotice title="Демо-роадмап">Здесь можно менять назначения, роли и часы в демонстрационном проекте.</PlanNotice>
+            ) : connectionQuery.data?.configured === false ? (
+              <PlanNotice
+                title="Azure DevOps не подключён"
+                action={canConfigure ? <Link href={routes.roadmapAdmin} className="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90">Открыть интеграции</Link> : undefined}
+              >
+                {canConfigure
+                  ? 'Откройте администрирование Roadmap, чтобы подключить организацию и настроить импорт.'
+                  : 'Попросите администратора Roadmap настроить интеграцию с Azure DevOps.'}
+              </PlanNotice>
+            ) : null}
+            {!demoMode && usingCachedProjects ? <PlanNotice tone="warning" title="Azure DevOps временно недоступен">
+              Показаны ранее импортированные проекты из локальной базы; планирование и демо-назначения доступны.
+            </PlanNotice> : null}
+            <QueryErrorNotice
+              title={mutationErrors.some(Boolean) ? 'Не удалось выполнить действие' : 'Не удалось загрузить данные проекта'}
+              queries={loadQueries}
+              errors={mutationErrors}
+            />
+            {!canConfigure && projectsQuery.isSuccess && !projects.length ? <PlanNotice title="У вас пока нет доступа к проектам" /> : null}
+            {syncResult ? <PlanNotice tone={syncResult.roleSyncWarning ? 'warning' : 'info'} title="Проект загружен из Azure DevOps">
+              Задач: {syncResult.importedWorkItems}.{!syncResult.roleSyncWarning && syncResult.importedRoles !== undefined ? ` Ролей: ${syncResult.importedRoles}.` : null}
+              {syncResult.roleSyncWarning ? <span className="mt-1 block">{syncResult.roleSyncWarning}</span> : null}
+            </PlanNotice> : null}
+          </div>
 
           {isAllProjects ? <section {...appearanceProps} aria-label="Планы всех проектов" className={cn(appearanceProps.className, 'min-w-0 overflow-hidden rounded-xl border border-border bg-card')}>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
@@ -1235,38 +1278,11 @@ export function RoadmapPage() {
                   ? 'fixed inset-3 z-50 flex h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl'
                   : 'flex flex-col overflow-hidden rounded-xl border border-border bg-card')}
               >
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <h2 className="truncate text-base font-medium leading-7 text-foreground">{plan.name}</h2>
-                    <PlanSyncInfo
-                      autoRefresh={!demoMode && configured && !usingCachedProjects && projectIsSynced}
-                      syncedAt={plan.syncedAt}
-                      writeBackMode={writeBackEnabled ? (plan.azure?.mode === 'manual' ? 'manual' : 'auto') : null}
-                      errorCount={azureErrorCount}
-                    />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {appearanceSettings}
-                    {canPushToAzure ? <Popover open={pushPreviewOpen} onOpenChange={setPushPreviewOpen}>
-                      <PopoverTrigger asChild>
-                        <Button type="button" variant={plan.azure?.mode === 'manual' && azureUnsyncedCount ? 'default' : 'outline'} size="sm" className="h-8 gap-2" disabled={!azureUnsyncedCount} title="Посмотреть и отправить изменения плана в Azure DevOps">
-                          <ArrowUpFromLine className="h-4 w-4" />
-                          {azureUnsyncedCount ? `Отправить в Azure (${azureUnsyncedCount})` : 'Всё в Azure'}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent align="end" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-xl p-0">
-                        {pushPreviewOpen ? <AzurePushPreview projectId={roadmapProjectId} onDone={() => setPushPreviewOpen(false)} /> : null}
-                      </PopoverContent>
-                    </Popover> : null}
-                    <Button type="button" variant={focusMode ? 'secondary' : 'outline'} size="sm" onClick={() => {
-                      if (!focusMode && view === 'periods') setExpandedEpics(new Set(epics.map((epic) => epic.id)));
-                      setFocusMode((current) => !current);
-                    }} className="h-8 gap-2" aria-label={focusMode ? 'Выйти из режима фокуса' : 'Включить режим фокуса'}>
-                      {focusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                      {focusMode ? 'Выйти' : 'Фокус'}
-                    </Button>
-                  </div>
-                </div>
+                {/* The project picker above already names the plan; the title is only shown when focus mode hides the picker. */}
+                {focusMode ? <div className="flex min-w-0 items-center gap-2 border-b border-border px-4 py-2.5">
+                  <h2 className="truncate text-base font-medium leading-7 text-foreground">{plan.name}</h2>
+                  {planSyncInfo}
+                </div> : <h2 className="sr-only">{plan.name}</h2>}
 
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -1302,6 +1318,25 @@ export function RoadmapPage() {
                     {view === 'periods' && focusMode ? <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setExpandedEpics(allEpicsExpanded ? new Set() : new Set(epics.map((epic) => epic.id)))}>{allEpicsExpanded ? 'Свернуть всё' : 'Развернуть всё'}</Button> : null}
                     {view === 'periods' ? <Button type="button" variant={showUnassignedPeriods ? 'secondary' : 'outline'} size="sm" className="h-8" onClick={() => setShowUnassignedPeriods((value) => !value)}>{showUnassignedPeriods ? 'Скрыть без назначений' : 'Показать без назначений'}</Button> : null}
                     {periodControls}
+                    {appearanceSettings}
+                    {canPushToAzure ? <Popover open={pushPreviewOpen} onOpenChange={setPushPreviewOpen}>
+                      <PopoverTrigger asChild>
+                        <Button type="button" variant={plan.azure?.mode === 'manual' && azureUnsyncedCount ? 'default' : 'outline'} size="sm" className="h-8 gap-2" disabled={!azureUnsyncedCount} title="Посмотреть и отправить изменения плана в Azure DevOps">
+                          <ArrowUpFromLine className="h-4 w-4" />
+                          {azureUnsyncedCount ? `Отправить в Azure (${azureUnsyncedCount})` : 'Всё в Azure'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-xl p-0">
+                        {pushPreviewOpen ? <AzurePushPreview projectId={roadmapProjectId} onDone={() => setPushPreviewOpen(false)} /> : null}
+                      </PopoverContent>
+                    </Popover> : null}
+                    <Button type="button" variant={focusMode ? 'secondary' : 'outline'} size="sm" onClick={() => {
+                      if (!focusMode && view === 'periods') setExpandedEpics(new Set(epics.map((epic) => epic.id)));
+                      setFocusMode((current) => !current);
+                    }} className="h-8 gap-2" aria-label={focusMode ? 'Выйти из режима фокуса' : 'Включить режим фокуса'}>
+                      {focusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                      {focusMode ? 'Выйти' : 'Фокус'}
+                    </Button>
                   </div>
                 </div>
 
@@ -1448,11 +1483,12 @@ export function RoadmapPage() {
                           {showUnattributedFact ? renderFactCell(null, 'unattributed') : null}
                         </tr> : null}
                       </tbody>
-                      <tfoot className="sticky bottom-0 z-20 bg-card">
+                      {/* Without the role breakdown the totals row would only repeat the summary cards above the table. */}
+                      {headerRowSpan === 2 ? <tfoot className="sticky bottom-0 z-20 bg-card">
                         <tr className="border-t-2 border-border bg-[color-mix(in_srgb,var(--color-muted)_40%,var(--color-card))] text-sm font-semibold text-foreground">
                           <th scope="row" style={pinnedCellStyle('name')} className={cn('px-3 py-3 @lg:px-4', pinnedCellClass('name'))}>Итого по проекту</th>
                           <td style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:plan'))}>{cellHours(totalHours)}</td>
-                          {preferences.showFact ? <td style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:fact'), totalActualHours ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground')}>{cellHours(totalActualHours)}</td> : null}
+                          {preferences.showFact ? <td style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:fact'), !totalActualHours && 'text-muted-foreground')}>{cellHours(totalActualHours)}</td> : null}
                           {detailRoles.map((role) => {
                             const hours = rolePlan.byProject.get(role.id) ?? 0;
                             return <Fragment key={role.id}>
@@ -1462,7 +1498,7 @@ export function RoadmapPage() {
                           })}
                           {showUnattributedFact ? renderFactCell(totalActualHours === null ? null : projectUnattributedFact, 'unattributed') : null}
                         </tr>
-                      </tfoot>
+                      </tfoot> : null}
                     </ResizablePlanTable></div>}
                   </div>
                 )}

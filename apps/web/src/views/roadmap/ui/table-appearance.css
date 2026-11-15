@@ -149,3 +149,39 @@
 .roadmap-table-appearance[data-separators='strong'] .roadmap-plan-table :is(thead, tbody, tfoot, tr, th, td) {
   border-color: color-mix(in srgb, var(--color-foreground) 32%, var(--color-card));
 }
+
+/* Compact rows keep the name cell on one line: title first, then id, state and counts. */
+.roadmap-table-appearance[data-density='compact'] .roadmap-plan-table [data-plan-name] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 0.5rem;
+  row-gap: 0.125rem;
+}
+
+.roadmap-table-appearance[data-density='compact'] .roadmap-plan-table [data-plan-name] > :first-child {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.roadmap-table-appearance[data-density='compact'] .roadmap-plan-table [data-plan-meta] {
+  flex: none;
+  flex-wrap: nowrap;
+  margin-top: 0;
+  padding-left: 0;
+}
+
+.roadmap-table-appearance[data-density='compact'] .roadmap-plan-table [data-plan-meta] > * {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.roadmap-table-appearance[data-density='compact'] .roadmap-plan-table :is([data-plan-toggle], [data-plan-action]) {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: -0.125rem;
+}
+
+.roadmap-table-appearance[data-density='compact'] .roadmap-plan-table [data-plan-action] {
+  margin-top: 0;
+}
