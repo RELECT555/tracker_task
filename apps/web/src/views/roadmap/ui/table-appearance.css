@@ -115,6 +115,19 @@
   padding-bottom: 1rem;
 }
 
+/* Tree connectors of feature rows follow the row padding, so the tick stays on the icon at every density. */
+.roadmap-plan-table [data-plan-connector] {
+  --plan-pad-y: 0.5rem;
+}
+
+.roadmap-table-appearance[data-density='compact'] .roadmap-plan-table [data-plan-connector] {
+  --plan-pad-y: 0.25rem;
+}
+
+.roadmap-table-appearance[data-density='comfortable'] .roadmap-plan-table [data-plan-connector] {
+  --plan-pad-y: 1rem;
+}
+
 .roadmap-table-appearance[data-font-size='small'] .roadmap-plan-table :is(.text-sm, [data-plan-title]) {
   font-size: 0.75rem;
   line-height: 1rem;
@@ -150,7 +163,7 @@
   border-color: color-mix(in srgb, var(--color-foreground) 32%, var(--color-card));
 }
 
-/* Compact rows keep the name cell on one line: title first, then id, state and counts. */
+/* Compact rows keep the name cell on one line: title on the left, id, state and counts in a fixed column on the right. */
 .roadmap-table-appearance[data-density='compact'] .roadmap-plan-table [data-plan-name] {
   display: flex;
   flex-wrap: wrap;

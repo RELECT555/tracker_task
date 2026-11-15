@@ -4,7 +4,7 @@ import { useId, type ReactNode } from 'react';
 import { cn } from '@/shared/lib/utils';
 
 interface RoadmapToolbarSwitchProps {
-  /** Short visible label; the full explanation lives in `hint`. */
+  /** Accessible name and tooltip title (not shown inline); the full explanation lives in `hint`. */
   label: string;
   /** Shown on hover and focus, and announced as the switch description. */
   hint: string;
@@ -35,7 +35,7 @@ export function RoadmapToolbarSwitch({ label, hint, icon, checked, onChange, dis
         className="peer sr-only"
       />
       <span aria-hidden="true" className="shrink-0 text-muted-foreground [&>svg]:size-3.5">{icon}</span>
-      <span>{label}</span>
+      <span className="sr-only">{label}</span>
       <span
         aria-hidden="true"
         className={cn(
@@ -52,6 +52,7 @@ export function RoadmapToolbarSwitch({ label, hint, icon, checked, onChange, dis
           'invisible opacity-0 transition-opacity duration-150 group-hover/switch:visible group-hover/switch:opacity-100 group-has-[:focus-visible]/switch:visible group-has-[:focus-visible]/switch:opacity-100',
         )}
       >
+        <span className="mb-0.5 block font-medium">{label}</span>
         {hint}
       </span>
     </label>

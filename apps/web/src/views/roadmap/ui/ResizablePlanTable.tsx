@@ -34,8 +34,12 @@ export const planColumnOffset = (precedingIds: string[]) => precedingIds.length
 const clampWidth = (column: FittedColumn, width: number) => Math.round(Math.min(column.maxWidth, Math.max(column.minWidth, width)));
 
 function fitColumns(columns: PlanColumn[], availableWidth: number): PlanColumn[] {
-  const canGrow = (column: PlanColumn) => column.grow && !column.customized;
   let remaining = availableWidth - columns.reduce((total, column) => total + column.width, 0);
+  // Prefer columns the user has not resized. When every growable column was
+  // resized by hand (e.g. no role columns are visible), they still absorb the
+  // leftover width so the table never stops short of its container.
+  const untouched = columns.some((column) => column.grow && !column.customized);
+  const canGrow = (column: PlanColumn) => column.grow && (!untouched || !column.customized);
   let weight = columns.filter(canGrow).reduce((total, column) => total + column.width, 0);
   return columns.map((column) => {
     if (!canGrow(column) || remaining <= 0) return column;
@@ -312,8 +316,6 @@ export function ColumnResizeHandle({ columnId }: { columnId: string }) {
       const clampedWidth = clampWidth(column, nextWidth);
       if (clampedWidth !== width) onColumnResize(columnId, clampedWidth);
     }}
-    className="group absolute inset-y-0 right-0 z-30 w-3 cursor-col-resize touch-none select-none outline-none after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border after:content-[''] hover:after:w-0.5 hover:after:bg-primary focus-visible:after:w-0.5 focus-visible:after:bg-primary data-[resizing=true]:after:w-0.5 data-[resizing=true]:after:bg-primary"
-  >
-    <span aria-hidden="true" className="absolute right-0 top-1/2 h-8 w-0.5 -translate-y-1/2 rounded-full bg-border group-hover:bg-primary group-focus-visible:bg-primary group-data-[resizing=true]:bg-primary" />
-  </div>;
+    className="group absolute inset-y-0 right-0 z-30 w-3 cursor-col-resize touch-none select-none outline-none after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border after:content-[''] hover:after:bg-primary focus-visible:after:bg-primary data-[resizing=true]:after:bg-primary"
+  />;
 }

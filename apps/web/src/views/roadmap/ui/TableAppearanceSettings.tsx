@@ -50,8 +50,8 @@ export function TableAppearanceSettings(props: TableAppearanceSettingsProps) {
   const errorMessage = disabled ? 'Не удалось загрузить настройки.' : 'Не удалось сохранить настройки.';
 
   return <>
-    <Button ref={trigger} type="button" variant="outline" size="sm" className="h-8 gap-2" aria-haspopup="dialog" aria-expanded={open} aria-describedby={status === 'error' ? `${id}-error` : undefined} title={status === 'error' ? `${errorMessage} Откройте панель, чтобы повторить.` : undefined} onClick={openPanel}>
-      <SlidersHorizontal aria-hidden="true" className="size-4" />Вид таблицы
+    <Button ref={trigger} type="button" variant="outline" size="sm" className="h-8 gap-1.5 px-2.5" aria-label="Вид таблицы" aria-haspopup="dialog" aria-expanded={open} aria-describedby={status === 'error' ? `${id}-error` : undefined} title={status === 'error' ? `Вид таблицы. ${errorMessage} Откройте панель, чтобы повторить.` : 'Вид таблицы'} onClick={openPanel}>
+      <SlidersHorizontal aria-hidden="true" className="size-4" />
       {status === 'error' ? <span aria-hidden="true" className="size-1.5 rounded-full bg-destructive" /> : null}
     </Button>
     {status === 'error' ? <span id={`${id}-error`} className="sr-only">{errorMessage} Откройте панель, чтобы повторить.</span> : null}
