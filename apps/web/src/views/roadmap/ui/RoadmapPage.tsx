@@ -5,13 +5,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { aggregateRoadmapSummaries, azureRoleEstimate, getRoadmapFactRoots, getRoadmapRolePlan, getRoadmapSummary } from '@tracker/shared';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, ExternalLink, ListChecks, Maximize2, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Cloud, Equal, ExternalLink, ListChecks, Maximize2, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
 import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
 import { AzureWorkItemIcon } from '@/entities/roadmap/ui/AzureWorkItemIcon';
+import { WorkItemStateBadge } from '@/entities/roadmap/ui/WorkItemStateBadge';
 import { Button } from '@/shared/ui/button';
 import { QueryErrorNotice } from '@/shared/ui/error-notice';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
@@ -37,6 +38,7 @@ import { type ColumnWidthsApi, type ColumnWidthConfig } from '../model/use-roadm
 import { useRoadmapTablePreferences } from '../model/use-roadmap-table-preferences';
 import { getTableAppearanceProps } from '../model/table-appearance';
 import { TableAppearanceSettings } from './TableAppearanceSettings';
+import { RoadmapToolbarSwitch } from './RoadmapToolbarSwitch';
 import { CreatedTasksPanel } from './CreatedTasksPanel';
 import { AgentPanel } from '@/features/roadmap-agent/ui/AgentPanel';
 import './table-appearance.css';
@@ -58,7 +60,6 @@ const SUMMARY_COLUMN = { defaultWidth: 120, minWidth: 96, maxWidth: 480 };
 const ROLE_COLUMN = { defaultWidth: 200, minWidth: 140, grow: true };
 const FACT_COLUMN = { defaultWidth: 100, minWidth: 80, maxWidth: 480 };
 const DELTA_COLUMN = { defaultWidth: 90, minWidth: 80, maxWidth: 480 };
-const ROLE_CONTROL_CLASS = 'inline-flex h-8 max-w-full items-center gap-2 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-foreground hover:bg-muted/60';
 type ColumnWidths = ColumnWidthsApi;
 
 function planColumn(widths: ColumnWidths, id: string, label: string, sizing: ColumnWidthConfig & { grow?: boolean }): PlanColumn & ColumnWidthConfig {
@@ -142,6 +143,11 @@ const hoursFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2, u
 
 function displayHours(hours: number | string | null) {
   return hours === null ? '—' : `${hoursFormat.format(Number(hours))} ч`;
+}
+
+/** Table cell value: the unit lives in the column header, and zero reads as empty. */
+function cellHours(hours: number | string | null) {
+  return hours === null || Number(hours) === 0 ? '—' : hoursFormat.format(Number(hours));
 }
 
 function unattributedFact(total: number, byRole?: Map<string, number>) {
@@ -631,7 +637,7 @@ export function RoadmapPage() {
   const { preferences } = tableSettings;
   const columnWidths = tableSettings.columnWidths;
   const appearanceProps = getTableAppearanceProps(preferences);
-  const appearanceSettings = <TableAppearanceSettings preferences={preferences} onChange={tableSettings.change} onReset={tableSettings.reset} status={tableSettings.status} onRetry={tableSettings.retry} disabled={!tableSettings.ready} />;
+  const appearanceSettings = <TableAppearanceSettings preferences={preferences} onChange={tableSettings.change} onReset={tableSettings.reset} status={tableSettings.status} onRetry={tableSettings.retry} disabled={!tableSettings.ready} hasCustomWidths={columnWidths.hasCustomWidths} onResetWidths={columnWidths.resetWidths} />;
   const [showUnassignedPeriods, setShowUnassignedPeriods] = useState(false);
   const pinnedColumns = preferences.pinnedColumns;
   const [quarterSelection, setQuarterSelection] = useState(() => {
@@ -844,7 +850,7 @@ export function RoadmapPage() {
   const detailRoles = showRoleDetails ? visibleRoles : [];
   const showUnattributedFact = showRoleDetails && hasUnattributedFact && preferences.showFact;
   const roleMetricCount = 1 + Number(preferences.showFact) + Number(preferences.showDelta);
-  const headerRowSpan = detailRoles.length || showUnattributedFact ? 3 : 1;
+  const headerRowSpan = detailRoles.length || showUnattributedFact ? 2 : 1;
   const tableColumns = [
     planColumn(columnWidths, 'name', 'Эпик / фича', NAME_COLUMN),
     planColumn(columnWidths, 'summary:plan', 'План', SUMMARY_COLUMN),
@@ -883,7 +889,7 @@ export function RoadmapPage() {
     <td key={key} className={cn(
       'whitespace-nowrap border-l border-border/40 px-3 py-2.5 text-right text-sm tabular-nums',
       hours ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground',
-    )}>{displayHours(hours)}</td>
+    )}>{cellHours(hours)}</td>
   );
 
   const pinnedCellClass = (id: string) => (
@@ -904,7 +910,7 @@ export function RoadmapPage() {
       {preferences.showDelta ? <td key={`delta:${roleId}`} title="Дельта = факт − план" className={cn(
         'whitespace-nowrap border-l border-border/40 px-3 py-2.5 text-right text-sm tabular-nums',
         delta !== null && delta > 0 ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
-      )}>{delta === null ? '—' : `${delta > 0 ? '+' : delta < 0 ? '−' : ''}${displayHours(Math.abs(delta))}`}</td> : null}
+      )}>{delta === null || delta === 0 ? '—' : `${delta > 0 ? '+' : '−'}${cellHours(Math.abs(delta))}`}</td> : null}
     </>;
   };
 
@@ -935,7 +941,8 @@ export function RoadmapPage() {
               <div className="col-start-3 min-w-0">
                 <div data-plan-title title={item.title} className="text-sm leading-5 font-semibold text-foreground [overflow-wrap:anywhere]">{item.title}</div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-4 text-muted-foreground">
-                  <span className="min-w-0 tabular-nums [overflow-wrap:anywhere]">Epic #{item.externalId}{item.state ? ` · ${item.state}` : ''}</span>
+                  <span className="min-w-0 tabular-nums [overflow-wrap:anywhere]">Epic #{item.externalId}</span>
+                  <WorkItemStateBadge state={item.state} />
                   <span className="rounded-full bg-muted px-2 py-px whitespace-nowrap font-medium tabular-nums text-foreground/70">
                     {childCount} {featureCountForm === 'one' ? 'фича' : featureCountForm === 'few' ? 'фичи' : 'фич'}
                   </span>
@@ -960,18 +967,18 @@ export function RoadmapPage() {
                 <AzureWorkItemIcon type={item.type} className="mt-0.5" />
                 <span data-plan-title title={item.title} className="min-w-0 text-sm leading-snug [overflow-wrap:anywhere]">{item.title}</span>
               </div>
-              <p className="mt-0.5 pl-6 text-[11px] text-muted-foreground">
-                <span className="mr-1">Feature</span>
-                #{item.externalId}{item.state ? ` · ${item.state}` : ''}
-              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-6 text-[11px] text-muted-foreground">
+                <span className="tabular-nums">Feature #{item.externalId}</span>
+                <WorkItemStateBadge state={item.state} />
+              </div>
             </div>
           )}
         </th>
         <td style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:plan'), itemHours ? 'font-medium text-foreground' : 'text-muted-foreground')}>
-          {displayHours(itemHours)}
+          {cellHours(itemHours)}
         </td>
         {preferences.showFact ? <td style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:fact'), Number(actualHours) ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground')}>
-          {displayHours(actualHours)}
+          {cellHours(actualHours)}
         </td> : null}
         {detailRoles.map((role) => {
           const planned = plannedByRole?.get(role.id) ?? 0;
@@ -981,7 +988,7 @@ export function RoadmapPage() {
           if (isEpic) {
             return (
               <Fragment key={role.id}>
-                <td className={cn(cellClassName, 'px-3 py-2.5 text-right text-sm tabular-nums', planned ? 'font-medium text-foreground' : 'text-muted-foreground')}>{displayHours(planned)}</td>
+                <td className={cn(cellClassName, 'px-3 py-2.5 text-right text-sm tabular-nums', planned ? 'font-medium text-foreground' : 'text-muted-foreground')}>{cellHours(planned)}</td>
                 {renderRoleMetrics(role.id, planned, actual)}
               </Fragment>
             );
@@ -996,13 +1003,13 @@ export function RoadmapPage() {
             item, role, people: rolePeople, quarterLabel: currentQuarterLabel, saving: saveMutation.isPending, onSave: saveAllocation,
             azure: writeBackEnabled ? { onRetry: canPushToAzure ? (allocationId: string) => pushAllocationMutation.mutate(allocationId) : undefined, retrying: pushAllocationMutation.isPending } : undefined,
           };
-          const personLine = ({ name, email, hours, mock, placeholder, status }: { name: string; email?: string | null; hours: string; mock?: boolean; placeholder?: boolean; status?: React.ReactNode }) => (
+          const personLine = ({ name, email, hours, mock, status }: { name: string; email?: string | null; hours: string; mock?: boolean; status?: React.ReactNode }) => (
             <span className="flex w-full min-w-0 items-center gap-2 px-1.5 py-1 text-left">
-              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${placeholder ? 'border border-dashed border-muted-foreground/40 text-muted-foreground' : 'bg-primary/10 text-primary'}`}>{name.slice(0, 1)}</span>
-              <span title={email ?? undefined} className={`min-w-0 flex-1 truncate text-xs ${placeholder ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>{name}</span>
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{name.slice(0, 1)}</span>
+              <span title={email ?? undefined} className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{name}</span>
               {mock ? <span className="shrink-0 rounded bg-amber-500/10 px-1 py-px text-[9px] font-medium uppercase text-amber-700 dark:text-amber-300">демо</span> : null}
               {status}
-              <span className={`shrink-0 text-xs tabular-nums ${placeholder ? 'text-muted-foreground/60 group-hover/chip:text-primary' : 'font-medium text-foreground'}`}>{hours}</span>
+              <span className="shrink-0 text-xs font-medium tabular-nums text-foreground">{hours}</span>
             </span>
           );
           const chipClassName = 'group/chip block w-full rounded-md transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30';
@@ -1011,7 +1018,7 @@ export function RoadmapPage() {
               const line = personLine({
                 name: allocation.personName,
                 email: allocation.personEmail,
-                hours: displayHours(allocation.estimatedHours),
+                hours: cellHours(allocation.estimatedHours),
                 mock: role.members?.find((member) => member.personExternalId === allocation.personExternalId)?.personIsMock,
                 status: writeBackEnabled ? <AzureSyncMark allocation={allocation} /> : undefined,
               });
@@ -1019,25 +1026,20 @@ export function RoadmapPage() {
                 ? <AllocationEditor key={allocation.id} {...editorProps} initial={allocation} trigger={<button type="button" className={chipClassName} aria-label={`Изменить оценку: ${allocation.personName}`}>{line}</button>} />
                 : <div key={allocation.id}>{line}</div>;
             })}
-            {unassignedPeople.map((person) => {
-              const participation = memberParticipation(role, person.id);
-              const line = personLine({ name: person.name, email: person.email, hours: `${participation.toLocaleString('ru-RU')}%`, placeholder: true });
-              return canEdit
-                ? <AllocationEditor key={person.id} {...editorProps} initialPersonExternalId={person.id} trigger={<button type="button" className={chipClassName} aria-label={`Задать оценку: ${person.name}`} title={`Участие в роли: ${participation.toLocaleString('ru-RU')}%. Нажмите, чтобы задать оценку`}>{line}</button>} />
-                : <div key={person.id} title="Участие в роли; оценка ещё не задана">{line}</div>;
-            })}
           </>;
-          const hasContent = allocations.length > 0 || unassignedPeople.length > 0;
-          const actions = canEdit ? <div className={`flex items-center gap-0.5 ${hasContent ? 'opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100 [@media(hover:none)]:opacity-100' : ''}`}>
-            {unassignedPeople.length > 0 ? <AllocationEditor {...editorProps} people={unassignedPeople} trigger={<button type="button" className="inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"><Plus className="h-3 w-3" />{hasContent ? 'Участник' : 'Назначить'}</button>} /> : null}
+          // Members without an estimate are not listed in every row; they are one hover-revealed action away.
+          const hasContent = allocations.length > 0;
+          const actions = canEdit ? <div className="flex items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
+            {unassignedPeople.length > 0 ? <AllocationEditor {...editorProps} people={unassignedPeople} initialPersonExternalId={unassignedPeople.length === 1 ? unassignedPeople[0].id : undefined} trigger={<button type="button" className="inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground" aria-label={`Назначить участника роли «${role.name}»: ${item.title}`}><Plus aria-hidden="true" className="h-3 w-3" />{hasContent ? 'Участник' : 'Назначить'}</button>} /> : null}
             {allocations.length > 1 ? <button type="button" disabled={saveMutation.isPending || splitMutation.isPending} title="Распределить часы поровну между участниками" onClick={() => splitMutation.mutate(allocations.map(({ id }) => id))} className="inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-50"><Equal className="h-3 w-3" />{splitMutation.isPending ? 'Делим…' : 'Поровну'}</button> : null}
           </div> : null;
           return (
             <Fragment key={role.id}>
             <td className={cellClassName}>
-              <div className={cn('flex items-center justify-end gap-1.5 px-1.5 py-1 text-sm tabular-nums', planned ? 'font-medium text-foreground' : 'text-muted-foreground')} title={!allocations.length && sourceEstimate !== null ? 'Оценка Azure DevOps на всю карточку' : undefined}>
-                {!allocations.length && sourceEstimate !== null ? <RefreshCw aria-label="Оценка Azure DevOps" className="size-3 text-muted-foreground" /> : null}
-                {displayHours(planned)}
+              <div className={cn('flex items-center justify-end px-1.5 py-1 text-sm tabular-nums', planned ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+                {!allocations.length && sourceEstimate !== null && planned ? <span title="Оценка Azure DevOps на всю карточку, без назначений" className="underline decoration-muted-foreground/50 decoration-dotted underline-offset-4">
+                  {cellHours(planned)}<span className="sr-only"> (оценка Azure DevOps)</span>
+                </span> : cellHours(planned)}
               </div>
               <div className="space-y-0.5">
                 {assignmentList}
@@ -1068,30 +1070,26 @@ export function RoadmapPage() {
       : 'Выберите проект Azure DevOps выше.'
     : null;
 
-  const plannedRoleFilter = <>
-    <label className={cn(ROLE_CONTROL_CLASS, 'relative cursor-pointer has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring')}>
-      <input
-        type="checkbox"
-        role="switch"
-        checked={plannedRolesOnly}
-        aria-describedby="roadmap-planned-roles-description"
-        onChange={(event) => {
-          tableSettings.change({ plannedRolesOnly: event.target.checked });
-        }}
-        className="peer sr-only"
-      />
-      <span
-        aria-hidden="true"
-        className={cn(
-          "relative h-4 w-7 shrink-0 rounded-full bg-muted ring-1 ring-inset ring-border after:absolute after:left-0.5 after:top-0.5 after:size-3 after:rounded-full after:bg-muted-foreground after:content-['']",
-          'peer-checked:bg-primary peer-checked:ring-primary peer-checked:after:translate-x-3 peer-checked:after:bg-primary-foreground',
-          'dark:ring-muted-foreground/50 forced-colors:outline forced-colors:outline-[ButtonText] forced-colors:after:bg-[ButtonText]',
-        )}
-      />
-      <span>Только роли с планом</span>
-    </label>
-    <span id="roadmap-planned-roles-description" hidden>Роли с положительным планом. В квартальном виде учитываются назначения выбранного квартала, а при их отсутствии — оценка Azure DevOps на всю карточку. В месячном виде учитываются только часы выбранного месяца.</span>
-  </>;
+  const plannedRolesSwitch = (disabled?: boolean) => <RoadmapToolbarSwitch
+    label="С планом"
+    icon={<ListChecks />}
+    disabled={disabled}
+    hint="Показывать только роли с положительным планом. В квартальном виде учитываются назначения выбранного квартала, а при их отсутствии — оценка Azure DevOps на всю карточку. В месячном виде — только часы выбранного месяца."
+    checked={plannedRolesOnly}
+    onChange={(checked) => tableSettings.change({ plannedRolesOnly: checked })}
+  />;
+  const switchGroupClass = 'inline-flex items-stretch divide-x divide-border rounded-md border border-border bg-card';
+  // Both switches control the per-role columns, so they sit in one joined group.
+  const roleColumnControls = <div role="group" aria-label="Столбцы по ролям" className={switchGroupClass}>
+    <RoadmapToolbarSwitch
+      label="По ролям"
+      icon={<Users />}
+      hint="Показать столбцы плана и факта по каждой роли проекта."
+      checked={showRoleDetails}
+      onChange={setRoleBreakdown}
+    />
+    {plannedRolesSwitch(!showRoleDetails)}
+  </div>;
   const periodControls = <div role="group" aria-label="Период" className="flex h-8 items-center rounded-md border border-border bg-card shadow-xs">
     <Button type="button" variant="ghost" size="icon" className="h-full w-7 rounded-r-none" aria-label="Предыдущий квартал" onClick={() => shiftQuarter(-1)}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></Button>
     <span aria-live="polite" className="min-w-16 text-center text-xs font-semibold tabular-nums">{currentQuarterLabel}</span>
@@ -1198,7 +1196,7 @@ export function RoadmapPage() {
               }}><RefreshCw aria-hidden="true" className="size-3.5" />Обновить</Button> : null}</div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
-              {plannedRoleFilter}
+              <div className={switchGroupClass}>{plannedRolesSwitch()}</div>
               <div className="flex flex-wrap items-center gap-2">{periodControls}</div>
             </div>
             {overviewLoading ? <p role="status" className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
@@ -1238,19 +1236,20 @@ export function RoadmapPage() {
                   : 'flex flex-col overflow-hidden rounded-xl border border-border bg-card')}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-                  <div>
-                    <h2 className="font-medium text-foreground">{plan.name}</h2>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {!demoMode && configured && !usingCachedProjects && projectIsSynced ? <>Автообновление каждые 5 мин · </> : null}
-                      {plan.syncedAt ? <>Последний импорт: <time dateTime={plan.syncedAt}>{new Date(plan.syncedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</time></> : 'Данные ещё не синхронизированы'}
-                      {writeBackEnabled ? <> · Запись в Azure: {plan.azure?.mode === 'manual' ? 'по кнопке' : 'автоматически'}{azureErrorCount ? <span className="text-destructive"> · ошибок: {azureErrorCount}</span> : null}</> : null}
-                    </p>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <h2 className="truncate text-base font-medium leading-7 text-foreground">{plan.name}</h2>
+                    <PlanSyncInfo
+                      autoRefresh={!demoMode && configured && !usingCachedProjects && projectIsSynced}
+                      syncedAt={plan.syncedAt}
+                      writeBackMode={writeBackEnabled ? (plan.azure?.mode === 'manual' ? 'manual' : 'auto') : null}
+                      errorCount={azureErrorCount}
+                    />
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {appearanceSettings}
                     {canPushToAzure ? <Popover open={pushPreviewOpen} onOpenChange={setPushPreviewOpen}>
                       <PopoverTrigger asChild>
-                        <Button type="button" variant={plan.azure?.mode === 'manual' && azureUnsyncedCount ? 'default' : 'outline'} size="sm" className="h-9 gap-2" disabled={!azureUnsyncedCount} title="Посмотреть и отправить изменения плана в Azure DevOps">
+                        <Button type="button" variant={plan.azure?.mode === 'manual' && azureUnsyncedCount ? 'default' : 'outline'} size="sm" className="h-8 gap-2" disabled={!azureUnsyncedCount} title="Посмотреть и отправить изменения плана в Azure DevOps">
                           <ArrowUpFromLine className="h-4 w-4" />
                           {azureUnsyncedCount ? `Отправить в Azure (${azureUnsyncedCount})` : 'Всё в Azure'}
                         </Button>
@@ -1259,11 +1258,10 @@ export function RoadmapPage() {
                         {pushPreviewOpen ? <AzurePushPreview projectId={roadmapProjectId} onDone={() => setPushPreviewOpen(false)} /> : null}
                       </PopoverContent>
                     </Popover> : null}
-                    {canConfigure ? <Link href={roleSettingsHref} className="inline-flex h-9 items-center gap-2 rounded-md border border-input px-3 text-xs font-medium text-foreground hover:bg-muted"><Users aria-hidden="true" className="h-4 w-4" />Роли и участники</Link> : null}
                     <Button type="button" variant={focusMode ? 'secondary' : 'outline'} size="sm" onClick={() => {
                       if (!focusMode && view === 'periods') setExpandedEpics(new Set(epics.map((epic) => epic.id)));
                       setFocusMode((current) => !current);
-                    }} className="h-9 gap-2" aria-label={focusMode ? 'Выйти из режима фокуса' : 'Включить режим фокуса'}>
+                    }} className="h-8 gap-2" aria-label={focusMode ? 'Выйти из режима фокуса' : 'Включить режим фокуса'}>
                       {focusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
                       {focusMode ? 'Выйти' : 'Фокус'}
                     </Button>
@@ -1276,22 +1274,10 @@ export function RoadmapPage() {
                       <Button type="button" size="sm" variant={view === 'roles' ? 'secondary' : 'ghost'} onClick={() => setView('roles')} className="h-8 gap-1.5"><Users className="h-3.5 w-3.5" />По ролям</Button>
                       <Button type="button" size="sm" variant={view === 'periods' ? 'secondary' : 'ghost'} onClick={() => setView('periods')} className="h-8 gap-1.5"><Clock3 className="h-3.5 w-3.5" />По периодам</Button>
                     </> : null}
-                    {view === 'roles' && roles.length > 0 && plan.workItems.length > 0 ? <>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className={cn(ROLE_CONTROL_CLASS, 'justify-start whitespace-normal text-left hover:text-foreground', showRoleDetails && 'bg-muted/50')}
-                        aria-expanded={showRoleDetails}
-                        onClick={() => setRoleBreakdown(!showRoleDetails)}
-                      >
-                        {showRoleDetails ? <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" /> : <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />}
-                        Детализация по ролям
-                      </Button>
-                      {plannedRoleFilter}
-                    </> : null}
-                    {canConfigure ? <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
-                      <PopoverTrigger asChild><Button type="button" variant="ghost" size="sm" className={cn(ROLE_CONTROL_CLASS, 'shrink-0 text-muted-foreground hover:text-foreground')} aria-label="Добавить роль" title="Добавить роль" disabled={!roadmapProjectId || addRoleMutation.isPending}><UserRoundPlus aria-hidden="true" className="size-3.5" />Роль</Button></PopoverTrigger>
+                    {view === 'roles' && roles.length > 0 && plan.workItems.length > 0 ? roleColumnControls : null}
+                    {canConfigure ? <div role="group" aria-label="Роли проекта" className={switchGroupClass}>
+                    <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
+                      <PopoverTrigger asChild><Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 gap-1.5 rounded-none rounded-l-[5px] px-2.5 text-xs font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground" aria-label="Добавить роль" title="Добавить роль из каталога" disabled={!roadmapProjectId || addRoleMutation.isPending}><Plus aria-hidden="true" className="size-3.5" />Роль</Button></PopoverTrigger>
                       <PopoverContent align="start" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(320px,calc(100vw-2rem))] overflow-hidden rounded-xl p-0">
                         <RoleCatalogPicker
                           templates={availableRoleTemplates}
@@ -1301,7 +1287,9 @@ export function RoadmapPage() {
                           onAdd={(templateId) => addRoleMutation.mutate({ projectId: roadmapProjectId, templateId })}
                         />
                       </PopoverContent>
-                    </Popover> : null}
+                    </Popover>
+                    <Link href={roleSettingsHref} className="inline-flex h-8 items-center gap-1.5 rounded-r-[5px] px-2.5 text-xs font-medium text-foreground hover:bg-muted/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"><Users aria-hidden="true" className="size-3.5" />Роли и участники</Link>
+                    </div> : null}
                     {!demoMode && roadmapProjectId ? <AgentPanel
                       key={roadmapProjectId}
                       projectId={roadmapProjectId}
@@ -1311,9 +1299,6 @@ export function RoadmapPage() {
                     /> : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    {columnWidths.hasCustomWidths ? (
-                      <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={columnWidths.resetWidths} title="Вернуть исходную ширину всех столбцов для вашего аккаунта">Сбросить ширину</Button>
-                    ) : null}
                     {view === 'periods' && focusMode ? <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setExpandedEpics(allEpicsExpanded ? new Set() : new Set(epics.map((epic) => epic.id)))}>{allEpicsExpanded ? 'Свернуть всё' : 'Развернуть всё'}</Button> : null}
                     {view === 'periods' ? <Button type="button" variant={showUnassignedPeriods ? 'secondary' : 'outline'} size="sm" className="h-8" onClick={() => setShowUnassignedPeriods((value) => !value)}>{showUnassignedPeriods ? 'Скрыть без назначений' : 'Показать без назначений'}</Button> : null}
                     {periodControls}
@@ -1350,7 +1335,7 @@ export function RoadmapPage() {
                     ) : null}
                     {view === 'roles' && showRoleDetails && plannedRolesOnly && roles.length > 0 && visibleRoles.length === 0 ? (
                       <p id="roadmap-plan-roles" role="status" className="border-b border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-                        В выбранном периоде нет оценок по ролям. Выключите фильтр «Только роли с планом», чтобы увидеть все роли.
+                        В выбранном периоде нет оценок по ролям. Выключите фильтр «С планом», чтобы увидеть все роли.
                       </p>
                     ) : null}
                     {view === 'periods' ? <QuarterPlanningGrid
@@ -1397,22 +1382,17 @@ export function RoadmapPage() {
                             <span className="block">Факт</span><span className="text-[10px] font-normal normal-case">{selectedMonth ? 'за месяц, ч' : 'всего, ч'}</span>
                             <ColumnResizeHandle columnId="summary:fact" />
                           </th> : null}
-                          {detailRoles.length || showUnattributedFact ? <th scope="colgroup" id="roadmap-role-details" colSpan={detailRoles.length * roleMetricCount + Number(showUnattributedFact)} className="border-l border-border/60 px-3 py-1.5">Детализация по ролям</th> : null}
-                        </tr>
-                        {headerRowSpan === 3 ? <><tr className="border-b border-border bg-muted/25">
                           {detailRoles.map((role) => {
                             const hasActiveMembers = (role.members ?? []).some((member) => member.personIsActive);
-                            return <th scope="colgroup" colSpan={roleMetricCount} key={role.id} className="border-l border-border/60 px-3 py-2.5">
-                              <div className="space-y-1.5">
-                                <div className="flex items-center gap-2 normal-case tracking-normal">
-                                  <RoleMark name={role.name} color={role.color} size="sm" />
-                                  <span className="min-w-0 truncate text-[13px] font-semibold text-foreground" title={role.name}>{role.name}</span>
-                                  {role.azureEstimateField ? <span role="img" aria-label="Роль из Azure DevOps" className="shrink-0 text-primary" title="Роль из Azure DevOps"><RefreshCw aria-hidden="true" className="size-3.5" /></span> : null}
-                                  {canConfigure ? <Link href={roleSettingsHref} aria-label={`Добавить участников в роль «${role.name}»`} title={`Участники роли «${role.name}»`} className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-card hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"><UserRoundPlus aria-hidden="true" className="size-4" /></Link> : null}
-                                  {role.isMock && !/демо/i.test(role.name) ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium normal-case text-amber-700 dark:text-amber-300">демо</span> : null}
-                                </div>
+                            return <th scope="colgroup" colSpan={roleMetricCount} key={role.id} className="border-l border-border/60 px-3 py-2">
+                              <div className="flex min-w-0 items-center gap-2 normal-case tracking-normal">
+                                <RoleMark name={role.name} color={role.color} size="sm" />
+                                <span className="min-w-0 truncate text-[13px] font-semibold text-foreground" title={role.name}>{role.name}</span>
+                                {role.azureEstimateField ? <span role="img" aria-label="Оценка роли берётся из Azure DevOps" className="shrink-0 text-muted-foreground" title="Оценка роли берётся из Azure DevOps"><Cloud aria-hidden="true" className="size-3.5" /></span> : null}
+                                {role.isMock && !/демо/i.test(role.name) ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium text-amber-700 dark:text-amber-300">демо</span> : null}
+                                <span className="ml-auto flex shrink-0 items-center">
                                 {!selectedMonth && role.members?.length ? <Popover>
-                                  <PopoverTrigger asChild><button type="button" className="flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-medium normal-case text-muted-foreground transition-colors hover:bg-card hover:text-foreground"><Users aria-hidden="true" className="size-3.5 shrink-0" /><span className="truncate">Участники: {role.members.length}</span></button></PopoverTrigger>
+                                  <PopoverTrigger asChild><button type="button" aria-label={`Участники роли «${role.name}»: ${role.members.length}`} title="Участники роли" className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-medium tabular-nums text-muted-foreground transition-colors hover:bg-card hover:text-foreground"><Users aria-hidden="true" className="size-3.5 shrink-0" />{role.members.length}</button></PopoverTrigger>
                                   <PopoverContent align="start" side="bottom" sideOffset={6} collisionPadding={16} className="w-[min(320px,calc(100vw-2rem))] rounded-xl p-2">
                                     <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Участие в роли · {role.name}</p>
                                     <ul className="max-h-64 overflow-y-auto">
@@ -1424,19 +1404,21 @@ export function RoadmapPage() {
                                     {canConfigure ? <Link href={roleSettingsHref} className="mt-1 block rounded-lg border-t border-border px-2 py-2 text-sm text-primary hover:bg-muted">Настроить состав и участие</Link> : null}
                                   </PopoverContent>
                                 </Popover> : null}
-                                {!hasActiveMembers && !canConfigure ? <span className="block text-xs font-normal text-muted-foreground">Нет участников</span> : null}
+                                {!hasActiveMembers && canConfigure ? <Link href={roleSettingsHref} aria-label={`Добавить участников в роль «${role.name}»`} title="Добавить участников" className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-card hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"><UserRoundPlus aria-hidden="true" className="size-4" /></Link> : null}
+                                {!hasActiveMembers && !canConfigure ? <span className="text-xs font-normal text-muted-foreground">Нет участников</span> : null}
+                                </span>
                               </div>
                             </th>;
                           })}
-                          {showUnattributedFact ? <th scope="col" rowSpan={2} data-column-id="fact:unattributed" title="Факт участников, для которых не определена единственная роль в проекте" className="relative border-l border-border/60 px-3 py-2.5 text-right text-xs font-semibold">Без роли<span className="mt-1 block font-normal text-muted-foreground">факт, ч</span><ColumnResizeHandle columnId="fact:unattributed" /></th> : null}
+                          {showUnattributedFact ? <th scope="col" rowSpan={2} data-column-id="fact:unattributed" title="Факт участников, для которых не определена единственная роль в проекте" className="relative border-l border-border/60 px-3 py-2.5 text-right">Без роли<span className="block text-[10px] font-normal normal-case">факт, ч</span><ColumnResizeHandle columnId="fact:unattributed" /></th> : null}
                         </tr>
-                        <tr className="border-b border-border bg-muted/20 text-right text-[11px] font-medium text-muted-foreground">
+                        {headerRowSpan === 2 ? <tr className="border-b border-border bg-muted/20 text-right text-[11px] font-medium text-muted-foreground">
                           {detailRoles.map((role) => <Fragment key={role.id}>
-                            <th scope="col" data-column-id={`plan:${role.id}`} className="relative border-l border-border/60 px-3 py-1.5">План<ColumnResizeHandle columnId={`plan:${role.id}`} /></th>
-                            {preferences.showFact ? <th scope="col" data-column-id={`fact:${role.id}`} className="relative border-l border-border/40 px-3 py-1.5">Факт<ColumnResizeHandle columnId={`fact:${role.id}`} /></th> : null}
-                            {preferences.showDelta ? <th scope="col" data-column-id={`delta:${role.id}`} title="Факт − план" className="relative border-l border-border/40 px-3 py-1.5">Дельта<ColumnResizeHandle columnId={`delta:${role.id}`} /></th> : null}
+                            <th scope="col" data-column-id={`plan:${role.id}`} className="relative border-l border-border/60 px-3 py-1.5">План, ч<ColumnResizeHandle columnId={`plan:${role.id}`} /></th>
+                            {preferences.showFact ? <th scope="col" data-column-id={`fact:${role.id}`} className="relative border-l border-border/40 px-3 py-1.5">Факт, ч<ColumnResizeHandle columnId={`fact:${role.id}`} /></th> : null}
+                            {preferences.showDelta ? <th scope="col" data-column-id={`delta:${role.id}`} title="Дельта: факт − план, ч" className="relative border-l border-border/40 px-3 py-1.5">Δ, ч<ColumnResizeHandle columnId={`delta:${role.id}`} /></th> : null}
                           </Fragment>)}
-                        </tr></> : null}
+                        </tr> : null}
                       </thead>
                       <tbody>
                         {epics.map((epic) => {
@@ -1457,10 +1439,10 @@ export function RoadmapPage() {
                           <th scope="row" style={pinnedCellStyle('name')} className={cn('px-4 py-3 text-left font-normal', pinnedCellClass('name'))}>
                             План без эпика / фичи<span className="mt-0.5 block text-xs text-muted-foreground">Назначения на карточках без связи с эпиком или фичей</span>
                           </th>
-                          <td style={pinnedCellStyle('summary:plan')} className={cn('px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:plan'))}>{displayHours(unattachedPlanHours)}</td>
+                          <td style={pinnedCellStyle('summary:plan')} className={cn('px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:plan'))}>{cellHours(unattachedPlanHours)}</td>
                           {preferences.showFact ? <td style={pinnedCellStyle('summary:fact')} className={cn('px-3 py-3 text-right text-muted-foreground', pinnedCellClass('summary:fact'))}>—</td> : null}
                           {detailRoles.map((role) => <Fragment key={role.id}>
-                            <td className="border-l border-border/60 px-3 py-3 text-right tabular-nums">{displayHours(rolePlan.byUnattached.get(role.id) ?? 0)}</td>
+                            <td className="border-l border-border/60 px-3 py-3 text-right tabular-nums">{cellHours(rolePlan.byUnattached.get(role.id) ?? 0)}</td>
                             {renderRoleMetrics(role.id, rolePlan.byUnattached.get(role.id) ?? 0, null)}
                           </Fragment>)}
                           {showUnattributedFact ? renderFactCell(null, 'unattributed') : null}
@@ -1469,12 +1451,12 @@ export function RoadmapPage() {
                       <tfoot className="sticky bottom-0 z-20 bg-card">
                         <tr className="border-t-2 border-border bg-[color-mix(in_srgb,var(--color-muted)_40%,var(--color-card))] text-sm font-semibold text-foreground">
                           <th scope="row" style={pinnedCellStyle('name')} className={cn('px-3 py-3 @lg:px-4', pinnedCellClass('name'))}>Итого по проекту</th>
-                          <td style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:plan'))}>{displayHours(totalHours)}</td>
-                          {preferences.showFact ? <td style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:fact'), totalActualHours === null ? 'text-muted-foreground' : 'text-emerald-700 dark:text-emerald-300')}>{displayHours(totalActualHours)}</td> : null}
+                          <td style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:plan'))}>{cellHours(totalHours)}</td>
+                          {preferences.showFact ? <td style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:fact'), totalActualHours ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground')}>{cellHours(totalActualHours)}</td> : null}
                           {detailRoles.map((role) => {
                             const hours = rolePlan.byProject.get(role.id) ?? 0;
                             return <Fragment key={role.id}>
-                              <td className={cn('border-l border-border/60 px-3 py-3 text-right tabular-nums', !hours && 'text-muted-foreground')}>{displayHours(hours)}</td>
+                              <td className={cn('border-l border-border/60 px-3 py-3 text-right tabular-nums', !hours && 'text-muted-foreground')}>{cellHours(hours)}</td>
                               {renderRoleMetrics(role.id, hours, totalActualHours === null ? null : projectRoleFact.get(role.id) ?? 0)}
                             </Fragment>;
                           })}
@@ -1514,5 +1496,79 @@ export function RoadmapPage() {
           ) : null}
         </div>
     </main>
+  );
+}
+
+function PlanSyncInfo({ autoRefresh, syncedAt, writeBackMode, errorCount }: {
+  autoRefresh: boolean;
+  syncedAt?: string | null;
+  writeBackMode: 'auto' | 'manual' | null;
+  errorCount: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const closeTimer = useRef<number | null>(null);
+  const hasErrors = writeBackMode !== null && errorCount > 0;
+  const show = () => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    setOpen(true);
+  };
+  const hide = () => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setOpen(false), 120);
+  };
+  useEffect(() => () => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+  }, []);
+  const Icon = hasErrors ? AlertCircle : Clock3;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={hasErrors ? `Синхронизация с Azure: ошибок ${errorCount}` : 'Информация о синхронизации'}
+          onPointerEnter={(event) => { if (event.pointerType === 'mouse') show(); }}
+          onPointerLeave={(event) => { if (event.pointerType === 'mouse') hide(); }}
+          className={cn(
+            'inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 data-[state=open]:bg-muted data-[state=open]:text-foreground',
+            hasErrors && 'bg-destructive/10 px-2 text-destructive hover:bg-destructive/15 hover:text-destructive data-[state=open]:bg-destructive/15 data-[state=open]:text-destructive',
+          )}
+        >
+          <Icon aria-hidden="true" className="h-4 w-4" strokeWidth={1.75} />
+          {hasErrors ? <span className="text-xs font-medium tabular-nums">{errorCount}</span> : null}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="bottom"
+        sideOffset={6}
+        collisionPadding={16}
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        onPointerEnter={show}
+        onPointerLeave={hide}
+        className="w-auto max-w-xs px-3 py-2 text-xs"
+      >
+        <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-1">
+          <dt className="text-muted-foreground">Последний импорт</dt>
+          <dd className="text-foreground">
+            {syncedAt
+              ? <time dateTime={syncedAt}>{new Date(syncedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</time>
+              : 'ещё не было'}
+          </dd>
+          {autoRefresh ? <>
+            <dt className="text-muted-foreground">Автообновление</dt>
+            <dd className="text-foreground">каждые 5 мин</dd>
+          </> : null}
+          {writeBackMode ? <>
+            <dt className="text-muted-foreground">Запись в Azure</dt>
+            <dd className="text-foreground">{writeBackMode === 'manual' ? 'по кнопке' : 'автоматически'}</dd>
+          </> : null}
+          {hasErrors ? <>
+            <dt className="text-muted-foreground">Ошибки записи</dt>
+            <dd className="font-medium text-destructive">{errorCount}</dd>
+          </> : null}
+        </dl>
+      </PopoverContent>
+    </Popover>
   );
 }

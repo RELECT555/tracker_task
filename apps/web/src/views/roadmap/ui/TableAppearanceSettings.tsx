@@ -14,6 +14,8 @@ export interface TableAppearanceSettingsProps {
   status: 'loading' | 'saving' | 'saved' | 'error';
   onRetry: () => void;
   disabled?: boolean;
+  hasCustomWidths?: boolean;
+  onResetWidths?: () => void;
 }
 
 const TableAppearancePanel = dynamic(() => import('./TableAppearancePanel').then((module) => module.TableAppearancePanel), {
@@ -42,7 +44,7 @@ export function TableAppearanceSettings(props: TableAppearanceSettingsProps) {
   const errorMessage = disabled ? 'Не удалось загрузить настройки.' : 'Не удалось сохранить настройки.';
 
   return <>
-    <Button ref={trigger} type="button" variant="outline" size="sm" className="h-9 gap-2" aria-haspopup="dialog" aria-expanded={open} aria-describedby={status === 'error' ? `${id}-error` : undefined} title={status === 'error' ? `${errorMessage} Откройте панель, чтобы повторить.` : undefined} onClick={openPanel}>
+    <Button ref={trigger} type="button" variant="outline" size="sm" className="h-8 gap-2" aria-haspopup="dialog" aria-expanded={open} aria-describedby={status === 'error' ? `${id}-error` : undefined} title={status === 'error' ? `${errorMessage} Откройте панель, чтобы повторить.` : undefined} onClick={openPanel}>
       <SlidersHorizontal aria-hidden="true" className="size-4" />Вид таблицы
       {status === 'error' ? <span aria-hidden="true" className="size-1.5 rounded-full bg-destructive" /> : null}
     </Button>

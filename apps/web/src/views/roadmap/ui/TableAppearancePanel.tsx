@@ -48,7 +48,7 @@ function PalettePreview({ palette }: { palette: (typeof TABLE_PALETTES)[number] 
   </span>;
 }
 
-export function TableAppearancePanel({ id, preferences, onChange, onReset, status, onRetry, disabled }: TableAppearanceSettingsProps & { id: string }) {
+export function TableAppearancePanel({ id, preferences, onChange, onReset, status, onRetry, disabled, hasCustomWidths, onResetWidths }: TableAppearanceSettingsProps & { id: string }) {
   const content = useRef<HTMLDivElement>(null);
   const [section, setSection] = useState<'appearance' | 'columns'>('appearance');
   const selectedPalette = getTablePalette(preferences);
@@ -104,7 +104,11 @@ export function TableAppearancePanel({ id, preferences, onChange, onReset, statu
             <label className="block space-y-3 text-sm font-semibold"><span>Закрепление столбцов</span><span className="relative block"><SearchableSelect searchable={false} value={preferences.pinnedColumns} onChange={(value) => onChange({ pinnedColumns: value as RoadmapTablePreferences['pinnedColumns'] })} options={[{ value: 'none', label: 'Без закрепления' }, { value: 'name', label: 'Закрепить название' }, { value: 'totals', label: 'Название и итоги' }]} /></span></label>
             <p className="text-xs leading-5 text-muted-foreground">Закреплённые столбцы остаются на месте при горизонтальной прокрутке.</p>
           </section>
-          <p className="border-t border-border py-5 text-xs leading-5 text-muted-foreground">Чтобы изменить ширину, потяните границу столбца в шапке таблицы.</p>
+          <section className="space-y-3 border-t border-border py-5">
+            <h3 className="text-sm font-semibold">Ширина столбцов</h3>
+            <p className="text-xs leading-5 text-muted-foreground">Чтобы изменить ширину, потяните границу столбца в шапке таблицы.</p>
+            {onResetWidths ? <Button type="button" variant="outline" className="h-9 gap-2 text-xs" disabled={!hasCustomWidths} onClick={onResetWidths}><RotateCcw aria-hidden="true" className="size-3.5" />Сбросить ширину столбцов</Button> : null}
+          </section>
         </div>
       </fieldset>
     </div>

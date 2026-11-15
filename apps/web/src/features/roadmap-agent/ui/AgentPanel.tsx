@@ -106,7 +106,11 @@ export function AgentPanel({ projectId, quarterKey, canEditPlan, onApplied }: {
 
   const reset = () => { setMessages([]); setHistory([]); setError(null); setDraft(''); };
 
-  if (!status.data?.configured) return null;
+  if (status.isPending) return null;
+  // Disabled buttons ignore pointer events, so the hint lives on the wrapper.
+  if (!status.data?.configured) return <span className="inline-flex shrink-0" title="Ассистент не настроен: на сервере не заданы HRNNG_API_URL, HRNNG_API_KEY и HRNNG_MODEL">
+    <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 text-xs text-muted-foreground" disabled aria-label="Ассистент не настроен"><Sparkles aria-hidden="true" className="size-3.5" />Ассистент</Button>
+  </span>;
 
   return <Popover open={open} onOpenChange={setOpen}>
     <PopoverTrigger asChild>

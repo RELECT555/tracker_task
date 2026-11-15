@@ -7,6 +7,7 @@ import { ArrowDown, ArrowUp, ArrowUpRight, ChevronDown, ChevronRight, ChevronsDo
 import { getRoadmapMonthlyFact, roadmapApi, type AzureProject, type RoadmapRole, type RoadmapWorkItem } from '@/entities/roadmap/api/roadmapApi';
 import { isRoadmapDemoMode } from '@/entities/roadmap/api/roadmapDemo';
 import { AzureWorkItemIcon } from '@/entities/roadmap/ui/AzureWorkItemIcon';
+import { WorkItemStateBadge } from '@/entities/roadmap/ui/WorkItemStateBadge';
 import { Button } from '@/shared/ui/button';
 import { QueryErrorNotice } from '@/shared/ui/error-notice';
 import { Input } from '@/shared/ui/input';
@@ -311,7 +312,10 @@ function ProjectPlanDetails({
             <AzureWorkItemIcon type={item.type} className="mt-1 shrink-0" />
             <div className="min-w-0">
               <p data-plan-title title={item.title} className={cn('break-words text-sm leading-snug [overflow-wrap:anywhere]', epic && 'font-medium')}>{item.title}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{epic ? 'Epic' : 'Feature'} #{item.externalId}{item.state ? ` · ${item.state}` : ''}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <span className="tabular-nums">{epic ? 'Epic' : 'Feature'} #{item.externalId}</span>
+                <WorkItemStateBadge state={item.state} />
+              </div>
             </div>
           </div>
         </th>
