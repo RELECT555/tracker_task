@@ -99,10 +99,28 @@ export function getRoadmapSummary<Item extends RoadmapMetricsItem, Role extends 
       if (roleIds.has(allocation.roleId)) addParticipant(allocation.personExternalId);
     }
   }
+  // Cards count for the period only when they carry plan or fact in it; the item list itself stays complete
+  // so unplanned cards can still be picked up and planned. In the quarter view the plan also includes the
+  // role hours written in Azure DevOps (they carry no period), in a month only local assignments count.
+  const planHoursOf = (item: Item) => [...(rolePlan.byItem.get(item.id)?.values() ?? [])].reduce((sum, hours) => sum + hours, 0);
+  const hasActivity = (item: Item) => item.allocations.length > 0
+    || (monthKey ? finiteHours(item.actualHours) !== 0 : planHoursOf(item) > 0);
+  const byExternalId = new Map(items.map((item) => [item.externalId, item]));
+  const activeFeatures = items.filter((item) => item.type.toLowerCase() === 'feature' && hasActivity(item));
+  const activeEpicIds = new Set(items.filter((item) => item.type.toLowerCase() === 'epic' && hasActivity(item)).map((item) => item.id));
+  for (const feature of activeFeatures) {
+    const visited = new Set([feature.externalId]);
+    let ancestor = feature.parentExternalId ? byExternalId.get(feature.parentExternalId) : undefined;
+    while (ancestor && !visited.has(ancestor.externalId)) {
+      if (ancestor.type.toLowerCase() === 'epic') activeEpicIds.add(ancestor.id);
+      visited.add(ancestor.externalId);
+      ancestor = ancestor.parentExternalId ? byExternalId.get(ancestor.parentExternalId) : undefined;
+    }
+  }
   const roleKeys = [...new Set(visibleRoles.map((role) => role.name.trim().replace(/\s+/g, ' ').toLowerCase()))];
   return {
-    epics: items.filter((item) => item.type.toLowerCase() === 'epic').length,
-    features: items.filter((item) => item.type.toLowerCase() === 'feature').length,
+    epics: activeEpicIds.size,
+    features: activeFeatures.length,
     planHours: [...rolePlan.byProject.values()].reduce((sum, hours) => sum + hours, 0),
     actualHours: monthKey
       ? monthlyFact ? finiteHours(monthlyFact.totalHours) : null

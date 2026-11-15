@@ -107,3 +107,18 @@ test('all-project summary adds project work even when IDs overlap and deduplicat
     epics: 0, features: 0, planHours: 0, actualHours: 0, roles: 0, participants: 0, roleKeys: [], participantIds: [],
   });
 });
+
+test('epic and feature counts follow the selected quarter and month', () => {
+  const plan = project([
+    item('epic-q4', 'Epic'), item('feature-q4', 'Feature', 'epic-q4', { allocations: [allocation('a', 'BA', 'alice', 5, '2026-Q4', [{ monthKey: '2026-11', hours: 5 }])] }),
+    item('epic-q1', 'Epic'), item('feature-q1', 'Feature', 'epic-q1', { allocations: [allocation('b', 'BA', 'bob', 5, '2027-Q1', [{ monthKey: '2027-01', hours: 5 }])] }),
+    item('idle', 'Feature'),
+  ], [role('BA')]);
+  const q4 = getRoadmapSummary(plan, quarter);
+  assert.deepEqual([q4.epics, q4.features], [1, 1]);
+  assert.deepEqual([getRoadmapSummary(plan, { quarterKey: '2027-Q1' }).epics, getRoadmapSummary(plan, { quarterKey: '2027-Q1' }).features], [1, 1]);
+  const oct = getRoadmapSummary(plan, { ...quarter, monthKey: '2026-10' });
+  assert.deepEqual([oct.epics, oct.features], [0, 0]);
+  const nov = getRoadmapSummary(plan, { ...quarter, monthKey: '2026-11' });
+  assert.deepEqual([nov.epics, nov.features], [1, 1]);
+});

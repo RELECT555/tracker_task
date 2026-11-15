@@ -44,22 +44,22 @@ export function RoadmapSummaryStrip({ summary, month, loading = false, projects 
   return <dl
     aria-label="Сводка плана"
     aria-busy={loading}
-    className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-flow-col lg:auto-cols-fr lg:grid-cols-none"
+    className="grid w-full grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-flow-col lg:auto-cols-fr lg:grid-cols-none"
   >
     {metrics.map(({ label, value, hours, description, note }) => <div
       key={label}
       title={description}
-      className="min-w-0 rounded-xl border border-border bg-card px-4 py-3.5 shadow-xs transition-colors hover:border-foreground/15 sm:px-5 sm:py-4"
+      className="min-w-0 rounded-xl border border-border bg-card px-4 py-3 shadow-xs transition-colors hover:border-foreground/15"
     >
       <dt className="truncate text-[13px] text-muted-foreground">{label}</dt>
-      <dd className="mt-2 whitespace-nowrap text-[26px] font-semibold leading-none tabular-nums tracking-tight text-foreground">
+      <dd className="mt-1.5 whitespace-nowrap text-[22px] font-semibold leading-none tabular-nums tracking-tight text-foreground">
         {value == null
-          ? loading ? <Skeleton className="h-7 w-16" /> : <span className="text-muted-foreground">—</span>
+          ? loading ? <Skeleton className="h-6 w-14" /> : <span className="text-muted-foreground">—</span>
           : <>{countFormat.format(value)}{hours ? <span className="ml-1 text-sm font-normal tracking-normal text-muted-foreground">ч</span> : null}</>}
       </dd>
       {note ? <dd
         title={note.over ? 'Факт месяца превышает план' : undefined}
-        className={cn('mt-2 truncate text-xs tabular-nums', note.over ? 'font-medium text-amber-700 dark:text-amber-400' : 'text-muted-foreground')}
+        className={cn('mt-1.5 truncate text-xs tabular-nums', note.over ? 'font-medium text-amber-700 dark:text-amber-400' : 'text-muted-foreground')}
       >{note.text}</dd> : null}
     </div>)}
   </dl>;
