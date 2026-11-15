@@ -10,6 +10,9 @@ export interface SearchableSelectOption {
   value: string;
   label: string;
   description?: string | null;
+  /** Description shown in the closed trigger; `null` hides it there. Defaults to `description`. */
+  triggerDescription?: string | null;
+  descriptionTone?: 'muted' | 'warning';
   color?: string;
   badge?: string;
   group?: string;
@@ -55,6 +58,7 @@ export function SearchableSelect({
   const list = useRef<HTMLDivElement>(null);
   const searchField = useRef<HTMLInputElement>(null);
   const selected = options.find((option) => option.value === value);
+  const selectedDescription = selected?.triggerDescription === undefined ? selected?.description : selected.triggerDescription;
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('ru-RU');
     return term ? options.filter((option) => `${option.label} ${option.description ?? ''}`.toLocaleLowerCase('ru-RU').includes(term)) : options;
@@ -119,7 +123,7 @@ export function SearchableSelect({
           {selected?.color ? <ColorMark color={selected.color} size="md" /> : null}
           {selected?.leading ? <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">{selected.leading}</span> : null}
           {searchable && !selected?.leading && !selected?.color && selected ? <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{selected.label.slice(0, 1)}</span> : null}
-          <span className="min-w-0"><span className={cn('block truncate', selected ? 'font-medium' : 'text-muted-foreground')}>{selected?.label ?? placeholder}</span>{selected?.description ? <span className="block truncate text-[10px] text-muted-foreground">{selected.description}</span> : null}</span>
+          <span className="min-w-0"><span className={cn('block truncate', selected ? 'font-medium' : 'text-muted-foreground')}>{selected?.label ?? placeholder}</span>{selectedDescription ? <span className={cn('block truncate text-[11px]', descriptionToneClass(selected?.descriptionTone))}>{selectedDescription}</span> : null}</span>
           {selected?.badge ? <span className="shrink-0 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-amber-700 dark:text-amber-300">{selected.badge}</span> : null}
         </span>
         <ChevronDown aria-hidden="true" className={cn('h-4 w-4 shrink-0 text-muted-foreground motion-safe:transition-transform', open && 'rotate-180')} />
@@ -182,7 +186,7 @@ export function SearchableSelect({
             className={cn('flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left focus-visible:bg-muted motion-safe:transition-colors', index === activeIndex ? 'bg-muted' : 'hover:bg-muted/70')}
           >
             {option.leading ? <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">{option.leading}</span> : option.color ? <ColorMark color={option.color} size="md" /> : searchable ? <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{option.label.slice(0, 1)}</span> : null}
-            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-foreground">{option.label}</span>{option.description ? <span className="block truncate text-[10px] text-muted-foreground">{option.description}</span> : null}</span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-foreground">{option.label}</span>{option.description ? <span className={cn('block truncate text-[11px]', descriptionToneClass(option.descriptionTone))}>{option.description}</span> : null}</span>
             {option.badge ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-amber-700 dark:text-amber-300">{option.badge}</span> : null}
             {option.value === value ? <Check aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" /> : null}
           </button>
@@ -190,4 +194,8 @@ export function SearchableSelect({
       </div>
     </PopoverContent>
   </Popover>;
+}
+
+function descriptionToneClass(tone: SearchableSelectOption['descriptionTone']) {
+  return tone === 'warning' ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground';
 }
