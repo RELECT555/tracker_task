@@ -74,6 +74,8 @@ model User {
 
   isActive Boolean @default(true) @map("is_active")
 
+  roadmapTablePreferences Json? @map("roadmap_table_preferences")
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()

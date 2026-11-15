@@ -38,8 +38,14 @@ const plan = {
   try {
     const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
     const unexpectedRequests = [];
+    let tablePreferences = null;
     await context.route('**/api/v1/**', async (route) => {
       const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
+      if (path === '/roadmap/preferences/table' && ['GET', 'PUT'].includes(route.request().method())) {
+        if (route.request().method() === 'PUT') tablePreferences = route.request().postDataJSON();
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ preferences: tablePreferences }) });
+        return;
+      }
       const payload = path === '/auth/me' ? { user: { id: 'roles-user', email: 'roles@example.test', fullName: 'Проверка ролей', roles: ['admin'], orgUnit: null, manager: null } }
         : path === '/roadmap/connection' ? { provider: 'azure-devops', configured: true, organizationUrl: '' }
           : path === '/roadmap/projects' ? { data: [{ id: plan.externalId, name: plan.name, imported: true, planSynced: true, roadmapId: plan.id }] }
@@ -83,6 +89,29 @@ const plan = {
         close(entry.headerX, entry.cellX, stage + ': ' + entry.id + ' header matches its cells');
         close(entry.headerWidth, entry.cellWidth, stage + ': ' + entry.id + ' header width matches its cells');
       }
+    };
+    const assertPinnedOcclusion = async (stage) => {
+      const coveredHandles = await page.locator('thead').evaluate((head) => {
+        const pinned = Array.from(head.querySelectorAll('th')).filter((cell) => getComputedStyle(cell).position === 'sticky');
+        return Array.from(head.querySelectorAll('[role="separator"]')).flatMap((handle) => {
+          if (pinned.includes(handle.closest('th'))) return [];
+          const bounds = handle.getBoundingClientRect();
+          const x = bounds.x + bounds.width / 2;
+          const y = bounds.y + bounds.height / 2;
+          const coveringCell = pinned.find((cell) => {
+            const rect = cell.getBoundingClientRect();
+            return x > rect.left && x < rect.right && y > rect.top && y < rect.bottom;
+          });
+          if (!coveringCell) return [];
+          return [{
+            hiddenColumn: handle.dataset.columnId,
+            expected: coveringCell.dataset.columnId,
+            actual: document.elementFromPoint(x, y)?.closest('th')?.dataset.columnId,
+          }];
+        });
+      });
+      assert.ok(coveredHandles.length > 0, stage + ': scrolled resize handles intersect the pinned area');
+      for (const entry of coveredHandles) assert.equal(entry.actual, entry.expected, stage + ': ' + entry.hiddenColumn + ' stays behind the pinned header');
     };
     const expectedColumns = ['name', 'summary:plan', 'summary:fact', 'plan:ba', 'fact:ba', 'delta:ba', 'plan:qa', 'fact:qa', 'delta:qa', 'fact:unattributed'];
     assert.deepEqual(await columnIds(), expectedColumns, 'Each role groups adjacent plan, fact, delta; empty roles are filtered');
@@ -144,6 +173,7 @@ const plan = {
     await scroll(280);
     close(await x(first), initialX, 'Pinned title remains visible while scrolling');
     await assertHeaderAlignment('Title pin after horizontal scroll');
+    await assertPinnedOcclusion('Title pin after horizontal scroll');
     await setPin('Название и итоги');
     await scroll(0);
     const totalPlan = await getCell(epic, 'summary:plan');
@@ -155,6 +185,7 @@ const plan = {
     close(await x(totalPlan), planX, 'Plan total stays fixed');
     close(await x(totalFact), factX, 'Actual total stays fixed');
     await assertHeaderAlignment('Pinned title and totals after horizontal scroll');
+    await assertPinnedOcclusion('Pinned title and totals after horizontal scroll');
     if (process.env.ROADMAP_TEST_SCREENSHOT) await page.screenshot({ path: process.env.ROADMAP_TEST_SCREENSHOT.replace(/\.png$/i, '-pinned.png'), fullPage: true });
     await setPin('Без закрепления');
     await scroll(0);

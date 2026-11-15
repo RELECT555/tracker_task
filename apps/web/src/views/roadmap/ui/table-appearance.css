@@ -1,0 +1,151 @@
+/* Previews and live tables share the same palette, resolved by the app theme. */
+.roadmap-table-appearance,
+.roadmap-palette-preview {
+  --roadmap-palette-header: var(--roadmap-palette-light-header);
+  --roadmap-palette-subheader: var(--roadmap-palette-light-subheader);
+  --roadmap-palette-epic: var(--roadmap-palette-light-epic);
+  --roadmap-palette-epic-hover: var(--roadmap-palette-light-epic-hover);
+  --roadmap-palette-stripe: var(--roadmap-palette-light-stripe);
+  --roadmap-palette-row-hover: var(--roadmap-palette-light-row-hover);
+  --roadmap-palette-footer: var(--roadmap-palette-light-footer);
+  --roadmap-palette-border: var(--roadmap-palette-light-border);
+  --roadmap-palette-accent: var(--roadmap-palette-light-accent);
+  --roadmap-palette-text: var(--roadmap-palette-light-text);
+  --roadmap-palette-muted: var(--roadmap-palette-light-muted);
+  --roadmap-palette-surface: var(--roadmap-palette-light-surface);
+}
+
+.dark .roadmap-table-appearance,
+.dark .roadmap-palette-preview {
+  --roadmap-palette-header: var(--roadmap-palette-dark-header);
+  --roadmap-palette-subheader: var(--roadmap-palette-dark-subheader);
+  --roadmap-palette-epic: var(--roadmap-palette-dark-epic);
+  --roadmap-palette-epic-hover: var(--roadmap-palette-dark-epic-hover);
+  --roadmap-palette-stripe: var(--roadmap-palette-dark-stripe);
+  --roadmap-palette-row-hover: var(--roadmap-palette-dark-row-hover);
+  --roadmap-palette-footer: var(--roadmap-palette-dark-footer);
+  --roadmap-palette-border: var(--roadmap-palette-dark-border);
+  --roadmap-palette-accent: var(--roadmap-palette-dark-accent);
+  --roadmap-palette-text: var(--roadmap-palette-dark-text);
+  --roadmap-palette-muted: var(--roadmap-palette-dark-muted);
+  --roadmap-palette-surface: var(--roadmap-palette-dark-surface);
+}
+
+/* The baseline retains the original table CSS. Custom picks keep the tint fallback. */
+.roadmap-table-appearance[data-palette='custom'][data-header-tint='true'] .roadmap-plan-table > thead,
+.roadmap-table-appearance[data-palette='custom'][data-header-tint='true'] .roadmap-plan-table > thead > tr {
+  background-color: color-mix(in srgb, var(--roadmap-header-tint) 12%, var(--color-card));
+}
+
+.roadmap-table-appearance[data-palette='custom'][data-epic-tint='true'] .roadmap-plan-table > tbody > :is([data-row-kind='epic'], [data-row-kind='project']) {
+  background-color: color-mix(in srgb, var(--roadmap-epic-tint) 9%, var(--color-card));
+}
+
+.roadmap-table-appearance[data-palette='custom'][data-epic-tint='true'] .roadmap-plan-table > tbody > :is([data-row-kind='epic'], [data-row-kind='project']):hover {
+  background-color: color-mix(in srgb, var(--roadmap-epic-tint) 15%, var(--color-card));
+}
+
+.dark .roadmap-table-appearance[data-palette='custom'][data-header-tint='true'] .roadmap-plan-table > thead,
+.dark .roadmap-table-appearance[data-palette='custom'][data-header-tint='true'] .roadmap-plan-table > thead > tr {
+  background-color: color-mix(in srgb, var(--roadmap-header-tint) 20%, var(--color-card));
+}
+
+.dark .roadmap-table-appearance[data-palette='custom'][data-epic-tint='true'] .roadmap-plan-table > tbody > :is([data-row-kind='epic'], [data-row-kind='project']) {
+  background-color: color-mix(in srgb, var(--roadmap-epic-tint) 16%, var(--color-card));
+}
+
+.dark .roadmap-table-appearance[data-palette='custom'][data-epic-tint='true'] .roadmap-plan-table > tbody > :is([data-row-kind='epic'], [data-row-kind='project']):hover {
+  background-color: color-mix(in srgb, var(--roadmap-epic-tint) 23%, var(--color-card));
+}
+
+.roadmap-table-appearance[data-striped='true'] .roadmap-plan-table > tbody > [data-row-kind='feature']:nth-child(even) {
+  background-color: color-mix(in srgb, var(--color-muted) 23%, var(--color-card));
+}
+
+.roadmap-table-appearance[data-striped='true'] .roadmap-plan-table > tbody > [data-row-kind='feature']:hover {
+  background-color: color-mix(in srgb, var(--color-muted) 35%, var(--color-card));
+}
+
+.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > thead,
+.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > thead > tr:first-child {
+  background-color: var(--roadmap-palette-header);
+  color: var(--roadmap-palette-muted);
+}
+
+.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > thead > tr:not(:first-child) {
+  background-color: var(--roadmap-palette-subheader);
+}
+
+.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > thead .text-muted-foreground {
+  color: var(--roadmap-palette-muted);
+}
+
+.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > tbody > :is([data-row-kind='epic'], [data-row-kind='project']) {
+  background-color: var(--roadmap-palette-epic);
+}
+
+.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > tbody > :is([data-row-kind='epic'], [data-row-kind='project']):hover {
+  background-color: var(--roadmap-palette-epic-hover);
+}
+
+.roadmap-table-appearance[data-palette-preset='true'][data-striped='true'] .roadmap-plan-table > tbody > [data-row-kind='feature']:nth-child(even) {
+  background-color: var(--roadmap-palette-stripe);
+}
+
+.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > tbody > [data-row-kind='feature']:hover {
+  background-color: var(--roadmap-palette-row-hover);
+}
+
+.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > tfoot,
+.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > tfoot > tr {
+  background-color: var(--roadmap-palette-footer);
+}
+
+.roadmap-table-appearance[data-palette-preset='true'][data-separators='standard'] .roadmap-plan-table :is(thead, tbody, tfoot, tr, th, td) {
+  border-color: var(--roadmap-palette-border);
+}
+
+.roadmap-table-appearance[data-density='compact'] .roadmap-plan-table > :is(thead, tbody, tfoot) > tr > :is(th, td) {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.roadmap-table-appearance[data-density='comfortable'] .roadmap-plan-table > :is(thead, tbody, tfoot) > tr > :is(th, td) {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.roadmap-table-appearance[data-font-size='small'] .roadmap-plan-table :is(.text-sm, [data-plan-title]) {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.roadmap-table-appearance[data-font-size='small'] .roadmap-plan-table .text-xs {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+}
+
+.roadmap-table-appearance[data-font-size='large'] .roadmap-plan-table :is(.text-sm, [data-plan-title]) {
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
+.roadmap-table-appearance[data-font-size='large'] .roadmap-plan-table .text-xs {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.roadmap-table-appearance[data-wrap='false'] .roadmap-plan-table [data-plan-title] {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roadmap-table-appearance[data-separators='subtle'] .roadmap-plan-table :is(thead, tbody, tfoot, tr, th, td) {
+  border-color: color-mix(in srgb, var(--color-border) 40%, var(--color-card));
+}
+
+.roadmap-table-appearance[data-separators='strong'] .roadmap-plan-table :is(thead, tbody, tfoot, tr, th, td) {
+  border-color: color-mix(in srgb, var(--color-foreground) 32%, var(--color-card));
+}

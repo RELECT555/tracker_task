@@ -13,6 +13,8 @@ import { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
 import { RoadmapWorkItemCreateService } from './roadmap-work-item-create.service';
 import { RoadmapProjectAccessController } from './roadmap-project-access.controller';
 import { RoadmapProjectAccessService } from './roadmap-project-access.service';
+import { RoadmapTablePreferencesController } from './roadmap-table-preferences.controller';
+import { RoadmapTablePreferencesService } from './roadmap-table-preferences.service';
 
 @Module({
   imports: [IdentityModule],
@@ -22,6 +24,7 @@ import { RoadmapProjectAccessService } from './roadmap-project-access.service';
     RoadmapAdminController,
     RoadmapWebhookController,
     RoadmapProjectAccessController,
+    RoadmapTablePreferencesController,
   ],
   providers: [
     RoadmapService,
@@ -31,6 +34,7 @@ import { RoadmapProjectAccessService } from './roadmap-project-access.service';
     RoadmapAzureCatalogService,
     RoadmapWorkItemCreateService,
     RoadmapProjectAccessService,
+    RoadmapTablePreferencesService,
     AdminRoleGuard,
   ],
 })

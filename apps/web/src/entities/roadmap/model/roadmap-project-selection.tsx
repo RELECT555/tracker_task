@@ -3,6 +3,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { AzureProject } from '../api/roadmapApi';
 
+export const ALL_ROADMAP_PROJECTS = '__all__';
+
 type ProjectSelection = {
   projectId: string;
   ready: boolean;
@@ -37,17 +39,18 @@ export function RoadmapProjectSelection({ userId, children }: { userId: string; 
   </ProjectSelectionContext.Provider>;
 }
 
-export function useRoadmapProject(projects: AzureProject[]) {
+export function useRoadmapProject(projects: AzureProject[], { allowAll = false }: { allowAll?: boolean } = {}) {
   const selection = useContext(ProjectSelectionContext);
   if (!selection) throw new Error('RoadmapProjectSelection is required');
 
   const { projectId, ready, selectProject } = selection;
-  const project = ready
+  const isAllProjects = ready && allowAll && projectId === ALL_ROADMAP_PROJECTS;
+  const project = ready && !isAllProjects
     ? projects.find((item) => item.id === projectId)
       ?? projects.find((item) => item.imported && item.planSynced !== false)
       ?? projects.find((item) => item.imported)
       ?? projects[0]
     : undefined;
 
-  return { project, ready, selectProject };
+  return { project, ready, selectProject, isAllProjects };
 }

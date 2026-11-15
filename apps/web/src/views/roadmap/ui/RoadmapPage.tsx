@@ -1,14 +1,13 @@
 'use client';
 
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, ExternalLink, Maximize2, Minus, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, ExternalLink, Maximize2, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
-import { RoadmapTopbar } from '@/widgets/roadmap-shell/RoadmapFrame';
 import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
 import { AzurePushPreview } from '@/entities/roadmap/ui/AzurePushPreview';
 import { AzureWorkItemIcon } from '@/entities/roadmap/ui/AzureWorkItemIcon';
@@ -22,17 +21,23 @@ import {
   roadmapApi,
   type AzureProject,
   type RoadmapAllocation,
-  type RoadmapMonthlyFact,
   type RoadmapPeriod,
   type RoadmapProjectsResult,
   type RoadmapRole,
   type RoadmapWorkItem,
 } from '@/entities/roadmap/api/roadmapApi';
 import { isRoadmapDemoMode } from '@/entities/roadmap/api/roadmapDemo';
-import { useRoadmapProject } from '@/entities/roadmap/model/roadmap-project-selection';
+import { ALL_ROADMAP_PROJECTS, useRoadmapProject } from '@/entities/roadmap/model/roadmap-project-selection';
+import { aggregateRoadmapSummaries, getRoadmapFactRoots, getRoadmapSummary } from '../model/roadmap-summary';
+import { RoadmapSummaryStrip } from './RoadmapSummaryStrip';
+import { AllProjectsPlanTable } from './AllProjectsPlanTable';
 import { getRoadmapRoleFact } from '../model/roadmap-role-fact';
 import { azureRoleEstimate, getRoadmapRolePlan } from '../model/roadmap-role-plan';
-import { useRoadmapColumnWidths, type ColumnWidthConfig } from '../model/use-roadmap-column-widths';
+import { type ColumnWidthsApi, type ColumnWidthConfig } from '../model/use-roadmap-column-widths';
+import { useRoadmapTablePreferences } from '../model/use-roadmap-table-preferences';
+import { getTableAppearanceProps } from '../model/table-appearance';
+import { TableAppearanceSettings } from './TableAppearanceSettings';
+import './table-appearance.css';
 import { CreateAzureWorkItem } from './CreateAzureWorkItem';
 import { ColumnResizeHandle, planColumnOffset, ResizablePlanTable, type PlanColumn } from './ResizablePlanTable';
 
@@ -41,7 +46,8 @@ const SUMMARY_COLUMN = { defaultWidth: 120, minWidth: 96, maxWidth: 480 };
 const ROLE_COLUMN = { defaultWidth: 200, minWidth: 140, grow: true };
 const FACT_COLUMN = { defaultWidth: 100, minWidth: 80, maxWidth: 480 };
 const DELTA_COLUMN = { defaultWidth: 90, minWidth: 80, maxWidth: 480 };
-type ColumnWidths = ReturnType<typeof useRoadmapColumnWidths>;
+const ROLE_CONTROL_CLASS = 'inline-flex h-8 max-w-full items-center gap-2 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-foreground hover:bg-muted/60';
+type ColumnWidths = ColumnWidthsApi;
 
 function planColumn(widths: ColumnWidths, id: string, label: string, sizing: ColumnWidthConfig & { grow?: boolean }): PlanColumn & ColumnWidthConfig {
   return { ...sizing, id, label, width: widths.getWidth(id, sizing), customized: widths.hasCustomWidth(id) };
@@ -117,25 +123,6 @@ function quarterMonths(year: number, quarter: number): QuarterMonth[] {
 
 function monthOptionLabel(month: QuarterMonth) {
   return `${month.label.charAt(0).toUpperCase()}${month.label.slice(1)} · ${month.monthKey.slice(2)}`;
-}
-
-function monthlyPlan(item: RoadmapWorkItem, monthKey: string, fact?: RoadmapMonthlyFact): RoadmapWorkItem {
-  return {
-    ...item,
-    actualHours: fact ? fact.workItems[item.id] ?? 0 : null,
-    allocations: item.allocations.flatMap((allocation) => {
-      // Legacy allocations can contain periods outside the allocation's planning quarter.
-      const periods = allocation.periods.filter((period) => period.monthKey === monthKey);
-      const actualHours = fact?.allocations[allocation.id] ?? null;
-      if (!periods.length && !actualHours) return [];
-      return [{
-        ...allocation,
-        periods,
-        estimatedHours: periods.reduce((hours, period) => hours + Number(period.hours), 0),
-        actualHours,
-      }];
-    }),
-  };
 }
 
 const hoursFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2, useGrouping: false });
@@ -617,11 +604,14 @@ export function RoadmapPage() {
   const canConfigure = isAdminUser(user);
   const [view, setView] = useState<'roles' | 'periods'>('roles');
   const [focusMode, setFocusMode] = useState(false);
-  const columnWidths = useRoadmapColumnWidths(user?.id);
+  const tableSettings = useRoadmapTablePreferences(user?.id);
+  const { preferences } = tableSettings;
+  const columnWidths = tableSettings.columnWidths;
+  const appearanceProps = getTableAppearanceProps(preferences);
+  const appearanceSettings = <TableAppearanceSettings preferences={preferences} onChange={tableSettings.change} onReset={tableSettings.reset} status={tableSettings.status} onRetry={tableSettings.retry} disabled={!tableSettings.ready} />;
   const [showUnassignedPeriods, setShowUnassignedPeriods] = useState(false);
-  const [roleBreakdowns, setRoleBreakdowns] = useState<Partial<Record<string, boolean>>>({});
-  const [pinnedColumns, setPinnedColumns] = useState('name');
-  const [plannedRolesOnlyByProject, setPlannedRolesOnlyByProject] = useState<Partial<Record<string, boolean>>>({});
+  const pinnedColumns = preferences.pinnedColumns;
+  const setPinnedColumns = (value: string) => tableSettings.change({ pinnedColumns: value as typeof pinnedColumns });
   const [quarterSelection, setQuarterSelection] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), quarter: Math.floor(now.getMonth() / 3) + 1 };
@@ -660,13 +650,11 @@ export function RoadmapPage() {
   const people = peopleQuery.data?.data ?? [];
   const needsPeopleSync = canConfigure && peopleQuery.isSuccess && people.length === 0;
   const usingCachedProjects = projectsQuery.data?.source === 'cache';
-  const { project: selectedProject, ready: projectSelectionReady, selectProject } = useRoadmapProject(projects);
-  const activeAzureProjectId = selectedProject?.id ?? '';
+  const { project: selectedProject, ready: projectSelectionReady, selectProject, isAllProjects } = useRoadmapProject(projects, { allowAll: true });
+  const activeAzureProjectId = isAllProjects ? ALL_ROADMAP_PROJECTS : selectedProject?.id ?? '';
   const roadmapProjectId = selectedProject?.roadmapId ?? '';
-  const showRoleDetails = roleBreakdowns[roadmapProjectId] ?? true;
-  const setRoleBreakdown = (expanded: boolean, projectId = roadmapProjectId) => {
-    setRoleBreakdowns((current) => ({ ...current, [projectId]: expanded }));
-  };
+  const showRoleDetails = preferences.showRoleDetails;
+  const setRoleBreakdown = (expanded: boolean) => tableSettings.change({ showRoleDetails: expanded });
   const projectIsSynced = Boolean(selectedProject?.imported && selectedProject.planSynced !== false);
   const canImportProject = Boolean(canConfigure && !demoMode && configured && selectedProject && !usingCachedProjects && !projectIsSynced);
   const roleSettingsHref = roadmapProjectId ? `${routes.roadmapAdminRoles}?projectId=${encodeURIComponent(roadmapProjectId)}` : routes.roadmapAdminRoles;
@@ -713,7 +701,7 @@ export function RoadmapPage() {
   });
   const monthlyFact = monthlyFactQuery.data;
   const roles = plan?.roles ?? [];
-  const plannedRolesOnly = plannedRolesOnlyByProject[roadmapProjectId] ?? true;
+  const plannedRolesOnly = preferences.plannedRolesOnly;
   const availableRoleTemplates = (roleCatalogQuery.data ?? []).filter((template) => !roles.some((role) => role.name === template.name));
   const writeBackEnabled = Boolean(plan?.azure?.writeBackEnabled);
   const canPushToAzure = plan?.azure?.canPush === true;
@@ -759,8 +747,8 @@ export function RoadmapPage() {
     mutationFn: ({ projectId, templateId }: { projectId: string; templateId: string }) => roadmapApi.addRoleFromCatalog(projectId, templateId),
     onSuccess: async (_, { projectId }) => {
       setRolePickerOpen(false);
-      setPlannedRolesOnlyByProject((current) => ({ ...current, [projectId]: false }));
-      setRoleBreakdown(true, projectId);
+      tableSettings.change({ plannedRolesOnly: false });
+      setRoleBreakdown(true);
       await queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', projectId] });
     },
   });
@@ -769,27 +757,66 @@ export function RoadmapPage() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
   });
   const monthKey = selectedMonth?.monthKey;
-  const plannedItems = useMemo(() => plan?.workItems.map((item) => monthKey
-    ? monthlyPlan(item, monthKey, monthlyFact)
-    : { ...item, allocations: item.allocations.filter((allocation) => allocation.quarterKey === currentQuarterKey) }
-  ) ?? [], [plan, monthKey, monthlyFact, currentQuarterKey]);
+  const summary = useMemo(() => plan ? getRoadmapSummary(plan, {
+    quarterKey: currentQuarterKey, monthKey, monthlyFact, plannedRolesOnly,
+  }) : undefined, [plan, currentQuarterKey, monthKey, monthlyFact, plannedRolesOnly]);
+  // Reuse each project's normal plan cache; the portfolio makes no write or import requests.
+  const overviewProjects = isAllProjects ? projects.filter((project) => project.imported && project.roadmapId) : [];
+  const overviewPlanQueries = useQueries({ queries: overviewProjects.map((project) => ({
+    queryKey: ['roadmap', 'plan', project.roadmapId],
+    queryFn: () => roadmapApi.plan(project.roadmapId!),
+    refetchInterval: demoMode ? false as const : PLAN_REFRESH_INTERVAL,
+    retry: false,
+  })) });
+  const overviewFactQueries = useQueries({ queries: overviewProjects.map((project, index) => ({
+    queryKey: ['roadmap', 'monthly-fact', project.roadmapId, selectedMonthKey],
+    queryFn: ({ signal }: { signal: AbortSignal }) => getRoadmapMonthlyFact(project.roadmapId!, selectedMonthKey, signal),
+    enabled: Boolean(monthKey && overviewPlanQueries[index].data && !overviewPlanQueries[index].isError && !demoMode),
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: PLAN_REFRESH_INTERVAL,
+    retry: false,
+  })) });
+  const overviewLastImports = useRef(new Map<string, string>());
+  useEffect(() => {
+    if (demoMode) return;
+    for (const query of overviewPlanQueries) {
+      const projectPlan = query.isError ? undefined : query.data;
+      if (!projectPlan?.syncedAt) continue;
+      const previous = overviewLastImports.current.get(projectPlan.id);
+      overviewLastImports.current.set(projectPlan.id, projectPlan.syncedAt);
+      if (previous && previous !== projectPlan.syncedAt) {
+        void queryClient.invalidateQueries({ queryKey: ['roadmap', 'monthly-fact', projectPlan.id] });
+      }
+    }
+  }, [demoMode, overviewPlanQueries, queryClient]);
+  const overviewRows = overviewProjects.map((project, index) => {
+    const query = overviewPlanQueries[index];
+    const projectPlan = query.isError ? undefined : query.data;
+    return {
+      project, plan: projectPlan,
+      summary: projectPlan ? getRoadmapSummary(projectPlan, {
+        quarterKey: currentQuarterKey, monthKey,
+        monthlyFact: overviewFactQueries[index].data, plannedRolesOnly,
+      }) : undefined,
+      loading: query.isPending,
+      error: query.isError,
+      onRetry: () => { void query.refetch(); },
+    };
+  });
+  const overviewLoading = projectsQuery.isLoading || overviewRows.some((row) => row.loading);
+  const overviewIncomplete = overviewRows.some((row) => !row.summary) || projectsQuery.isError;
+  const overviewSummary = overviewLoading || overviewIncomplete ? undefined
+    : aggregateRoadmapSummaries(overviewRows.flatMap((row) => row.summary ? [row.summary] : []));
+  const plannedItems = useMemo(() => summary?.items ?? [], [summary]);
   const epics = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'epic'), [plannedItems]);
   const features = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'feature'), [plannedItems]);
   const standaloneFeatures = features.filter((feature) => !epics.some((epic) => epic.externalId === feature.parentExternalId));
-  const rolePlan = useMemo(() => getRoadmapRolePlan(plannedItems, plan?.roles ?? [], !monthKey), [plannedItems, plan?.roles, monthKey]);
-  const visibleRoles = useMemo(() => {
-    if (!plan) return [];
-    if (!plannedRolesOnly) return plan.roles;
-    return plan.roles.filter((role) => (rolePlan.byProject.get(role.id) ?? 0) > 0);
-  }, [plan, plannedRolesOnly, rolePlan]);
-  const displayedAllocations = (selectedMonth ? [...epics, ...features] : plannedItems).flatMap((item) => item.allocations);
-  const assignedPeopleCount = new Set([
-    ...displayedAllocations.filter((allocation) => !selectedMonth || Number(allocation.estimatedHours) > 0).map((allocation) => allocation.personExternalId),
-  ]).size;
-  const totalHours = Array.from(rolePlan.byProject.values()).reduce((sum, hours) => sum + hours, 0);
+  const rolePlan = summary?.rolePlan ?? getRoadmapRolePlan([], []);
+  const visibleRoles = summary?.visibleRoles ?? [];
+  const totalHours = summary?.planHours ?? 0;
   const unattachedPlanHours = Array.from(rolePlan.byUnattached.values()).reduce((sum, hours) => sum + hours, 0);
-  const factRoots = [...epics, ...standaloneFeatures];
-  const totalActualHours = selectedMonth ? monthlyFact?.totalHours ?? null : factRoots.reduce((sum, item) => sum + Number(item.actualHours ?? 0), 0);
+  const factRoots = getRoadmapFactRoots(plannedItems);
+  const totalActualHours = summary?.actualHours ?? (selectedMonth ? null : 0);
   const roleFact = useMemo(() => plan && (!monthKey || monthlyFact)
     ? getRoadmapRoleFact(plan.workItems, plan.roles, monthKey ? monthlyFact : undefined)
     : undefined, [plan, monthKey, monthlyFact]);
@@ -808,16 +835,17 @@ export function RoadmapPage() {
     if (item.actualHours !== null && unattributedFact(Number(item.actualHours), byRole)) hasUnattributedFact = true;
   }
   const detailRoles = showRoleDetails ? visibleRoles : [];
-  const showUnattributedFact = showRoleDetails && hasUnattributedFact;
+  const showUnattributedFact = showRoleDetails && hasUnattributedFact && preferences.showFact;
+  const roleMetricCount = 1 + Number(preferences.showFact) + Number(preferences.showDelta);
   const headerRowSpan = detailRoles.length || showUnattributedFact ? 3 : 1;
   const tableColumns = [
     planColumn(columnWidths, 'name', 'Эпик / фича', NAME_COLUMN),
     planColumn(columnWidths, 'summary:plan', 'План', SUMMARY_COLUMN),
-    planColumn(columnWidths, 'summary:fact', 'Факт', SUMMARY_COLUMN),
+    ...(preferences.showFact ? [planColumn(columnWidths, 'summary:fact', 'Факт', SUMMARY_COLUMN)] : []),
     ...detailRoles.flatMap((role) => [
       planColumn(columnWidths, `plan:${role.id}`, `План · ${role.name}`, ROLE_COLUMN),
-      planColumn(columnWidths, `fact:${role.id}`, `Факт · ${role.name}`, FACT_COLUMN),
-      planColumn(columnWidths, `delta:${role.id}`, `Дельта · ${role.name}`, DELTA_COLUMN),
+      ...(preferences.showFact ? [planColumn(columnWidths, `fact:${role.id}`, `Факт · ${role.name}`, FACT_COLUMN)] : []),
+      ...(preferences.showDelta ? [planColumn(columnWidths, `delta:${role.id}`, `Дельта · ${role.name}`, DELTA_COLUMN)] : []),
     ]),
     ...(showUnattributedFact ? [planColumn(columnWidths, 'fact:unattributed', 'Факт · Без роли', FACT_COLUMN)] : []),
   ];
@@ -851,9 +879,13 @@ export function RoadmapPage() {
     )}>{displayHours(hours)}</td>
   );
 
-  const pinnedCellClass = (id: string, muted = false) => (
+  const pinnedCellClass = (id: string) => (
     pinnedColumns === 'totals' || (pinnedColumns === 'name' && id === 'name')
-      ? cn('md:sticky md:left-[var(--roadmap-pinned-left)] md:z-10', muted ? 'md:bg-muted' : 'md:bg-card') : undefined
+      ? cn(
+        'md:sticky md:left-[var(--roadmap-pinned-left)] md:z-10 md:bg-inherit',
+        id === (pinnedColumns === 'totals' ? preferences.showFact ? 'summary:fact' : 'summary:plan' : 'name')
+          && 'md:shadow-[1px_0_0_var(--color-border),5px_0_6px_-5px_rgb(0_0_0/0.18)]',
+      ) : undefined
   );
   const pinnedCellStyle = (id: string) => ({
     '--roadmap-pinned-left': planColumnOffset(id === 'name' ? [] : id === 'summary:plan' ? ['name'] : ['name', 'summary:plan']),
@@ -861,11 +893,11 @@ export function RoadmapPage() {
   const renderRoleMetrics = (roleId: string, planned: number, actual: number | null) => {
     const delta = actual === null ? null : Number((actual - planned).toFixed(2));
     return <>
-      {renderFactCell(actual, `fact:${roleId}`)}
-      <td key={`delta:${roleId}`} title="Дельта = факт − план" className={cn(
+      {preferences.showFact ? renderFactCell(actual, `fact:${roleId}`) : null}
+      {preferences.showDelta ? <td key={`delta:${roleId}`} title="Дельта = факт − план" className={cn(
         'whitespace-nowrap border-l border-border/40 px-3 py-2.5 text-right text-sm tabular-nums',
         delta !== null && delta > 0 ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
-      )}>{delta === null ? '—' : `${delta > 0 ? '+' : delta < 0 ? '−' : ''}${displayHours(Math.abs(delta))}`}</td>
+      )}>{delta === null ? '—' : `${delta > 0 ? '+' : delta < 0 ? '−' : ''}${displayHours(Math.abs(delta))}`}</td> : null}
     </>;
   };
 
@@ -876,8 +908,8 @@ export function RoadmapPage() {
     const actualByRole = roleFact?.byItem.get(item.id);
     const featureCountForm = isEpic ? FEATURE_COUNT_PLURALS.select(childCount) : null;
     return (
-      <tr key={item.id} className={`group/row align-top transition-colors ${isEpic ? 'border-t border-border bg-muted/30 hover:bg-muted/45' : 'border-t border-border/50 hover:bg-muted/15'}`}>
-        <th scope="row" style={pinnedCellStyle('name')} className={cn('py-2 text-left font-normal', pinnedCellClass('name', isEpic), isEpic ? 'px-3 inset-shadow-[2px_0_0] inset-shadow-primary/40 sm:px-4' : isChild ? 'px-0' : 'px-3 sm:px-4')}>
+      <tr key={item.id} data-row-kind={isEpic ? 'epic' : 'feature'} className={`group/row align-top transition-colors ${isEpic ? 'border-t border-border bg-[color-mix(in_srgb,var(--color-muted)_30%,var(--color-card))] hover:bg-[color-mix(in_srgb,var(--color-muted)_45%,var(--color-card))]' : 'border-t border-border/50 bg-card hover:bg-[color-mix(in_srgb,var(--color-muted)_15%,var(--color-card))]'}`}>
+        <th scope="row" style={pinnedCellStyle('name')} className={cn('py-2 text-left font-normal', pinnedCellClass('name'), isEpic ? 'px-3 inset-shadow-[2px_0_0] inset-shadow-primary/40 sm:px-4' : isChild ? 'px-0' : 'px-3 sm:px-4')}>
           {isEpic ? (
             <div className={cn('-ml-1 grid items-start gap-x-2', canCreateWorkItem ? 'grid-cols-[1.75rem_1rem_minmax(0,1fr)_2rem]' : 'grid-cols-[1.75rem_1rem_minmax(0,1fr)]')}>
               <Button
@@ -894,7 +926,7 @@ export function RoadmapPage() {
               </Button>
               <AzureWorkItemIcon type={item.type} className="mt-0.5" />
               <div className="col-start-3 min-w-0">
-                <div className="text-sm leading-5 font-semibold text-foreground [overflow-wrap:anywhere]">{item.title}</div>
+                <div data-plan-title title={item.title} className="text-sm leading-5 font-semibold text-foreground [overflow-wrap:anywhere]">{item.title}</div>
                 <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs leading-4 text-muted-foreground">
                   <span className="min-w-0 tabular-nums [overflow-wrap:anywhere]">Epic #{item.externalId}{item.state ? ` · ${item.state}` : ''}</span>
                   <span className="rounded bg-muted/70 px-1.5 whitespace-nowrap font-medium tabular-nums">
@@ -919,7 +951,7 @@ export function RoadmapPage() {
               : 'pl-3'}>
               <div className="flex min-w-0 items-start gap-2">
                 <AzureWorkItemIcon type={item.type} className="mt-0.5" />
-                <span className="min-w-0 text-sm leading-snug [overflow-wrap:anywhere]">{item.title}</span>
+                <span data-plan-title title={item.title} className="min-w-0 text-sm leading-snug [overflow-wrap:anywhere]">{item.title}</span>
               </div>
               <p className="mt-0.5 pl-6 text-[11px] text-muted-foreground">
                 <span className="mr-1">Feature</span>
@@ -928,12 +960,12 @@ export function RoadmapPage() {
             </div>
           )}
         </th>
-        <td style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:plan', isEpic), itemHours ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+        <td style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:plan'), itemHours ? 'font-medium text-foreground' : 'text-muted-foreground')}>
           {displayHours(itemHours)}
         </td>
-        <td style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:fact', isEpic), Number(actualHours) ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground')}>
+        {preferences.showFact ? <td style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:fact'), Number(actualHours) ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground')}>
           {displayHours(actualHours)}
-        </td>
+        </td> : null}
         {detailRoles.map((role) => {
           const planned = plannedByRole?.get(role.id) ?? 0;
           const actual = actualHours === null ? null : actualByRole?.get(role.id) ?? 0;
@@ -1023,34 +1055,87 @@ export function RoadmapPage() {
       : connectionQuery.isLoading
         ? 'Проверяем подключение к Azure DevOps…'
         : null;
-  const emptyPlanMessage = projectSelectionReady && configured && !projectsQuery.isError && !roadmapProjectId
+  const emptyPlanMessage = !isAllProjects && projectSelectionReady && configured && !projectsQuery.isError && !roadmapProjectId
     ? selectedProject
       ? 'Загрузите выбранный проект, чтобы получить задачи, роли и оценки из Azure DevOps.'
       : 'Выберите проект Azure DevOps выше.'
     : null;
 
+  const plannedRoleFilter = <>
+    <label className={cn(ROLE_CONTROL_CLASS, 'relative cursor-pointer has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring')}>
+      <input
+        type="checkbox"
+        role="switch"
+        checked={plannedRolesOnly}
+        aria-describedby="roadmap-planned-roles-description"
+        onChange={(event) => {
+          tableSettings.change({ plannedRolesOnly: event.target.checked });
+        }}
+        className="peer sr-only"
+      />
+      <span
+        aria-hidden="true"
+        className={cn(
+          "relative h-4 w-7 shrink-0 rounded-full bg-muted ring-1 ring-inset ring-border after:absolute after:left-0.5 after:top-0.5 after:size-3 after:rounded-full after:bg-muted-foreground after:content-['']",
+          'peer-checked:bg-primary peer-checked:ring-primary peer-checked:after:translate-x-3 peer-checked:after:bg-primary-foreground',
+          'dark:ring-muted-foreground/50 forced-colors:outline forced-colors:outline-[ButtonText] forced-colors:after:bg-[ButtonText]',
+        )}
+      />
+      <span>Только роли с планом</span>
+    </label>
+    <span id="roadmap-planned-roles-description" hidden>Роли с положительным планом. В квартальном виде учитываются назначения выбранного квартала, а при их отсутствии — оценка Azure DevOps на всю карточку. В месячном виде учитываются только часы выбранного месяца.</span>
+  </>;
+  const periodControls = <>
+    {view === 'roles' ? <SearchableSelect
+      ariaLabel="Период плана"
+      value={selectedMonthKey}
+      onChange={setSelectedMonthKey}
+      searchable={false}
+      options={[
+        { value: '', label: 'Весь квартал' },
+        ...currentQuarterMonths.map((month) => ({ value: month.monthKey, label: monthOptionLabel(month) })),
+      ]}
+      className="h-8 min-h-8 w-auto max-w-full border-border bg-background px-2.5 py-0 text-xs font-medium shadow-xs hover:bg-muted"
+    /> : null}
+    <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
+      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Предыдущий квартал" onClick={() => shiftQuarter(-1)}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></Button>
+      <span aria-live="polite" className="min-w-20 text-center text-xs font-semibold tabular-nums">{currentQuarterLabel}</span>
+      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Следующий квартал" onClick={() => shiftQuarter(1)}><ChevronRight aria-hidden="true" className="h-4 w-4" /></Button>
+    </div>
+  </>;
+
   return (
     <main className="roadmap-scrollbar relative min-h-0 flex-1 overflow-auto overscroll-none px-4 py-5 sm:px-6 lg:px-8">
         <div className="mx-auto flex min-h-full w-full flex-col gap-5">
           <h1 className="sr-only">План проекта</h1>
-          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
-            <AzureProjectPicker
-              projects={projects}
-              value={activeAzureProjectId}
-              onChange={selectProject}
-              disabled={projectsQuery.isLoading || !projectSelectionReady}
-              placeholder={demoMode ? 'Демо-проект' : configured ? 'Выбрать проект Azure DevOps' : 'Выбрать локальный проект'}
-            />
-            {plan && !canEditPlan ? <span className="text-sm text-muted-foreground">Только просмотр</span> : null}
-            {canImportProject && <Button
-              type="button"
-              onClick={() => selectedProject && syncMutation.mutate(selectedProject)}
-              disabled={syncMutation.isPending}
-              className="gap-2"
-            >
-              {syncMutation.isPending ? <RefreshCw aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" /> : <ArrowDownToLine aria-hidden="true" className="h-4 w-4" />}
-              {syncMutation.isPending ? 'Загружаем проект…' : 'Загрузить проект из Azure'}
-            </Button>}
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-6 gap-y-4">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <AzureProjectPicker
+                projects={projects}
+                includeAllProjects
+                value={activeAzureProjectId}
+                onChange={selectProject}
+                disabled={projectsQuery.isLoading || !projectSelectionReady}
+                placeholder={demoMode ? 'Демо-проект' : configured ? 'Выбрать проект Azure DevOps' : 'Выбрать локальный проект'}
+              />
+              {plan && !canEditPlan ? <span className="text-sm text-muted-foreground">Только просмотр</span> : null}
+              {canImportProject && <Button
+                type="button"
+                onClick={() => selectedProject && syncMutation.mutate(selectedProject)}
+                disabled={syncMutation.isPending}
+                className="gap-2"
+              >
+                {syncMutation.isPending ? <RefreshCw aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" /> : <ArrowDownToLine aria-hidden="true" className="h-4 w-4" />}
+                {syncMutation.isPending ? 'Загружаем проект…' : 'Загрузить проект из Azure'}
+              </Button>}
+            </div>
+            {plan || isAllProjects ? <div className="min-w-0 flex-1 basis-full xl:basis-[34rem]">
+              <RoadmapSummaryStrip
+                summary={isAllProjects ? overviewSummary : summary && view === 'periods' ? { ...summary, planHours: quarterTotalHours } : summary}
+                month={Boolean(selectedMonth)}
+                loading={isAllProjects ? overviewLoading : planQuery.isLoading}
+              />
+            </div> : null}
           </div>
 
           {demoMode ? (
@@ -1092,25 +1177,34 @@ export function RoadmapPage() {
             </div>
           ) : null}
 
-          {plan ? (
+          {isAllProjects ? <section {...appearanceProps} aria-label="Планы всех проектов" className={cn(appearanceProps.className, 'min-w-0 overflow-hidden rounded-xl border border-border bg-card')}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+              <div>
+                <h2 className="font-medium text-foreground">Все проекты</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">Импортированных проектов: {overviewProjects.length}. Раскройте проект, чтобы увидеть эпики и фичи.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">{appearanceSettings}{overviewRows.some((row) => row.summary) ? <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5" disabled={overviewPlanQueries.some((query) => query.isFetching)} onClick={() => {
+                void Promise.all(overviewPlanQueries.map((query) => query.refetch()));
+                if (monthKey && !demoMode) void Promise.all(overviewFactQueries.map((query) => query.refetch()));
+              }}><RefreshCw aria-hidden="true" className="size-3.5" />Обновить</Button> : null}</div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
+              {plannedRoleFilter}
+              <div className="flex flex-wrap items-center gap-2">{periodControls}</div>
+            </div>
+            {overviewLoading || overviewIncomplete ? <p role="status" className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+              {overviewLoading ? 'Загружаем планы проектов…' : 'Общая сводка недоступна: загрузите планы с ошибкой кнопкой «Повторить».'}
+            </p> : null}
+            {monthKey ? <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+              <p role="status">{demoMode ? 'Факт за месяц доступен в проектах Azure DevOps.' : overviewFactQueries.some((query) => query.isError) ? 'Не удалось загрузить факт за месяц для части проектов.' : overviewFactQueries.some((query) => query.isFetching) ? 'Загружаем факт за месяц…' : 'План и факт за выбранный месяц.'}</p>
+              <QueryErrorNotice title="Не удалось загрузить факт за месяц" queries={overviewFactQueries} />
+            </div> : null}
+            {!projectsQuery.isLoading && !overviewProjects.length ? <div className="px-6 py-10 text-center text-sm text-muted-foreground">
+              <p>Пока нет импортированных проектов.</p>
+              <p className="mt-1">Выберите отдельный проект в списке, чтобы открыть или загрузить его план.</p>
+            </div> : <AllProjectsPlanTable projects={overviewRows} onSelectProject={selectProject} monthKey={monthKey} showFact={preferences.showFact} />}
+          </section> : plan ? (
             <>
-              <RoadmapTopbar>
-                <dl className="grid grid-cols-3 divide-x divide-border border-t border-border pt-2 lg:flex lg:border-t-0 lg:pt-0">
-                  <div className="flex flex-col justify-between gap-0.5 pr-2 lg:px-4">
-                    <dt className="text-xs leading-tight text-muted-foreground">Эпики и фичи</dt>
-                    <dd className="text-sm font-semibold tabular-nums text-foreground">{epics.length + features.length}</dd>
-                  </div>
-                  <div className="flex flex-col justify-between gap-0.5 px-2 lg:px-4">
-                    <dt className="text-xs leading-tight text-muted-foreground">План на {selectedMonth ? monthOptionLabel(selectedMonth) : currentQuarterLabel}</dt>
-                    <dd className="text-sm font-semibold tabular-nums text-foreground">{hoursFormat.format(view === 'periods' ? quarterTotalHours : totalHours)} <span className="text-xs font-normal text-muted-foreground">часов</span></dd>
-                  </div>
-                  <div className="flex flex-col justify-between gap-0.5 pl-2 lg:px-4">
-                    <dt className="text-xs leading-tight text-muted-foreground">Участники в плане</dt>
-                    <dd className="flex items-center gap-1.5 text-sm font-semibold tabular-nums text-foreground"><Users aria-hidden="true" className="size-3.5 text-muted-foreground" />{assignedPeopleCount}</dd>
-                  </div>
-                </dl>
-              </RoadmapTopbar>
-
               {createdTasks.length > 0 && (
                 <details className="rounded-xl border border-border bg-card">
                   <summary className="cursor-pointer rounded-xl px-4 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
@@ -1132,12 +1226,13 @@ export function RoadmapPage() {
 
               {focusMode ? <div className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm" aria-hidden="true" /> : null}
               <section
+                {...appearanceProps}
                 role={focusMode ? 'dialog' : undefined}
                 aria-modal={focusMode ? true : undefined}
                 aria-label={focusMode ? 'Режим заполнения плана' : undefined}
-                className={focusMode
+                className={cn(appearanceProps.className, focusMode
                   ? 'fixed inset-3 z-50 flex h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl'
-                  : 'flex flex-col overflow-hidden rounded-xl border border-border bg-card'}
+                  : 'flex flex-col overflow-hidden rounded-xl border border-border bg-card')}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
                   <div>
@@ -1148,7 +1243,8 @@ export function RoadmapPage() {
                       {writeBackEnabled ? <> · Запись в Azure: {plan.azure?.mode === 'manual' ? 'по кнопке' : 'автоматически'}{azureErrorCount ? <span className="text-destructive"> · ошибок: {azureErrorCount}</span> : null}</> : null}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {appearanceSettings}
                     {canPushToAzure ? <Popover open={pushPreviewOpen} onOpenChange={setPushPreviewOpen}>
                       <PopoverTrigger asChild>
                         <Button type="button" variant={plan.azure?.mode === 'manual' && azureUnsyncedCount ? 'default' : 'outline'} size="sm" className="h-9 gap-2" disabled={!azureUnsyncedCount} title="Посмотреть и отправить изменения плана в Azure DevOps">
@@ -1172,31 +1268,24 @@ export function RoadmapPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     {PERIOD_PLANNING_ENABLED ? <>
                       <Button type="button" size="sm" variant={view === 'roles' ? 'secondary' : 'ghost'} onClick={() => setView('roles')} className="h-8 gap-1.5"><Users className="h-3.5 w-3.5" />По ролям</Button>
                       <Button type="button" size="sm" variant={view === 'periods' ? 'secondary' : 'ghost'} onClick={() => setView('periods')} className="h-8 gap-1.5"><Clock3 className="h-3.5 w-3.5" />По периодам</Button>
                     </> : null}
                     {view === 'roles' && roles.length > 0 && plan.workItems.length > 0 ? <>
-                      <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" aria-label="Детализация по ролям" aria-expanded={showRoleDetails} onClick={() => setRoleBreakdown(!showRoleDetails)}>
-                        {showRoleDetails ? <Minus aria-hidden="true" className="size-3.5" /> : <Plus aria-hidden="true" className="size-3.5" />}Детализация по ролям
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className={cn(ROLE_CONTROL_CLASS, 'justify-start whitespace-normal text-left hover:text-foreground', showRoleDetails && 'bg-muted/50')}
+                        aria-expanded={showRoleDetails}
+                        onClick={() => setRoleBreakdown(!showRoleDetails)}
+                      >
+                        {showRoleDetails ? <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" /> : <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />}
+                        Детализация по ролям
                       </Button>
-                      <label className="relative inline-flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 text-xs font-medium text-foreground hover:bg-muted">
-                        <input
-                          type="checkbox"
-                          role="switch"
-                          checked={plannedRolesOnly}
-                          aria-describedby="roadmap-planned-roles-description"
-                          onChange={(event) => {
-                            const checked = event.target.checked;
-                            setPlannedRolesOnlyByProject((current) => ({ ...current, [roadmapProjectId]: checked }));
-                          }}
-                          className="peer sr-only"
-                        />
-                        <span aria-hidden="true" className="relative h-[18px] w-8 shrink-0 rounded-full bg-muted-foreground peer-checked:bg-primary peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring after:absolute after:left-0.5 after:top-0.5 after:size-3.5 after:rounded-full after:bg-background after:content-[''] peer-checked:after:translate-x-3.5 motion-safe:after:transition-transform forced-colors:border forced-colors:border-[ButtonText] forced-colors:after:bg-[ButtonText]" />
-                        <span>Только роли с планом</span>
-                      </label>
-                      <span id="roadmap-planned-roles-description" hidden>Роли с положительным планом. В квартальном виде учитываются назначения выбранного квартала, а при их отсутствии — оценка Azure DevOps на всю карточку. В месячном виде учитываются только часы выбранного месяца.</span>
+                      {plannedRoleFilter}
                     </> : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1217,22 +1306,8 @@ export function RoadmapPage() {
                     ) : null}
                     {view === 'periods' && focusMode ? <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setExpandedEpics(allEpicsExpanded ? new Set() : new Set(epics.map((epic) => epic.id)))}>{allEpicsExpanded ? 'Свернуть всё' : 'Развернуть всё'}</Button> : null}
                     {view === 'periods' ? <Button type="button" variant={showUnassignedPeriods ? 'secondary' : 'outline'} size="sm" className="h-8" onClick={() => setShowUnassignedPeriods((value) => !value)}>{showUnassignedPeriods ? 'Скрыть без назначений' : 'Показать без назначений'}</Button> : null}
-                    {view === 'roles' ? <SearchableSelect
-                      ariaLabel="Период плана"
-                      value={selectedMonthKey}
-                      onChange={setSelectedMonthKey}
-                      searchable={false}
-                      options={[
-                        { value: '', label: 'Весь квартал' },
-                        ...currentQuarterMonths.map((month) => ({ value: month.monthKey, label: monthOptionLabel(month) })),
-                      ]}
-                      className="h-8 min-h-8 w-auto max-w-full border-border bg-background px-2.5 py-0 text-xs font-medium shadow-xs hover:bg-muted"
-                    /> : null}
-                    <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
-                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Предыдущий квартал" onClick={() => shiftQuarter(-1)}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></Button>
-                      <span aria-live="polite" className="min-w-20 text-center text-xs font-semibold tabular-nums">{currentQuarterLabel}</span>
-                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Следующий квартал" onClick={() => shiftQuarter(1)}><ChevronRight aria-hidden="true" className="h-4 w-4" /></Button>
-                    </div>
+                    {periodControls}
+
                     {canConfigure ? <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
                       <PopoverTrigger asChild><Button type="button" variant="outline" size="icon" className="size-9 shrink-0" aria-label="Добавить роль" title="Добавить роль" disabled={!roadmapProjectId || addRoleMutation.isPending}><UserRoundPlus aria-hidden="true" className="size-4" /></Button></PopoverTrigger>
                       <PopoverContent align="end" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(320px,calc(100vw-2rem))] rounded-xl p-2">
@@ -1307,25 +1382,25 @@ export function RoadmapPage() {
                         key={JSON.stringify([user?.id, roadmapProjectId])}
                         columns={tableColumns}
                         onColumnResize={(id, width) => columnWidths.commitWidth(id, width, tableColumns.find((column) => column.id === id)!)}
-                        className="table-fixed border-collapse text-left"
+                        className="roadmap-plan-table table-fixed border-separate border-spacing-0 text-left [&>thead>tr>th]:border-b [&>thead>tr>th]:border-b-inherit [&>tbody>tr+tr>*]:border-t [&>tbody>tr+tr>*]:border-t-inherit [&>tfoot>tr>*]:border-t-2 [&>tfoot>tr>*]:border-t-inherit"
                       >
-                      <thead className="sticky top-0 z-20 bg-card">
-                        <tr className="border-b border-border bg-muted/40 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          <th scope="col" data-column-id="name" rowSpan={headerRowSpan} style={pinnedCellStyle('name')} className={cn('relative px-3 py-2.5 pr-5 @lg:px-4 @lg:pr-5', pinnedCellClass('name', true))}><div className="flex items-center justify-between gap-1 @lg:gap-3"><span>Эпик / фича</span>{canCreateWorkItem ? <Button ref={createEpicTrigger} type="button" variant="ghost" size="icon" className="size-8 shrink-0" aria-label="Создать эпик" title="Создать эпик" aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)}><Plus aria-hidden="true" className="size-4" /></Button> : null}</div><ColumnResizeHandle columnId="name" /></th>
-                          <th scope="col" data-column-id="summary:plan" rowSpan={headerRowSpan} style={pinnedCellStyle('summary:plan')} className={cn('relative border-l border-border/60 px-3 py-2.5 text-right', pinnedCellClass('summary:plan', true))} title={selectedMonth ? 'План выбранного месяца' : 'Назначения выбранного квартала. При их отсутствии используется общая оценка Azure на карточке, без привязки к кварталу.'}>
+                      <thead className="sticky top-0 z-20 bg-card [&_th]:isolate">
+                        <tr className="border-b border-border bg-[color-mix(in_srgb,var(--color-muted)_40%,var(--color-card))] text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          <th scope="col" data-column-id="name" rowSpan={headerRowSpan} style={pinnedCellStyle('name')} className={cn('relative px-3 py-2.5 pr-5 @lg:px-4 @lg:pr-5', pinnedCellClass('name'))}><div className="flex items-center justify-between gap-1 @lg:gap-3"><span>Эпик / фича</span>{canCreateWorkItem ? <Button ref={createEpicTrigger} type="button" variant="ghost" size="icon" className="size-8 shrink-0" aria-label="Создать эпик" title="Создать эпик" aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)}><Plus aria-hidden="true" className="size-4" /></Button> : null}</div><ColumnResizeHandle columnId="name" /></th>
+                          <th scope="col" data-column-id="summary:plan" rowSpan={headerRowSpan} style={pinnedCellStyle('summary:plan')} className={cn('relative border-l border-border/60 px-3 py-2.5 text-right', pinnedCellClass('summary:plan'))} title={selectedMonth ? 'План выбранного месяца' : 'Назначения выбранного квартала. При их отсутствии используется общая оценка Azure на карточке, без привязки к кварталу.'}>
                             <span className="block">План</span><span className="text-[10px] font-normal normal-case">итого, ч</span>
                             <ColumnResizeHandle columnId="summary:plan" />
                           </th>
-                          <th scope="col" data-column-id="summary:fact" rowSpan={headerRowSpan} style={pinnedCellStyle('summary:fact')} className={cn('relative px-3 py-2.5 text-right', pinnedCellClass('summary:fact', true))} title={selectedMonth ? 'Изменение Completed Work за выбранный календарный месяц (UTC)' : 'Суммарный факт за всё время'}>
+                          {preferences.showFact ? <th scope="col" data-column-id="summary:fact" rowSpan={headerRowSpan} style={pinnedCellStyle('summary:fact')} className={cn('relative px-3 py-2.5 text-right', pinnedCellClass('summary:fact'))} title={selectedMonth ? 'Изменение Completed Work за выбранный календарный месяц (UTC)' : 'Суммарный факт за всё время'}>
                             <span className="block">Факт</span><span className="text-[10px] font-normal normal-case">{selectedMonth ? 'за месяц, ч' : 'всего, ч'}</span>
                             <ColumnResizeHandle columnId="summary:fact" />
-                          </th>
-                          {detailRoles.length || showUnattributedFact ? <th scope="colgroup" id="roadmap-role-details" colSpan={detailRoles.length * 3 + Number(showUnattributedFact)} className="border-l border-border/60 px-3 py-1.5">Детализация по ролям</th> : null}
+                          </th> : null}
+                          {detailRoles.length || showUnattributedFact ? <th scope="colgroup" id="roadmap-role-details" colSpan={detailRoles.length * roleMetricCount + Number(showUnattributedFact)} className="border-l border-border/60 px-3 py-1.5">Детализация по ролям</th> : null}
                         </tr>
                         {headerRowSpan === 3 ? <><tr className="border-b border-border bg-muted/25">
                           {detailRoles.map((role) => {
                             const hasActiveMembers = (role.members ?? []).some((member) => member.personIsActive);
-                            return <th scope="colgroup" colSpan={3} key={role.id} className="border-l border-border/60 px-3 py-2.5">
+                            return <th scope="colgroup" colSpan={roleMetricCount} key={role.id} className="border-l border-border/60 px-3 py-2.5">
                               <div className="space-y-1.5">
                                 <div className="flex items-center gap-2 normal-case tracking-normal">
                                   <RoleMark name={role.name} color={role.color} size="sm" />
@@ -1356,8 +1431,8 @@ export function RoadmapPage() {
                         <tr className="border-b border-border bg-muted/20 text-right text-[11px] font-medium text-muted-foreground">
                           {detailRoles.map((role) => <Fragment key={role.id}>
                             <th scope="col" data-column-id={`plan:${role.id}`} className="relative border-l border-border/60 px-3 py-1.5">План<ColumnResizeHandle columnId={`plan:${role.id}`} /></th>
-                            <th scope="col" data-column-id={`fact:${role.id}`} className="relative border-l border-border/40 px-3 py-1.5">Факт<ColumnResizeHandle columnId={`fact:${role.id}`} /></th>
-                            <th scope="col" data-column-id={`delta:${role.id}`} title="Факт − план" className="relative border-l border-border/40 px-3 py-1.5">Дельта<ColumnResizeHandle columnId={`delta:${role.id}`} /></th>
+                            {preferences.showFact ? <th scope="col" data-column-id={`fact:${role.id}`} className="relative border-l border-border/40 px-3 py-1.5">Факт<ColumnResizeHandle columnId={`fact:${role.id}`} /></th> : null}
+                            {preferences.showDelta ? <th scope="col" data-column-id={`delta:${role.id}`} title="Факт − план" className="relative border-l border-border/40 px-3 py-1.5">Дельта<ColumnResizeHandle columnId={`delta:${role.id}`} /></th> : null}
                           </Fragment>)}
                         </tr></> : null}
                       </thead>
@@ -1376,12 +1451,12 @@ export function RoadmapPage() {
                           </Fragment>;
                         })}
                         {standaloneFeatures.map((feature) => renderItemRow(feature))}
-                        {unattachedPlanHours > 0 ? <tr className="border-t border-border/50 text-sm">
+                        {unattachedPlanHours > 0 ? <tr className="border-t border-border/50 bg-card text-sm">
                           <th scope="row" style={pinnedCellStyle('name')} className={cn('px-4 py-3 text-left font-normal', pinnedCellClass('name'))}>
                             План без эпика / фичи<span className="mt-0.5 block text-xs text-muted-foreground">Назначения на карточках без связи с эпиком или фичей</span>
                           </th>
                           <td style={pinnedCellStyle('summary:plan')} className={cn('px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:plan'))}>{displayHours(unattachedPlanHours)}</td>
-                          <td style={pinnedCellStyle('summary:fact')} className={cn('px-3 py-3 text-right text-muted-foreground', pinnedCellClass('summary:fact'))}>—</td>
+                          {preferences.showFact ? <td style={pinnedCellStyle('summary:fact')} className={cn('px-3 py-3 text-right text-muted-foreground', pinnedCellClass('summary:fact'))}>—</td> : null}
                           {detailRoles.map((role) => <Fragment key={role.id}>
                             <td className="border-l border-border/60 px-3 py-3 text-right tabular-nums">{displayHours(rolePlan.byUnattached.get(role.id) ?? 0)}</td>
                             {renderRoleMetrics(role.id, rolePlan.byUnattached.get(role.id) ?? 0, null)}
@@ -1390,10 +1465,10 @@ export function RoadmapPage() {
                         </tr> : null}
                       </tbody>
                       <tfoot className="sticky bottom-0 z-20 bg-card">
-                        <tr className="border-t-2 border-border bg-muted/40 text-sm font-semibold text-foreground">
-                          <th scope="row" style={pinnedCellStyle('name')} className={cn('px-3 py-3 @lg:px-4', pinnedCellClass('name', true))}>Итого по проекту</th>
-                          <td style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:plan', true))}>{displayHours(totalHours)}</td>
-                          <td style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:fact', true), totalActualHours === null ? 'text-muted-foreground' : 'text-emerald-700 dark:text-emerald-300')}>{displayHours(totalActualHours)}</td>
+                        <tr className="border-t-2 border-border bg-[color-mix(in_srgb,var(--color-muted)_40%,var(--color-card))] text-sm font-semibold text-foreground">
+                          <th scope="row" style={pinnedCellStyle('name')} className={cn('px-3 py-3 @lg:px-4', pinnedCellClass('name'))}>Итого по проекту</th>
+                          <td style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:plan'))}>{displayHours(totalHours)}</td>
+                          {preferences.showFact ? <td style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:fact'), totalActualHours === null ? 'text-muted-foreground' : 'text-emerald-700 dark:text-emerald-300')}>{displayHours(totalActualHours)}</td> : null}
                           {detailRoles.map((role) => {
                             const hours = rolePlan.byProject.get(role.id) ?? 0;
                             return <Fragment key={role.id}>

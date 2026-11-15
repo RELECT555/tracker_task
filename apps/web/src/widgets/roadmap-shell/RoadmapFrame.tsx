@@ -235,7 +235,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="relative flex min-w-0 flex-1 flex-col overflow-clip bg-background md:rounded-tl-2xl md:border-l md:border-t md:border-border dark:md:rounded-tl-none dark:md:border-l-0 dark:md:border-t-0">
-        <header className={cn('flex min-h-16 shrink-0 items-center justify-between gap-x-2 gap-y-2 border-b border-border bg-card px-3 py-3 sm:gap-x-4 sm:px-6', isPlanPage && 'flex-wrap')}>
+        <header className={cn('flex shrink-0 items-center justify-between gap-x-2 gap-y-2 border-b border-border bg-card px-3 sm:gap-x-4 sm:px-6', isPlanPage ? 'min-h-14 flex-wrap py-2' : 'min-h-16 py-3')}>
           <div className="flex min-w-0 items-center gap-3">
             <span className="hidden size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary sm:flex md:hidden">
               <GitBranch className="size-5" strokeWidth={1.7} aria-hidden="true" />

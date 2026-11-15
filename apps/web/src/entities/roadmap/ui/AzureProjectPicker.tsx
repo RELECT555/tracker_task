@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo } from 'react';
-import { ArrowDownToLine, Check } from 'lucide-react';
+import { ArrowDownToLine, Check, Layers3 } from 'lucide-react';
 import { type AzureProject } from '@/entities/roadmap/api/roadmapApi';
+import { ALL_ROADMAP_PROJECTS } from '@/entities/roadmap/model/roadmap-project-selection';
 import { SearchableSelect } from '@/shared/ui/searchable-select';
 
 export function AzureProjectPicker({
@@ -10,6 +11,7 @@ export function AzureProjectPicker({
   value,
   onChange,
   disabled = false,
+  includeAllProjects = false,
   placeholder = 'Выбрать проект Azure DevOps',
   className,
 }: {
@@ -17,10 +19,18 @@ export function AzureProjectPicker({
   value: string;
   onChange: (projectId: string) => void;
   disabled?: boolean;
+  includeAllProjects?: boolean;
   placeholder?: string;
   className?: string;
 }) {
   const options = useMemo(() => [
+    ...(includeAllProjects ? [{
+      value: ALL_ROADMAP_PROJECTS,
+      label: 'Все проекты',
+      description: 'Все импортированные проекты',
+      group: 'Общий обзор',
+      leading: <Layers3 className="h-4 w-4" />,
+    }] : []),
     ...projects.filter((project) => project.imported).map((project) => ({
       value: project.id,
       label: project.name,
@@ -35,7 +45,7 @@ export function AzureProjectPicker({
       group: 'Доступны для импорта',
       leading: <ArrowDownToLine className="h-4 w-4" />,
     })),
-  ], [projects]);
+  ], [projects, includeAllProjects]);
 
   return <SearchableSelect
     value={value}
