@@ -5,6 +5,7 @@ import {
   getSessionId,
   updateTokens,
 } from '@/shared/lib/auth-storage';
+import { refreshOutcomeForStatus, type RefreshOutcome } from '@/shared/lib/refresh-outcome';
 
 const baseURL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
 
@@ -16,7 +17,7 @@ interface RefreshResponse {
   expiresIn: number;
 }
 
-const pendingRefreshes = new Map<string, Promise<boolean>>();
+const pendingRefreshes = new Map<string, Promise<RefreshOutcome>>();
 
 function notifyAuthExpired(): void {
   clearTokens();
@@ -25,10 +26,10 @@ function notifyAuthExpired(): void {
   }
 }
 
-async function refreshAccessToken(sessionId: string, refreshToken: string): Promise<boolean> {
+async function refreshAccessToken(sessionId: string, refreshToken: string): Promise<RefreshOutcome> {
   const pending = pendingRefreshes.get(sessionId);
   if (pending) return pending;
-  const refresh = (async () => {
+  const refresh = (async (): Promise<RefreshOutcome> => {
     try {
       const response = await fetch(`${baseURL}/auth/refresh`, {
         method: 'POST',
@@ -37,32 +38,38 @@ async function refreshAccessToken(sessionId: string, refreshToken: string): Prom
       });
 
       if (!response.ok) {
-        return false;
+        return refreshOutcomeForStatus(response.status);
       }
 
       const data = (await response.json()) as RefreshResponse;
-      if (getSessionId() !== sessionId) return false;
+      if (getSessionId() !== sessionId) return 'rejected';
       if (getRefreshToken() === refreshToken) {
         updateTokens(data.accessToken, data.refreshToken);
       }
-      return true;
+      return 'refreshed';
     } catch {
-      return false;
+      // Offline or a broken response: the session itself is untouched.
+      return 'unavailable';
     }
   })().finally(() => pendingRefreshes.delete(sessionId));
   pendingRefreshes.set(sessionId, refresh);
   return refresh;
 }
 
-export async function handleUnauthorizedResponse(sessionId: string, accessToken: string): Promise<boolean> {
-  if (getSessionId() !== sessionId) return false;
-  if (getAccessToken() !== accessToken) return true;
+/**
+ * Called after a 401. `refreshed` means the request can be retried with the current token;
+ * `rejected` means the session is gone (the user is signed out); `unavailable` means the token
+ * could not be refreshed right now but the session is kept.
+ */
+export async function handleUnauthorizedResponse(sessionId: string, accessToken: string): Promise<RefreshOutcome> {
+  if (getSessionId() !== sessionId) return 'rejected';
+  if (getAccessToken() !== accessToken) return 'refreshed';
   const refreshToken = getRefreshToken();
-  const refreshed = refreshToken ? await refreshAccessToken(sessionId, refreshToken) : false;
-  if (getSessionId() !== sessionId) return false;
-  if (!refreshed && getAccessToken() === accessToken) {
-    notifyAuthExpired();
-    return false;
-  }
-  return true;
+  const outcome = refreshToken ? await refreshAccessToken(sessionId, refreshToken) : 'rejected';
+  if (getSessionId() !== sessionId) return 'rejected';
+  if (outcome !== 'rejected') return outcome;
+  // Another tab may have signed in again or refreshed while this request was waiting.
+  if (getAccessToken() !== accessToken) return 'refreshed';
+  notifyAuthExpired();
+  return 'rejected';
 }

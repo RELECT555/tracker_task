@@ -54,9 +54,13 @@ export async function apiFetch<T>(
     const code = body?.error?.code as string | undefined;
 
     if (code === 'UNAUTHORIZED' || !code) {
-      const refreshed = await handleUnauthorizedResponse(sessionId, token);
-      if (refreshed && getSessionId() === sessionId) {
+      const outcome = await handleUnauthorizedResponse(sessionId, token);
+      if (outcome === 'refreshed' && getSessionId() === sessionId) {
         return apiFetch<T>(path, { ...options, _retry: true }, origin);
+      }
+      if (outcome === 'unavailable') {
+        // The session is still valid; a 5xx keeps callers' own retry/notice logic out of the "signed out" path.
+        throw new ApiError('Не удалось обновить сессию. Попробуйте ещё раз.', 'REFRESH_UNAVAILABLE', 503);
       }
     }
 
