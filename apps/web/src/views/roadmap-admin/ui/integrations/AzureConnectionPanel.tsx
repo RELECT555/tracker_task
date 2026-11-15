@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Eye, EyeOff, LoaderCircle } from 'lucide-react';
+import { ChevronDown, Cloud, Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { roadmapApi, type RoadmapIntegrationSettings } from '@/entities/roadmap/api/roadmapApi';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
@@ -67,23 +67,27 @@ export function AzureConnectionPanel({ settings, openFromLink, onFirstConnect }:
 
   return (
     <section id="azure-connection" aria-labelledby="azure-connection-title" className="scroll-mt-4 rounded-xl border border-border bg-card">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5">
-        <div className="min-w-0 flex-1 basis-full sm:basis-0">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-4 sm:px-5">
+        <div className="flex min-w-0 flex-1 basis-full items-center gap-3.5 sm:basis-0">
+          <span aria-hidden="true" className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+            <Cloud className="size-5" />
+          </span>
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <h2 id="azure-connection-title" className="font-semibold text-foreground">Azure DevOps</h2>
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              <h2 id="azure-connection-title" className="text-base font-semibold leading-tight text-foreground">Azure DevOps</h2>
               <StatusPill active={settings.configured} label={settings.configured ? 'Настроено' : 'Не подключено'} />
             </div>
             <p className="mt-1 text-sm text-muted-foreground [overflow-wrap:anywhere]">
-              {settings.configured ? settings.organizationUrl : 'Укажите адрес организации и токен доступа.'}
+              {settings.configured ? settings.organizationUrl.replace(/^https?:\/\//, '') : 'Укажите адрес организации и токен доступа.'}
             </p>
           </div>
         </div>
         {settings.configured ? (
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
+            aria-label="Настройки подключения"
             aria-expanded={editing}
             aria-controls="azure-connection-form"
             onClick={() => {
@@ -95,7 +99,7 @@ export function AzureConnectionPanel({ settings, openFromLink, onFirstConnect }:
               setShowPat(false);
             }}
           >
-            Настройки подключения <ChevronDown aria-hidden="true" className={editing ? 'size-4 rotate-180' : 'size-4'} />
+            Настройки <ChevronDown aria-hidden="true" className={editing ? 'size-4 rotate-180' : 'size-4'} />
           </Button>
         ) : <a href="#azure-help" className="rounded text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">Справка</a>}
       </div>
