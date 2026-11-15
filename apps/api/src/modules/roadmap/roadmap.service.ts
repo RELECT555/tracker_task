@@ -219,6 +219,27 @@ export class RoadmapService {
     const endpoint = `${credentials.organizationUrl}/${encodeURIComponent(project.externalId)}/_apis/wit/wiql`;
     let importedCount = 0;
     let lastId = 0;
+    const enrichedIds = new Set<number>();
+    if (changedSince) {
+      // Older imports did not request AssignedTo. Enrich them once even when the
+      // Azure card has not changed since the last incremental synchronization.
+      const existing = await this.prisma.roadmapWorkItem.findMany({
+        where: { projectId: project.id, type: { in: ['Epic', 'Feature', 'Task'] } },
+        select: { externalId: true, azureCustomFields: true },
+      });
+      const missingAssigneeIds = existing
+        .filter((item) => !item.azureCustomFields || typeof item.azureCustomFields !== 'object'
+          || !Object.prototype.hasOwnProperty.call(item.azureCustomFields, 'System.AssignedTo'))
+        .map((item) => Number(item.externalId))
+        .filter((id) => Number.isSafeInteger(id) && id > 0 && id <= 2147483647);
+      if (missingAssigneeIds.length) {
+        const enriched = await this.importer.importWorkItems(project, missingAssigneeIds, credentials, {
+          requestTimeoutMs: AZURE_IMPORT_REQUEST_TIMEOUT_MS,
+        });
+        for (const item of enriched) enrichedIds.add(item.id);
+        importedCount += enriched.length;
+      }
+    }
 
     while (true) {
       const query = 'SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project'
@@ -232,7 +253,7 @@ export class RoadmapService {
       if (ids.some((id, index) => !Number.isSafeInteger(id) || id <= (ids[index - 1] ?? lastId))) {
         throw new BadGatewayException('Azure DevOps returned out-of-order work item IDs');
       }
-      const imported = await this.importer.importWorkItems(project, ids, credentials, {
+      const imported = await this.importer.importWorkItems(project, ids.filter((id) => !enrichedIds.has(id)), credentials, {
         requestTimeoutMs: AZURE_IMPORT_REQUEST_TIMEOUT_MS,
         requireAll: Boolean(changedSince),
       });
@@ -299,6 +320,7 @@ export class RoadmapService {
       return {
         ...item,
         allocations,
+        ownActualHours: item.actualHours,
         actualHours: isPlanItem(item) ? rolledUpActualHours.get(item.id) ?? 0 : item.actualHours,
         url: createdOrganization ? roadmapCreatedWorkItemUrl(createdOrganization, project.name, item.externalId) : item.url,
       };
@@ -346,7 +368,7 @@ export class RoadmapService {
 
     const monthStart = new Date(`${monthKey}-01T00:00:00.000Z`);
     const now = Date.now();
-    if (monthStart.getTime() > now) return { workItems: {}, allocations: {}, totalHours: 0 };
+    if (monthStart.getTime() > now) return { workItems: {}, allocations: {}, totalHours: 0, sourceHours: {} };
     const nextMonth = new Date(monthStart);
     nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
     const before = new Date(monthStart.getTime() - 1);
@@ -371,7 +393,7 @@ export class RoadmapService {
       const hours = changes.get(azureTaskId);
       return hours === undefined ? [] : [[id, hours] as const];
     });
-    return { workItems: Object.fromEntries(workItems), allocations: Object.fromEntries(allocations), totalHours };
+    return { workItems: Object.fromEntries(workItems), allocations: Object.fromEntries(allocations), totalHours, sourceHours: Object.fromEntries(changes) };
   }
 
   async listAzurePeople() {

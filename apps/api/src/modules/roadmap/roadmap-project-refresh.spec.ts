@@ -19,6 +19,7 @@ function setup(projects = [project]) {
   const prisma = {
     $transaction: jest.fn(),
     roadmapRole: { findMany: jest.fn().mockResolvedValue([]) },
+    roadmapWorkItem: { findMany: jest.fn().mockResolvedValue([]) },
     roadmapProject: {
       findMany: jest.fn().mockResolvedValue(projects),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -116,5 +117,17 @@ describe('Scheduled Roadmap project refresh', () => {
     expect(catalog.syncProject).toHaveBeenCalledWith(project.externalId, credentials);
     expect(importer.invalidateFieldCatalog).toHaveBeenCalled();
     expect(JSON.parse(integration.requestJson.mock.calls[0][1].body).query).not.toContain('[System.ChangedDate]');
+  });
+
+  it('enriches unchanged cards from old imports once, including clearing an unassigned identity', async () => {
+    const { service, prisma, importer } = setup();
+    prisma.roadmapWorkItem.findMany.mockResolvedValueOnce([
+      { externalId: '7', azureCustomFields: { 'Custom.Estimate': 12 } },
+      { externalId: '8', azureCustomFields: { 'System.AssignedTo': null } },
+    ]);
+    importer.importWorkItems.mockResolvedValueOnce([{ id: 7 }]);
+    await service.refreshImportedProjects();
+    expect(importer.importWorkItems).toHaveBeenNthCalledWith(1, project, [7], credentials, { requestTimeoutMs: expect.any(Number) });
+    expect(prisma.roadmapProject.updateMany).toHaveBeenCalledTimes(1);
   });
 });

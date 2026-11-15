@@ -65,6 +65,7 @@ describe('Roadmap monthly fact', () => {
       workItems: { epic: 11, feature: 4 },
       allocations: { linked: 6 },
       totalHours: 11,
+      sourceHours: { '1': 3, '2': -2, '4': 6, '5': 7, '6': 4, '7': 0 },
     });
     const bodies = requestJson.mock.calls.map(([, init]) => JSON.parse(init.body));
     const fields = [completedWork, createdDate];
@@ -79,8 +80,8 @@ describe('Roadmap monthly fact', () => {
     const { service, requestJson } = setup([workItem('epic', '1', 'Epic', null)]);
     requestJson.mockResolvedValue({ value: [azureItem(1, 2)] });
 
-    const emptyFact = { workItems: {}, allocations: {}, totalHours: 0 };
-    await expect(service.getProjectFact('project', '2026-11')).resolves.toEqual(emptyFact);
+    const emptyFact = { workItems: {}, allocations: {}, totalHours: 0, sourceHours: {} };
+    await expect(service.getProjectFact('project', '2026-11')).resolves.toEqual({ ...emptyFact, sourceHours: { '1': 0 } });
     await expect(service.getProjectFact('project', '2026-12')).resolves.toEqual(emptyFact);
     expect(requestJson.mock.calls.map(([, init]) => JSON.parse(init.body).asOf)).toEqual([
       monthEndSnapshot, now.toISOString(),

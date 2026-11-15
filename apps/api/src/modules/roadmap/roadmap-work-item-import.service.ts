@@ -17,6 +17,7 @@ const FIELD_CATALOG_TTL_MS = 10 * 60 * 1000;
 const WORK_ITEM_BATCH_SIZE = 200;
 const COMPLETED_WORK = 'Microsoft.VSTS.Scheduling.CompletedWork';
 const CREATED_DATE = 'System.CreatedDate';
+const ASSIGNED_TO = 'System.AssignedTo';
 
 function completedWork(item: AzureWorkItem | undefined) {
   const value = item?.fields[COMPLETED_WORK];
@@ -57,7 +58,7 @@ export class RoadmapWorkItemImportService {
     const customFields = [...names];
     const fields = [...new Set([
       'System.Id', 'System.Title', 'System.WorkItemType', 'System.State', 'System.Parent',
-      COMPLETED_WORK, ...customFields,
+      COMPLETED_WORK, ASSIGNED_TO, ...customFields,
     ])];
     const imported: AzureWorkItem[] = [];
     for (let offset = 0; offset < ids.length; offset += WORK_ITEM_BATCH_SIZE) {
@@ -159,6 +160,9 @@ export class RoadmapWorkItemImportService {
     const azureCustomFields = Object.fromEntries(customFields
       .filter((fieldName) => fields[fieldName] !== undefined)
       .map((fieldName) => [fieldName, fields[fieldName]]));
+    // Store null as well, so removing an assignee clears the old identity and
+    // existing imports can be distinguished from cards awaiting enrichment.
+    azureCustomFields[ASSIGNED_TO] = fields[ASSIGNED_TO] ?? null;
     const stringValue = (value: unknown, fallback: string | null = null) => {
       if (typeof value === 'string' || typeof value === 'number') return String(value);
       return fallback;

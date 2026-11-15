@@ -98,6 +98,8 @@ export interface RoadmapWorkItem {
   state: string | null;
   url: string | null;
   actualHours: number | string | null;
+  /** Completed Work stored on this card, before descendant roll-up. */
+  ownActualHours?: number | string | null;
   azureCustomFields: Record<string, unknown> | null;
   allocations: RoadmapAllocation[];
 }
@@ -135,6 +137,8 @@ export interface RoadmapMonthlyFact {
   workItems: Record<string, number>;
   allocations: Record<string, number>;
   totalHours: number;
+  /** Net Completed Work by Azure work item ID, including tasks without a local allocation. */
+  sourceHours?: Record<string, number>;
 }
 
 export function getRoadmapMonthlyFact(projectId: string, monthKey: string, signal?: AbortSignal) {

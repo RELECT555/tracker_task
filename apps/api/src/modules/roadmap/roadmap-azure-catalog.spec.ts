@@ -108,9 +108,9 @@ describe('Azure Roles Estimate catalog', () => {
     });
 
     const batchRequest = integration.requestJson.mock.calls[1][1] as { body: string };
-    expect(JSON.parse(batchRequest.body).fields).toEqual(expect.arrayContaining(['Custom.Team', 'Custom.AnalystHours']));
+    expect(JSON.parse(batchRequest.body).fields).toEqual(expect.arrayContaining(['Custom.Team', 'Custom.AnalystHours', 'System.AssignedTo']));
     expect(prisma.roadmapWorkItem.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      update: expect.objectContaining({ azureCustomFields: { 'Custom.Team': 'Platform', 'Custom.AnalystHours': 32 } }),
+      update: expect.objectContaining({ azureCustomFields: { 'Custom.Team': 'Platform', 'Custom.AnalystHours': 32, 'System.AssignedTo': null } }),
     }));
   });
 });
