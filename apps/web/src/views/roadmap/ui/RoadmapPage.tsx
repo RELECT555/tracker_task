@@ -186,7 +186,15 @@ function QuarterHoursCell({ hours, label, disabled, allocationId, rowIndex, mont
     onChange={(event) => setDraft(event.target.value)}
     onBlur={() => void save()}
     onKeyDown={(event) => {
-      if (event.key === 'Enter') event.currentTarget.blur();
+      if (event.key === 'Enter') {
+        // Like a spreadsheet: Enter moves down the month column, Shift+Enter up. Arrow keys stay with the number spinner.
+        const below = event.currentTarget.closest('table')?.querySelector<HTMLInputElement>(
+          `[data-quarter-cell="true"][data-quarter-row="${rowIndex + (event.shiftKey ? -1 : 1)}"][data-quarter-month="${monthIndex}"]`,
+        );
+        event.preventDefault();
+        if (below) below.focus(); // leaving the cell saves it through onBlur
+        else event.currentTarget.blur();
+      }
       if (event.key === 'Escape') { setDraft(hours ? String(hours) : ''); event.currentTarget.blur(); }
       if (event.key === 'Tab') {
         const cells = Array.from(event.currentTarget.closest('table')?.querySelectorAll<HTMLInputElement>('[data-quarter-cell="true"]') ?? []);
@@ -323,6 +331,8 @@ function QuarterPlanningGrid({
   const monthHours = (allocations: RoadmapAllocation[], monthKey: string) => allocations.reduce((sum, allocation) =>
     sum + allocation.periods.reduce((inner, period) => inner + (period.monthKey === monthKey ? Number(period.hours) : 0), 0), 0);
   const plannedHours = (allocation: RoadmapAllocation) => allocation.periods.reduce((sum, period) => sum + Number(period.hours), 0);
+  /** Estimate not yet spread over months; negative when the months exceed the estimate. */
+  const unplannedHours = (allocations: RoadmapAllocation[]) => allocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours) - plannedHours(allocation), 0);
   const quarterHours = (allocations: RoadmapAllocation[]) => months.reduce((sum, month) => sum + monthHours(allocations, month.monthKey), 0);
   const assignments = features.flatMap((feature) => feature.allocations);
   const legacyPeriods = assignments.flatMap((allocation) => allocation.periods.filter((period) => !period.monthKey));
@@ -346,7 +356,7 @@ function QuarterPlanningGrid({
       </th>
       {months.map((month) => <td key={month.monthKey} className="border-b border-border/50 px-3 py-2.5 text-right text-sm tabular-nums text-foreground/80">{monthHours(itemAllocations, month.monthKey) || <span className="text-muted-foreground">—</span>}</td>)}
       <td className="border-b border-l border-primary/15 bg-primary/[0.055] px-3 py-2.5 text-right text-sm font-semibold tabular-nums text-foreground">{quarterHours(itemAllocations) || <span className="text-muted-foreground">—</span>}</td>
-      <td className="border-b border-border/50 px-4 py-2.5 text-right text-sm tabular-nums text-muted-foreground">{itemAllocations.reduce((sum, allocation) => sum + Number(allocation.estimatedHours) - plannedHours(allocation), 0) || '—'}</td>
+      <td title={unplannedHours(itemAllocations) < 0 ? 'Распределено больше, чем оценено' : undefined} className={`border-b border-border/50 px-4 py-2.5 text-right text-sm tabular-nums ${unplannedHours(itemAllocations) < 0 ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>{unplannedHours(itemAllocations) || '—'}</td>
     </tr>
   );
 
@@ -905,7 +915,7 @@ export function RoadmapPage() {
     const featureCountForm = isEpic ? FEATURE_COUNT_PLURALS.select(childCount) : null;
     return (
       <tr key={item.id} data-row-kind={isEpic ? 'epic' : 'feature'} className={`group/row align-top transition-colors ${isEpic ? 'border-t border-border bg-[color-mix(in_srgb,var(--color-muted)_30%,var(--color-card))] hover:bg-[color-mix(in_srgb,var(--color-muted)_45%,var(--color-card))]' : 'border-t border-border/50 bg-card hover:bg-[color-mix(in_srgb,var(--color-muted)_15%,var(--color-card))]'}`}>
-        <th scope="row" style={pinnedCellStyle('name')} className={cn('py-2 text-left font-normal', pinnedCellClass('name'), isEpic ? 'px-3 inset-shadow-[2px_0_0] inset-shadow-primary/40 sm:px-4' : isChild ? 'px-0' : 'px-3 sm:px-4')}>
+        <th scope="row" style={pinnedCellStyle('name')} className={cn('py-2 text-left font-normal', pinnedCellClass('name'), isEpic ? 'px-3 pr-5 inset-shadow-[2px_0_0] inset-shadow-primary/40 sm:px-4 sm:pr-5' : isChild ? 'px-0' : 'px-3 sm:px-4')}>
           {isEpic ? (
             <div className={cn('-ml-1 grid items-start gap-x-2', canCreateWorkItem ? 'grid-cols-[1.75rem_1rem_minmax(0,1fr)_2rem]' : 'grid-cols-[1.75rem_1rem_minmax(0,1fr)]')}>
               <Button
@@ -923,9 +933,9 @@ export function RoadmapPage() {
               <AzureWorkItemIcon type={item.type} className="mt-0.5" />
               <div className="col-start-3 min-w-0">
                 <div data-plan-title title={item.title} className="text-sm leading-5 font-semibold text-foreground [overflow-wrap:anywhere]">{item.title}</div>
-                <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs leading-4 text-muted-foreground">
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-4 text-muted-foreground">
                   <span className="min-w-0 tabular-nums [overflow-wrap:anywhere]">Epic #{item.externalId}{item.state ? ` · ${item.state}` : ''}</span>
-                  <span className="rounded bg-muted/70 px-1.5 whitespace-nowrap font-medium tabular-nums">
+                  <span className="rounded-full bg-muted px-2 py-px whitespace-nowrap font-medium tabular-nums text-foreground/70">
                     {childCount} {featureCountForm === 'one' ? 'фича' : featureCountForm === 'few' ? 'фичи' : 'фич'}
                   </span>
                 </div>
@@ -934,7 +944,7 @@ export function RoadmapPage() {
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="-mt-1 size-8 text-muted-foreground hover:text-foreground"
+                className="self-center size-8 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100"
                 aria-label={`Создать фичу в эпике ${item.title}`}
                 title="Создать фичу"
                 aria-haspopup="dialog"

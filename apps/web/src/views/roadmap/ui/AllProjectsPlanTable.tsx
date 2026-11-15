@@ -3,13 +3,16 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRoadmapSummary, type RoadmapProjectOverview, type RoadmapSummary, type RoadmapSummaryMetrics } from '@tracker/shared';
-import { ArrowUpRight, ChevronDown, ChevronRight, FolderOpen } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpRight, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Download, FolderOpen, Search } from 'lucide-react';
 import { getRoadmapMonthlyFact, roadmapApi, type AzureProject, type RoadmapRole, type RoadmapWorkItem } from '@/entities/roadmap/api/roadmapApi';
 import { isRoadmapDemoMode } from '@/entities/roadmap/api/roadmapDemo';
 import { AzureWorkItemIcon } from '@/entities/roadmap/ui/AzureWorkItemIcon';
+import { Button } from '@/shared/ui/button';
 import { QueryErrorNotice } from '@/shared/ui/error-notice';
+import { Input } from '@/shared/ui/input';
 import { cn } from '@/shared/lib/utils';
 import { Skeleton, SkeletonStatus } from '@/shared/ui/skeleton';
+import { downloadCsv } from '../model/roadmap-csv';
 
 type ProjectSummary = RoadmapSummary<RoadmapWorkItem, RoadmapRole>;
 
@@ -30,6 +33,84 @@ function toggle(set: Set<string>, key: string) {
   return next;
 }
 
+type SortKey = 'name' | 'epics' | 'features' | 'plan' | 'fact' | 'done' | 'delta' | 'roles' | 'participants';
+type SortState = { key: SortKey; dir: 'asc' | 'desc' } | null;
+
+/** These columns exist only when fact is shown. */
+const FACT_SORT_KEYS: SortKey[] = ['fact', 'done', 'delta'];
+
+/** Name sorts A→Я first, numbers largest first; a third click resets the order. */
+function nextSort(current: SortState, key: SortKey): SortState {
+  const first = key === 'name' ? 'asc' : 'desc';
+  if (current?.key !== key) return { key, dir: first };
+  if (current.dir === first) return { key, dir: first === 'asc' ? 'desc' : 'asc' };
+  return null;
+}
+
+function sortValue(key: SortKey, project: ImportedProject, summary?: RoadmapProjectOverview): number | string | null {
+  if (key === 'name') return project.name;
+  const metrics = summary?.metrics;
+  if (!metrics) return null;
+  switch (key) {
+    case 'epics': return metrics.epics;
+    case 'features': return metrics.features;
+    case 'plan': return metrics.planHours;
+    case 'fact': return metrics.actualHours;
+    case 'done': return donePercent(metrics);
+    case 'delta': return deltaOf(metrics);
+    case 'roles': return metrics.roles;
+    case 'participants': return metrics.participants;
+  }
+}
+
+const VIEW_STORAGE_KEY = 'roadmap-all-projects-view';
+
+type StoredView = { projects?: string[]; epics?: string[]; sort?: SortState };
+
+const isStringList = (value: unknown): value is string[] => Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+
+/** Expanded rows and sort order are a per-browser convenience, so every storage failure is ignored. */
+function readStoredView(): StoredView {
+  try {
+    const stored: unknown = JSON.parse(window.localStorage.getItem(VIEW_STORAGE_KEY) ?? 'null');
+    if (!stored || typeof stored !== 'object') return {};
+    const { projects, epics, sort } = stored as Record<string, unknown>;
+    const validSort = sort && typeof sort === 'object'
+      && ['name', 'epics', 'features', 'plan', 'fact', 'done', 'delta', 'roles', 'participants'].includes((sort as { key?: string }).key ?? '')
+      && ['asc', 'desc'].includes((sort as { dir?: string }).dir ?? '');
+    return {
+      projects: isStringList(projects) ? projects : undefined,
+      epics: isStringList(epics) ? epics : undefined,
+      sort: validSort ? sort as SortState : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredView(view: StoredView) {
+  try { window.localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify(view)); } catch { /* optional convenience */ }
+}
+
+function columnCount(showFact: boolean) {
+  return showFact ? 9 : 6;
+}
+
+function SortHeader({ label, sortKey, sort, onSort, className, title }: {
+  label: React.ReactNode; sortKey: SortKey; sort: SortState; onSort: (key: SortKey) => void; className?: string; title?: string;
+}) {
+  const active = sort?.key === sortKey;
+  const Icon = !active ? ChevronsUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown;
+  return <th scope="col" aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined} className={cn('font-medium', className)}>
+    <button
+      type="button"
+      title={title}
+      onClick={() => onSort(sortKey)}
+      className={cn('inline-flex items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring', active && 'text-foreground')}
+    >{label}<Icon aria-hidden="true" className={cn('size-3 shrink-0', !active && 'opacity-40')} /></button>
+  </th>;
+}
+
 const numberFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
 const metricClass = 'whitespace-nowrap px-3 py-3 text-right text-sm tabular-nums';
 
@@ -37,15 +118,41 @@ function hours(value: number | null) {
   return value === null ? '—' : `${numberFormat.format(value)} ч`;
 }
 
+/** Fact minus plan; positive means the plan is exceeded. */
+function deltaOf(summary?: RoadmapSummaryMetrics) {
+  if (!summary || summary.actualHours === null) return null;
+  return Number((summary.actualHours - summary.planHours).toFixed(2));
+}
+
+function donePercent(summary?: RoadmapSummaryMetrics) {
+  if (!summary || summary.actualHours === null || summary.planHours <= 0) return null;
+  return Math.round((summary.actualHours / summary.planHours) * 100);
+}
+
+function formatDelta(delta: number) {
+  return `${delta > 0 ? '+' : delta < 0 ? '−' : ''}${hours(Math.abs(delta))}`;
+}
+
 function Metrics({ summary, showFact = true, loading = false }: { summary?: RoadmapSummaryMetrics; showFact?: boolean; loading?: boolean }) {
   if (!summary && loading) {
-    return <>{Array.from({ length: showFact ? 6 : 5 }, (_, index) => <td key={index} className={metricClass}><Skeleton className="ml-auto h-3 w-8" /></td>)}</>;
+    return <>{Array.from({ length: showFact ? 8 : 5 }, (_, index) => <td key={index} className={metricClass}><Skeleton className="ml-auto h-3 w-8" /></td>)}</>;
   }
+  const percent = donePercent(summary);
+  const delta = deltaOf(summary);
   return <>
     <td className={cn(metricClass, 'text-muted-foreground')}>{summary ? numberFormat.format(summary.epics) : '—'}</td>
     <td className={cn(metricClass, 'text-muted-foreground')}>{summary ? numberFormat.format(summary.features) : '—'}</td>
     <td className={cn(metricClass, 'font-medium text-foreground')}>{summary ? hours(summary.planHours) : '—'}</td>
-    {showFact ? <td className={cn(metricClass, summary?.actualHours ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground')}>{summary ? hours(summary.actualHours) : '—'}</td> : null}
+    {showFact ? <>
+      <td className={cn(metricClass, summary?.actualHours ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground')}>{summary ? hours(summary.actualHours) : '—'}</td>
+      <td className={metricClass}>{percent === null ? <span className="text-muted-foreground">—</span> : <span className="inline-flex items-center justify-end gap-2" title={`Факт — ${percent}% от плана`}>
+        <span aria-hidden="true" className="h-1.5 w-12 overflow-hidden rounded-full bg-muted">
+          <span className={cn('block h-full rounded-full', percent > 100 ? 'bg-amber-500' : 'bg-emerald-500')} style={{ width: `${Math.min(percent, 100)}%` }} />
+        </span>
+        <span className={cn('w-10 text-right', percent > 100 ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-foreground')}>{percent}%</span>
+      </span>}</td>
+      <td title="Дельта = факт − план" className={cn(metricClass, delta !== null && delta > 0 ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}>{delta === null ? '—' : formatDelta(delta)}</td>
+    </> : null}
     <td className={cn(metricClass, 'text-muted-foreground')}>{summary ? numberFormat.format(summary.roles) : '—'}</td>
     <td className={cn(metricClass, 'text-muted-foreground')}>{summary ? numberFormat.format(summary.participants) : '—'}</td>
   </>;
@@ -171,7 +278,7 @@ function ProjectPlanDetails({
   const summary = useMemo(() => plan ? getRoadmapSummary(plan, {
     quarterKey, monthKey, monthlyFact, plannedRolesOnly,
   }) : undefined, [plan, quarterKey, monthKey, monthlyFact, plannedRolesOnly]);
-  const columns = showFact ? 7 : 6;
+  const columns = columnCount(showFact);
   if (planQuery.isPending) return <tr><td colSpan={columns} className="p-0">
     <SkeletonStatus label="Загружаем детали проекта">
       {['w-1/2', 'w-2/5', 'w-1/3'].map((width, index) => <div key={index} className="flex items-center gap-3 border-t border-border/60 py-3 pl-12 pr-4">
@@ -246,31 +353,145 @@ export function AllProjectsPlanTable({
   const { monthKey, showFact } = period;
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
   const [expandedEpics, setExpandedEpics] = useState<Set<string>>(() => new Set());
+  const [query, setQuery] = useState('');
+  const [requestedSort, setRequestedSort] = useState<SortState>(null);
+  const [viewRestored, setViewRestored] = useState(false);
 
-  return <div className="roadmap-scrollbar min-w-0 overflow-x-auto">
-    <table className="roadmap-plan-table w-full min-w-[880px] table-fixed border-collapse text-left">
-      <caption className="sr-only">Сводный план проектов. Раскройте проект, затем эпик, чтобы увидеть фичи.</caption>
+  // Restored after mount so the server-rendered markup matches the first client render.
+  useEffect(() => {
+    const stored = readStoredView();
+    if (stored.projects) setExpandedProjects(new Set(stored.projects));
+    if (stored.epics) setExpandedEpics(new Set(stored.epics));
+    if (stored.sort) setRequestedSort(stored.sort);
+    setViewRestored(true);
+  }, []);
+
+  useEffect(() => {
+    // Wait for the catalog: an empty list while loading must not erase the saved view.
+    if (!viewRestored || !projects.length) return;
+    const projectIds = new Set(projects.map((project) => project.id));
+    const epicPrefixes = projects.map((project) => `${project.roadmapId}:`);
+    writeStoredView({
+      projects: [...expandedProjects].filter((id) => projectIds.has(id)),
+      epics: [...expandedEpics].filter((key) => epicPrefixes.some((prefix) => key.startsWith(prefix))),
+      sort: requestedSort,
+    });
+  }, [viewRestored, projects, expandedProjects, expandedEpics, requestedSort]);
+  const sort = requestedSort && (showFact || !FACT_SORT_KEYS.includes(requestedSort.key)) ? requestedSort : null;
+  const onSort = (key: SortKey) => setRequestedSort(nextSort(sort, key));
+
+  const visibleProjects = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const rows = projects.map((project, index) => ({ project, index }))
+      .filter(({ project }) => !needle || project.name.toLowerCase().includes(needle));
+    if (sort) {
+      rows.sort((a, b) => {
+        const left = sortValue(sort.key, a.project, summaries?.[a.project.roadmapId]);
+        const right = sortValue(sort.key, b.project, summaries?.[b.project.roadmapId]);
+        if (left === null || right === null) return left === right ? a.index - b.index : left === null ? 1 : -1;
+        const diff = typeof left === 'string' || typeof right === 'string'
+          ? String(left).localeCompare(String(right), 'ru')
+          : left - right;
+        return (sort.dir === 'asc' ? diff : -diff) || a.index - b.index;
+      });
+    }
+    return rows.map(({ project }) => project);
+  }, [projects, summaries, query, sort]);
+
+  const expandableProjects = visibleProjects.filter((project) => summaries?.[project.roadmapId]?.canExpand);
+  const allExpanded = expandableProjects.length > 0 && expandableProjects.every((project) => expandedProjects.has(project.id));
+  const anyExpanded = expandedProjects.size > 0 || expandedEpics.size > 0;
+  const columns = columnCount(showFact);
+
+  /** Exports the projects as they are shown now: filtered, sorted, with the selected period. */
+  const exportCsv = () => {
+    const header = ['Проект', 'Эпики', 'Фичи', 'План, ч', ...(showFact ? ['Факт, ч', 'Выполнено, %', 'Дельта, ч'] : []), 'Роли', 'Участники'];
+    const rows = visibleProjects.map((project) => {
+      const metrics = summaries?.[project.roadmapId]?.metrics;
+      return [
+        project.name, metrics?.epics ?? null, metrics?.features ?? null, metrics?.planHours ?? null,
+        ...(showFact ? [metrics?.actualHours ?? null, donePercent(metrics), deltaOf(metrics)] : []),
+        metrics?.roles ?? null, metrics?.participants ?? null,
+      ];
+    });
+    downloadCsv(`plan-projects-${period.quarterKey}${monthKey ? `-${monthKey}` : ''}.csv`, [header, ...rows]);
+  };
+
+  /** Arrow keys walk the expand buttons: Up/Down between rows, Right opens, Left closes. */
+  const onToggleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (!(target instanceof HTMLButtonElement) || !target.hasAttribute('aria-expanded') || event.altKey || event.ctrlKey || event.metaKey) return;
+    const toggles = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('tbody button[aria-expanded]:not(:disabled)'));
+    const index = toggles.indexOf(target);
+    const moveTo = (next: number) => { event.preventDefault(); toggles[next]?.focus(); };
+    if (event.key === 'ArrowDown') moveTo(Math.min(index + 1, toggles.length - 1));
+    else if (event.key === 'ArrowUp') moveTo(Math.max(index - 1, 0));
+    else if (event.key === 'Home') moveTo(0);
+    else if (event.key === 'End') moveTo(toggles.length - 1);
+    else if ((event.key === 'ArrowRight' && target.getAttribute('aria-expanded') === 'false') || (event.key === 'ArrowLeft' && target.getAttribute('aria-expanded') === 'true')) {
+      event.preventDefault();
+      target.click();
+    }
+  };
+
+  return <>
+    <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
+      <div className="relative min-w-0 flex-1 sm:max-w-xs">
+        <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input type="search" aria-label="Найти проект" placeholder="Найти проект…" value={query} onChange={(event) => setQuery(event.target.value)} className="h-8 pl-8 text-xs" />
+      </div>
+      <p role="status" className="text-xs text-muted-foreground">{query.trim() ? `Найдено проектов: ${visibleProjects.length} из ${projects.length}` : null}</p>
+      <div className="ml-auto flex items-center gap-1">
+        <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" disabled={!expandableProjects.length || allExpanded}
+          onClick={() => setExpandedProjects((current) => new Set([...current, ...expandableProjects.map((project) => project.id)]))}
+        ><ChevronsUpDown aria-hidden="true" className="size-3.5" />Развернуть проекты</Button>
+        <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" disabled={!anyExpanded}
+          onClick={() => { setExpandedProjects(new Set()); setExpandedEpics(new Set()); }}
+        ><ChevronsDownUp aria-hidden="true" className="size-3.5" />Свернуть всё</Button>
+        <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" disabled={!visibleProjects.length || !summaries} onClick={exportCsv}
+          title="Скачать CSV с проектами, которые сейчас показаны"
+        ><Download aria-hidden="true" className="size-3.5" />Экспорт CSV</Button>
+      </div>
+    </div>
+    <div className="roadmap-scrollbar max-h-[70vh] min-w-0 overflow-auto" onKeyDown={onToggleKeyDown}>
+    <table className={cn('roadmap-plan-table w-full table-fixed border-collapse text-left', showFact ? 'min-w-[1100px]' : 'min-w-[880px]')}>
+      <caption className="sr-only">Сводный план проектов. Раскройте проект, затем эпик, чтобы увидеть фичи. Заголовки столбцов сортируют проекты.</caption>
       <colgroup>
-        <col className={showFact ? 'w-[40%]' : 'w-[52%]'} />
-        <col className="w-[8%]" />
-        <col className="w-[8%]" />
-        <col className="w-[12%]" />
-        {showFact ? <col className="w-[12%]" /> : null}
-        <col className="w-[8%]" />
-        <col className="w-[12%]" />
+        {showFact ? <>
+          <col className="w-[26%]" />
+          <col className="w-[7%]" />
+          <col className="w-[7%]" />
+          <col className="w-[10%]" />
+          <col className="w-[10%]" />
+          <col className="w-[13%]" />
+          <col className="w-[10%]" />
+          <col className="w-[7%]" />
+          <col className="w-[10%]" />
+        </> : <>
+          <col className="w-[52%]" />
+          <col className="w-[8%]" />
+          <col className="w-[8%]" />
+          <col className="w-[12%]" />
+          <col className="w-[8%]" />
+          <col className="w-[12%]" />
+        </>}
       </colgroup>
-      <thead className="border-b border-border bg-muted/50 text-xs font-medium text-muted-foreground">
+      <thead className="sticky top-0 z-10 bg-[color-mix(in_srgb,var(--color-muted)_50%,var(--color-card))] text-xs font-medium text-muted-foreground shadow-[0_1px_0_var(--color-border)]">
         <tr>
-          <th scope="col" className="px-4 py-3 font-medium">Проект / эпик / фича</th>
-          <th scope="col" className="px-3 py-3 text-right font-medium">Эпики</th>
-          <th scope="col" className="px-3 py-3 text-right font-medium">Фичи</th>
-          <th scope="col" className="px-3 py-3 text-right font-medium">План</th>
-          {showFact ? <th scope="col" className="px-3 py-3 text-right font-medium" title={monthKey ? 'Факт за выбранный месяц' : 'Накопленный факт за всё время'}>Факт{!monthKey ? ' всего' : ''}</th> : null}
-          <th scope="col" className="px-3 py-3 text-right font-medium">Роли</th>
-          <th scope="col" className="px-3 py-3 text-right font-medium">Участники</th>
+          <SortHeader label="Проект / эпик / фича" sortKey="name" sort={sort} onSort={onSort} className="px-4 py-3" />
+          <SortHeader label="Эпики" sortKey="epics" sort={sort} onSort={onSort} className="px-3 py-3 text-right" />
+          <SortHeader label="Фичи" sortKey="features" sort={sort} onSort={onSort} className="px-3 py-3 text-right" />
+          <SortHeader label="План" sortKey="plan" sort={sort} onSort={onSort} className="px-3 py-3 text-right" />
+          {showFact ? <>
+            <SortHeader label={<>Факт{!monthKey ? ' всего' : ''}</>} sortKey="fact" sort={sort} onSort={onSort} className="px-3 py-3 text-right" title={monthKey ? 'Факт за выбранный месяц' : 'Накопленный факт за всё время'} />
+            <SortHeader label="Выполнено" sortKey="done" sort={sort} onSort={onSort} className="px-3 py-3 text-right" title="Факт в процентах от плана" />
+            <SortHeader label="Дельта" sortKey="delta" sort={sort} onSort={onSort} className="px-3 py-3 text-right" title="Факт − план: плюс означает перерасход" />
+          </> : null}
+          <SortHeader label="Роли" sortKey="roles" sort={sort} onSort={onSort} className="px-3 py-3 text-right" />
+          <SortHeader label="Участники" sortKey="participants" sort={sort} onSort={onSort} className="px-3 py-3 text-right" />
         </tr>
       </thead>
-      {projects.map((project) => {
+      {visibleProjects.map((project) => {
         const summary = summaries?.[project.roadmapId];
         const expanded = expandedProjects.has(project.id);
         const ExpandIcon = expanded ? ChevronDown : ChevronRight;
@@ -304,7 +525,9 @@ export function AllProjectsPlanTable({
           /> : null}
         </tbody>;
       })}
-      {!projects.length ? <tbody><tr><td colSpan={showFact ? 7 : 6} className="px-4 py-8 text-center text-sm text-muted-foreground">Нет загруженных проектов. Выберите проект в списке выше, чтобы открыть или загрузить его план.</td></tr></tbody> : null}
+      {!projects.length ? <tbody><tr><td colSpan={columns} className="px-4 py-8 text-center text-sm text-muted-foreground">Нет загруженных проектов. Выберите проект в списке выше, чтобы открыть или загрузить его план.</td></tr></tbody> : null}
+      {projects.length && !visibleProjects.length ? <tbody><tr><td colSpan={columns} className="px-4 py-8 text-center text-sm text-muted-foreground">Ничего не найдено по запросу «{query.trim()}».</td></tr></tbody> : null}
     </table>
-  </div>;
+    </div>
+  </>;
 }
