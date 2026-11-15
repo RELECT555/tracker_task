@@ -2,6 +2,25 @@ import type { RoadmapMonthlyFact, RoadmapRole, RoadmapWorkItem } from '@/entitie
 
 type RoleHours = Map<string, number>;
 
+const ASSIGNED_TO = 'System.AssignedTo';
+
+function normalized(value: unknown) {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function assigneeKeys(value: unknown) {
+  if (typeof value === 'string') {
+    const email = value.match(/<([^>]+)>/)?.[1];
+    return { ids: [normalized(value)], email: normalized(email ?? (value.includes('@') ? value : '')) };
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { ids: [], email: '' };
+  const identity = value as Record<string, unknown>;
+  return {
+    ids: [normalized(identity.descriptor), normalized(identity.id)].filter(Boolean),
+    email: normalized(identity.uniqueName ?? identity.mailAddress),
+  };
+}
+
 function addHours(totals: RoleHours, roleId: string, hours: number) {
   totals.set(roleId, (totals.get(roleId) ?? 0) + hours);
 }
@@ -9,25 +28,46 @@ function addHours(totals: RoleHours, roleId: string, hours: number) {
 export function getRoadmapRoleFact(items: RoadmapWorkItem[], roles: RoadmapRole[], monthlyFact?: RoadmapMonthlyFact) {
   const byItem = new Map<string, RoleHours>();
   const byProject: RoleHours = new Map();
-  const knownRoleIds = new Set(roles.map((role) => role.id));
   const itemsByExternalId = new Map(items.map((item) => [item.externalId, item]));
-  const linksByTaskId = new Map<string, { roleId: string | null; monthlyHours?: number }>();
+  const linksByTaskId = new Map<string, { roleId: string; personExternalId: string; personEmail: string | null; monthlyHours?: number }[]>();
+  const membersByRole = new Map(roles.map((role) => [role.id, role.members ?? (role.defaultPersonExternalId ? [{
+    personExternalId: role.defaultPersonExternalId,
+    personEmail: role.defaultPersonEmail ?? null,
+  }] : [])]));
 
   for (const item of items) {
-    for (const { id, roleId, azureTaskId } of item.allocations) {
-      if (!azureTaskId || !knownRoleIds.has(roleId)) continue;
-      const previous = linksByTaskId.get(azureTaskId);
-      linksByTaskId.set(azureTaskId, {
-        roleId: previous && previous.roleId !== roleId ? null : roleId,
-        monthlyHours: previous?.monthlyHours ?? monthlyFact?.allocations[id],
-      });
+    for (const { id, roleId, azureTaskId, personExternalId, personEmail } of item.allocations) {
+      if (!azureTaskId || !membersByRole.has(roleId)) continue;
+      linksByTaskId.set(azureTaskId, [...(linksByTaskId.get(azureTaskId) ?? []), {
+        roleId, personExternalId, personEmail, monthlyHours: monthlyFact?.allocations[id],
+      }]);
     }
   }
 
-  for (const [taskId, link] of linksByTaskId) {
-    const task = itemsByExternalId.get(taskId);
-    if (task?.type.toLowerCase() !== 'task' || link.roleId === null) continue;
-    const hours = monthlyFact ? link.monthlyHours ?? 0 : Number(task.actualHours ?? 0);
+  for (const task of items) {
+    const type = task.type.toLowerCase();
+    if (!['epic', 'feature', 'task'].includes(type)) continue;
+    const links = linksByTaskId.get(task.externalId) ?? [];
+    const hasImportedAssignee = Object.hasOwn(task.azureCustomFields ?? {}, ASSIGNED_TO);
+    const identity = assigneeKeys(task.azureCustomFields?.[ASSIGNED_TO]);
+    const matches = (person: { personExternalId: string; personEmail: string | null }) =>
+      identity.ids.includes(normalized(person.personExternalId))
+      || Boolean(identity.email && identity.email === normalized(person.personEmail));
+    const candidateRoles = new Set<string>();
+    for (const [roleId, members] of membersByRole) {
+      if (hasImportedAssignee ? members.some(matches) : members.some((member) => links.some((link) =>
+        normalized(link.personExternalId) === normalized(member.personExternalId)))) candidateRoles.add(roleId);
+    }
+    // A current task/allocation link can disambiguate a person with several roles.
+    // It cannot attribute a reassigned task to someone who is no longer in that role.
+    const linkedRoles = new Set(links.filter((link) => candidateRoles.has(link.roleId)
+      && (hasImportedAssignee ? matches(link) : true)).map((link) => link.roleId));
+    const roleId = candidateRoles.size === 1 ? [...candidateRoles][0]
+      : linkedRoles.size === 1 ? [...linkedRoles][0] : undefined;
+    if (!roleId) continue;
+    const hours = monthlyFact
+      ? monthlyFact.sourceHours?.[task.externalId] ?? links.find((link) => link.monthlyHours !== undefined)?.monthlyHours ?? 0
+      : Number(task.ownActualHours ?? (type === 'task' ? task.actualHours : 0));
     if (!Number.isFinite(hours) || hours === 0) continue;
 
     // Follow Azure's current hierarchy, which can differ from the allocation's owner.
@@ -39,13 +79,13 @@ export function getRoadmapRoleFact(items: RoadmapWorkItem[], roles: RoadmapRole[
       const type = ancestor.type.toLowerCase();
       if (type === 'epic' || type === 'feature') {
         const totals = byItem.get(ancestor.id) ?? new Map<string, number>();
-        addHours(totals, link.roleId, hours);
+        addHours(totals, roleId, hours);
         byItem.set(ancestor.id, totals);
         contributesToProject = true;
       }
       ancestor = ancestor.parentExternalId ? itemsByExternalId.get(ancestor.parentExternalId) : undefined;
     }
-    if (contributesToProject) addHours(byProject, link.roleId, hours);
+    if (contributesToProject) addHours(byProject, roleId, hours);
   }
 
   return { byItem, byProject };

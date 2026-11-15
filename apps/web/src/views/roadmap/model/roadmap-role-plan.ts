@@ -1,0 +1,96 @@
+import type { RoadmapRole, RoadmapWorkItem } from '@/entities/roadmap/api/roadmapApi';
+
+type RoleHours = Map<string, number>;
+
+export function azureRoleEstimate(item: RoadmapWorkItem, role: RoadmapRole) {
+  const value = role.azureEstimateField ? item.azureCustomFields?.[role.azureEstimateField] : undefined;
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && !value.trim()) return null;
+  const hours = Number(value);
+  return Number.isFinite(hours) && hours >= 0 ? hours : null;
+}
+
+/** Uses the same role totals for cells, collapsed epics, the project total and filtering. */
+export function getRoadmapRolePlan(items: RoadmapWorkItem[], roles: RoadmapRole[], includeAzureEstimates = true) {
+  const byItem = new Map<string, RoleHours>();
+  const byProject: RoleHours = new Map();
+  const byUnattached: RoleHours = new Map();
+  const planItems = items.filter((item) => ['epic', 'feature'].includes(item.type.toLowerCase()));
+  const planItemIds = new Set(planItems.map((item) => item.id));
+  const knownRoleIds = new Set(roles.map((role) => role.id));
+  const byExternalId = new Map(items.map((item) => [item.externalId, item]));
+  const childrenById = new Map<string, RoadmapWorkItem[]>();
+  const localHoursByItem = new Map<string, RoleHours>();
+  const explicitRolesByItem = new Map<string, Set<string>>();
+  const roots: RoadmapWorkItem[] = [];
+  const parentPlanItem = (item: RoadmapWorkItem) => {
+    let parent = item.parentExternalId ? byExternalId.get(item.parentExternalId) : undefined;
+    const visited = new Set([item.externalId]);
+    while (parent && !visited.has(parent.externalId) && !planItemIds.has(parent.id)) {
+      visited.add(parent.externalId);
+      parent = parent.parentExternalId ? byExternalId.get(parent.parentExternalId) : undefined;
+    }
+    return parent && !visited.has(parent.externalId) ? parent : undefined;
+  };
+  for (const item of planItems) {
+    const parent = parentPlanItem(item);
+    if (parent) {
+      childrenById.set(parent.id, [...(childrenById.get(parent.id) ?? []), item]);
+    } else {
+      roots.push(item);
+    }
+  }
+  // The API permits local assignments on Tasks and other non-Epic cards. Their
+  // plans belong to the nearest visible parent; their custom Azure fields do not.
+  for (const item of items) {
+    const owner = planItemIds.has(item.id) ? item : parentPlanItem(item);
+    const localHours = owner ? localHoursByItem.get(owner.id) ?? new Map<string, number>() : byUnattached;
+    for (const allocation of item.allocations) {
+      if (!knownRoleIds.has(allocation.roleId)) continue;
+      const hours = Number(allocation.estimatedHours);
+      localHours.set(allocation.roleId, (localHours.get(allocation.roleId) ?? 0)
+        + (Number.isFinite(hours) && hours > 0 ? hours : 0));
+    }
+    if (owner) localHoursByItem.set(owner.id, localHours);
+  }
+
+  const aggregate = (item: RoadmapWorkItem, visited = new Set<string>()): RoleHours => {
+    const cached = byItem.get(item.id);
+    if (cached) return cached;
+    if (visited.has(item.id)) return new Map();
+    const path = new Set([...visited, item.id]);
+    const childTotals: RoleHours = new Map();
+    const explicitRoles = new Set(localHoursByItem.get(item.id)?.keys());
+    for (const child of childrenById.get(item.id) ?? []) {
+      for (const [roleId, hours] of aggregate(child, path)) {
+        childTotals.set(roleId, (childTotals.get(roleId) ?? 0) + hours);
+      }
+      for (const roleId of explicitRolesByItem.get(child.id) ?? []) explicitRoles.add(roleId);
+    }
+    const totals: RoleHours = new Map();
+    for (const role of roles) {
+      const localHours = localHoursByItem.get(item.id)?.get(role.id);
+      const ownEstimate = includeAzureEstimates ? azureRoleEstimate(item, role) : null;
+      // Distinct local assignments are additive. Even an explicit zero replaces
+      // the imported estimate and keeps that decision when rolling up ancestors.
+      if (localHours !== undefined) totals.set(role.id, localHours + (childTotals.get(role.id) ?? 0));
+      // Parent Azure estimates describe the whole card, so don't add them again to its children.
+      // Azure's default zero fields are not a breakdown of a positive parent estimate.
+      else if (childTotals.has(role.id) && (childTotals.get(role.id)! > 0 || explicitRoles.has(role.id) || ownEstimate === null)) totals.set(role.id, childTotals.get(role.id)!);
+      else if (ownEstimate !== null) totals.set(role.id, ownEstimate);
+    }
+    byItem.set(item.id, totals);
+    explicitRolesByItem.set(item.id, explicitRoles);
+    return totals;
+  };
+  for (const item of planItems) aggregate(item);
+  for (const root of roots) {
+    for (const [roleId, hours] of byItem.get(root.id) ?? []) {
+      byProject.set(roleId, (byProject.get(roleId) ?? 0) + hours);
+    }
+  }
+  for (const [roleId, hours] of byUnattached) {
+    byProject.set(roleId, (byProject.get(roleId) ?? 0) + hours);
+  }
+  return { byItem, byProject, byUnattached };
+}

@@ -8,12 +8,12 @@ const { chromium } = require('playwright');
 const baseURL = process.env.ROADMAP_TEST_URL || 'http://localhost:3000';
 const now = new Date();
 const quarterKey = `${now.getFullYear()}-Q${Math.floor(now.getMonth() / 3) + 1}`;
-const role = { id: 'resize-role', name: 'Разработка', color: '#3b82f6', members: [] };
+const role = { id: 'resize-role', name: 'Разработка', color: '#3b82f6', members: [{ personExternalId: 'resize-person', personName: 'Тестовый участник', personEmail: 'resize@example.test', personIsActive: true }] };
 const role2 = { id: 'resize-role-2', name: 'Тестирование', color: '#10b981', members: [] };
 const user = (id) => ({ id, email: `${id}@example.test`, fullName: id, roles: ['admin'], orgUnit: null, manager: null });
 const item = (id, type, parentExternalId = null, allocations = []) => ({
   id, externalId: id, parentExternalId, type, title: `${type} ${id}`, state: 'Active', url: null,
-  actualHours: type === 'Task' ? 8 : 20, azureCustomFields: null, allocations,
+  actualHours: 8, azureCustomFields: type === 'Task' ? { 'System.AssignedTo': { id: 'resize-person', displayName: 'Тестовый участник', uniqueName: 'resize@example.test' } } : null, allocations,
 });
 const allocation = {
   id: 'resize-allocation', roleId: role.id, personExternalId: 'resize-person', personName: 'Тестовый участник',
@@ -85,10 +85,10 @@ const plan = {
     assert.equal(await resetWidthButton.count(), 0, 'Default column widths do not show a reset button');
     assertClose(fitSize.table, fitSize.available, 'A project with one visible role fills its card by default');
     const fitWidths = await getWidths();
-    assert.equal(Object.keys(fitWidths).length, 4);
+    assert.equal(Object.keys(fitWidths).length, 6, 'One role has adjacent plan, fact, and delta columns');
     assertClose(fitWidths['summary:plan'], 120, 'The plan total stays compact');
     assertClose(fitWidths['summary:fact'], 120, 'The actual total stays compact');
-    assert.ok(fitWidths.name > 440 && fitWidths[`plan:${role.id}`] > 260, 'The title and role share available space');
+    assert.ok(fitWidths.name > 440 && fitWidths[`plan:${role.id}`] > 200, 'The title and role share available space');
     await page.setViewportSize({ width: 1850, height: 1000 });
     await settlePaint();
     const wideSize = await getTableSize();
@@ -105,7 +105,7 @@ const plan = {
     await expandSidebar.waitFor();
     const collapsedReloadSize = await getTableSize();
     assertClose(collapsedReloadSize.table, collapsedReloadSize.available, 'Reload fits the previously collapsed sidebar');
-    const togglePlan = page.getByRole('button', { name: 'План по ролям', exact: true });
+    const togglePlan = page.getByRole('button', { name: 'Детализация по ролям', exact: true });
     await togglePlan.click();
     const totalsSize = await getTableSize();
     assertClose(totalsSize.table, totalsSize.available, 'Totals-only view fills the card with a collapsed sidebar');
@@ -136,17 +136,18 @@ const plan = {
     await page.getByRole('button', { name: 'Сбросить ширину', exact: true }).click();
     for (const [id, width] of Object.entries(fitWidths)) assertClose((await getWidths())[id], width, `${id} returns to its adaptive default`);
     plan.roles.push(role2);
+    plan.workItems.filter((entry) => entry.type !== 'Task').forEach((entry) => { entry.actualHours = 20; });
     await refreshPlan();
     console.log('PASS single-role layout fills the card, respects manual widths, and resets to automatic fitting');
 
     const revealFacts = async () => {
-      const toggle = page.getByRole('button', { name: 'Факт всего по ролям', exact: true });
+      const toggle = page.getByRole('button', { name: 'Детализация по ролям', exact: true });
       if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
     };
     await revealFacts();
     const initialWidths = await getWidths();
-    assert.equal(Object.keys(initialWidths).length, 7, 'Fixture covers name, both summaries, two plan roles, one fact role, and unattributed fact');
-    assert.equal(await page.getByRole('separator').count(), 7, 'Every visible column has a resize handle');
+    assert.equal(Object.keys(initialWidths).length, 10, 'Fixture covers name, both summaries, two role triples, and unattributed fact');
+    assert.equal(await page.getByRole('separator').count(), 10, 'Every visible column has a resize handle');
     for (const id of Object.keys(initialWidths)) {
       const handle = getHandle(id);
       await handle.scrollIntoViewIfNeeded();
@@ -174,7 +175,7 @@ const plan = {
       assertClose(committed[id], preview[id], `${id} does not jump on release`);
       assert.equal(await page.evaluate(() => window.__widthWrites.length), 1, `${id} persists once on release`);
     }
-    console.log('PASS all seven columns: exact dragging, stable neighbors, aligned handles, one storage write per drag');
+    console.log('PASS all ten columns: exact dragging, stable neighbors, aligned handles, one storage write per drag');
 
     const lastHandle = getHandle('fact:unattributed');
     await page.locator('table').evaluate((table) => { table.parentElement.scrollLeft = table.parentElement.scrollWidth; });
@@ -292,16 +293,16 @@ const plan = {
     for (const [id, width] of Object.entries(savedA)) assertClose((await getWidths())[id], width, `${id} restores first user customization`);
     console.log('PASS reload persistence and isolation between two users in the same browser');
 
-    await page.getByRole('button', { name: 'План по ролям', exact: true }).click();
+    await page.getByRole('button', { name: 'Детализация по ролям', exact: true }).click();
     const collapsedWidths = await getWidths();
     for (const [id, width] of Object.entries(collapsedWidths)) assertClose(width, savedA[id], `${id} stays fixed when role columns are hidden`);
-    await page.getByRole('button', { name: 'План по ролям', exact: true }).click();
+    await page.getByRole('button', { name: 'Детализация по ролям', exact: true }).click();
     for (const [id, width] of Object.entries(savedA)) assertClose((await getWidths())[id], width, `${id} restores after role columns are shown`);
     console.log('PASS role collapse and expand preserve widths');
 
     await page.setViewportSize({ width: 390, height: 844 });
     await settlePaint();
-    assert.equal(await page.getByRole('separator').count(), 7, 'Resizers remain available on narrow screens');
+    assert.equal(await page.getByRole('separator').count(), 10, 'Resizers remain available on narrow screens');
     for (const [id, width] of Object.entries(savedA)) assertClose((await getWidths())[id], width, `${id} stays fixed on mobile`);
     const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     assert.equal(horizontalOverflow, false, 'Table scrolling does not expand the page viewport');

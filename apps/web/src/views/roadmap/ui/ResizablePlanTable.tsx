@@ -27,6 +27,10 @@ const TableContext = createContext<TableContextValue | null>(null);
 // A role can change position after a background refresh while its handle stays
 // mounted. Encode the stable ID instead of binding its draft to a visible index.
 const widthProperty = (id: string) => `--plan-col-${Array.from(id, (character) => character.codePointAt(0)!.toString(16)).join('-')}-width`;
+/** Uses the live widths, including the pointer preview, to keep pinned cells aligned. */
+export const planColumnOffset = (precedingIds: string[]) => precedingIds.length
+  ? `calc(${precedingIds.map((id) => `var(${widthProperty(id)})`).join(' + ')})`
+  : '0px';
 const clampWidth = (column: FittedColumn, width: number) => Math.round(Math.min(column.maxWidth, Math.max(column.minWidth, width)));
 
 function fitColumns(columns: PlanColumn[], availableWidth: number): PlanColumn[] {
