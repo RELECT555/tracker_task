@@ -1,7 +1,12 @@
-import { RoadmapRolesPage } from '@/views/roadmap-admin/ui/RoadmapRolesPage';
+import { Suspense } from 'react';
+import { RoadmapRolesRoute } from '@/views/roadmap-admin/ui/RoadmapRolesPage';
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ projectId?: string | string[] }> }) {
-  const { projectId } = await searchParams;
-  const initialProjectId = typeof projectId === 'string' ? projectId : undefined;
-  return <RoadmapRolesPage key={initialProjectId} initialProjectId={initialProjectId} />;
+// projectId читается на клиенте, чтобы страница оставалась статической
+// и Next мог заранее подгрузить её целиком.
+export default function Page() {
+  return (
+    <Suspense>
+      <RoadmapRolesRoute />
+    </Suspense>
+  );
 }

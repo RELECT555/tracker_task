@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useId, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, Plus } from 'lucide-react';
@@ -20,6 +21,11 @@ import { RoleEditorDialog } from './roles/RoleEditorDialog';
 const adminRolesQueryKey = ['roadmap', 'admin', 'roles'] as const;
 
 type RoleEditor = { projectId: string; projectName: string; role?: RoadmapRole };
+
+export function RoadmapRolesRoute() {
+  const initialProjectId = useSearchParams().get('projectId') ?? undefined;
+  return <RoadmapRolesPage key={initialProjectId} initialProjectId={initialProjectId} />;
+}
 
 export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: string }) {
   const client = useQueryClient();

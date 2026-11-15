@@ -14,6 +14,8 @@ import { cn } from '@/shared/lib/utils';
 
 const SIDEBAR_STORAGE_KEY = 'roadmap:sidebar-collapsed';
 const ADMIN_LABEL = 'Администрирование';
+// Страховка, если переход отменили и pathname так и не сменился.
+const PENDING_NAVIGATION_TIMEOUT = 10_000;
 
 const roadmapLinks = [
   { href: routes.home, label: 'Главная', icon: House },
@@ -97,10 +99,11 @@ function RoadmapNavLink({ href, label, icon: Icon, active, collapsed, className 
       aria-label={label}
       title={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
+      data-nav-current={active ? '' : undefined}
       className={cn(
-        'relative flex h-10 items-center rounded-lg text-sm transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sidebar-primary',
+        'relative flex h-10 items-center rounded-lg text-sm transition-colors duration-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sidebar-primary',
         collapsed ? 'justify-center' : 'gap-3 px-3',
-        active ? 'bg-sidebar-accent font-medium text-sidebar-primary' : 'text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+        active ? 'font-medium text-sidebar-primary' : 'text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
         className,
       )}
     >
@@ -118,25 +121,87 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
   const [themeMounted, setThemeMounted] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const pageContent = useRef<HTMLDivElement>(null);
+  const navList = useRef<HTMLDivElement>(null);
+  const navIndicator = useRef<HTMLSpanElement>(null);
   const lastPathname = useRef(pathname);
+  // Куда пользователь только что кликнул: меню переключается сразу,
+  // не дожидаясь ответа сервера на переход.
+  const [pendingPath, setPendingPath] = useState<string | null>(null);
+  const navPath = pendingPath ?? pathname;
   const isPlanPage = pathname === routes.roadmap;
   const isAdmin = isAdminUser(auth.user);
   const isAdminHome = pathname === routes.roadmapAdminHome;
   const activeAdminSection = roadmapAdminSections.find(({ href }) => pathname === href);
   const isAdminSection = isAdminHome || pathname.startsWith(`${routes.roadmapAdminHome}/`);
+  const isNavAdminSection = navPath === routes.roadmapAdminHome || navPath.startsWith(`${routes.roadmapAdminHome}/`);
   const [adminMenuOpen, setAdminMenuOpen] = useState(Boolean(activeAdminSection));
 
   useLayoutEffect(() => {
     if (lastPathname.current === pathname) return;
     lastPathname.current = pathname;
+    setPendingPath(null);
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-    const animation = pageContent.current?.animate?.([{ opacity: 0.76 }, { opacity: 1 }], {
-      duration: 160,
+    const animation = pageContent.current?.animate?.([
+      { opacity: 0, transform: 'translateY(6px)' },
+      { opacity: 1, transform: 'none' },
+    ], {
+      duration: 260,
       easing: 'cubic-bezier(0.23, 1, 0.32, 1)',
     });
     return () => animation?.cancel();
   }, [pathname]);
+
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null;
+      if (!(anchor instanceof HTMLAnchorElement) || (anchor.target && anchor.target !== '_self') || anchor.hasAttribute('download')) return;
+      const url = new URL(anchor.href);
+      if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return;
+      setPendingPath(url.pathname);
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingPath) return;
+    const timer = window.setTimeout(() => setPendingPath(null), PENDING_NAVIGATION_TIMEOUT);
+    return () => window.clearTimeout(timer);
+  }, [pendingPath]);
+
+  useLayoutEffect(() => {
+    const list = navList.current;
+    const indicator = navIndicator.current;
+    if (!list || !indicator) return;
+
+    const place = () => {
+      const target = list.querySelector<HTMLElement>('[data-nav-current]');
+      if (!target || target.closest('[inert]')) {
+        indicator.style.opacity = '0';
+        return;
+      }
+      const listBox = list.getBoundingClientRect();
+      const box = target.getBoundingClientRect();
+      // Из скрытого состояния подложка не едет через всё меню, а проявляется на месте.
+      const appearing = indicator.style.opacity !== '1';
+      if (appearing) indicator.style.transition = 'opacity 160ms ease';
+      indicator.style.transform = `translate(${box.left - listBox.left}px, ${box.top - listBox.top}px)`;
+      indicator.style.width = `${box.width}px`;
+      indicator.style.height = `${box.height}px`;
+      indicator.style.opacity = '1';
+      if (appearing) {
+        indicator.getBoundingClientRect();
+        indicator.style.transition = '';
+      }
+    };
+
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [navPath, sidebarCollapsed, adminMenuOpen, isAdmin]);
 
   useEffect(() => setThemeMounted(true), []);
   useEffect(() => {
@@ -202,48 +267,55 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
         </div>
 
         <nav aria-label="Навигация Roadmap" className={cn('min-h-0 flex-1 overflow-auto py-5', sidebarCollapsed ? 'px-2.5' : 'px-3')}>
-          <ul className="space-y-1">
-            {roadmapLinks.map((link) => (
-              <li key={link.href}>
-                <RoadmapNavLink {...link} active={pathname === link.href} collapsed={sidebarCollapsed} />
-              </li>
-            ))}
-            {isAdmin ? (
-              <li>
-                <div className={cn('flex items-center rounded-lg', isAdminSection && 'bg-sidebar-accent/50')}>
-                  <RoadmapNavLink
-                    href={routes.roadmapAdminHome}
-                    label={ADMIN_LABEL}
-                    icon={Settings2}
-                    active={isAdminHome}
-                    collapsed={sidebarCollapsed}
-                    className={cn('min-w-0 flex-1', !sidebarCollapsed && 'gap-2.5 pr-1', isAdminSection && 'text-sidebar-primary')}
-                  />
+          <div ref={navList} className="relative">
+            <span ref={navIndicator} aria-hidden="true" className="roadmap-nav-indicator rounded-lg bg-sidebar-accent" />
+            <ul className="space-y-1">
+              {roadmapLinks.map((link) => (
+                <li key={link.href}>
+                  <RoadmapNavLink {...link} active={navPath === link.href} collapsed={sidebarCollapsed} />
+                </li>
+              ))}
+              {isAdmin ? (
+                <li>
+                  <div className={cn('flex items-center rounded-lg transition-colors duration-200', isNavAdminSection && 'bg-sidebar-accent/50')}>
+                    <RoadmapNavLink
+                      href={routes.roadmapAdminHome}
+                      label={ADMIN_LABEL}
+                      icon={Settings2}
+                      active={navPath === routes.roadmapAdminHome}
+                      collapsed={sidebarCollapsed}
+                      className={cn('min-w-0 flex-1', !sidebarCollapsed && 'gap-2.5 pr-1', isNavAdminSection && 'text-sidebar-primary')}
+                    />
+                    {!sidebarCollapsed ? (
+                      <button
+                        type="button"
+                        aria-label="Разделы администрирования"
+                        aria-expanded={adminMenuOpen}
+                        aria-controls="roadmap-admin-navigation"
+                        onClick={() => setAdminMenuOpen((open) => !open)}
+                        className="flex h-10 w-9 shrink-0 items-center justify-center rounded-lg text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sidebar-primary"
+                      >
+                        <ChevronDown className={cn('size-4 motion-safe:transition-transform', adminMenuOpen && 'rotate-180')} strokeWidth={1.7} aria-hidden="true" />
+                      </button>
+                    ) : null}
+                  </div>
                   {!sidebarCollapsed ? (
-                    <button
-                      type="button"
-                      aria-label="Разделы администрирования"
-                      aria-expanded={adminMenuOpen}
-                      aria-controls="roadmap-admin-navigation"
-                      onClick={() => setAdminMenuOpen((open) => !open)}
-                      className="flex h-10 w-9 shrink-0 items-center justify-center rounded-lg text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sidebar-primary"
-                    >
-                      <ChevronDown className={cn('size-4 motion-safe:transition-transform', adminMenuOpen && 'rotate-180')} strokeWidth={1.7} aria-hidden="true" />
-                    </button>
+                    <div inert={!adminMenuOpen} className={cn('grid motion-safe:transition-[grid-template-rows,opacity] motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.23,1,0.32,1)]', adminMenuOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
+                      <div className="min-h-0 overflow-hidden">
+                        <ul id="roadmap-admin-navigation" className="ml-5 mt-1 space-y-0.5 border-l border-sidebar-border pl-2">
+                          {roadmapAdminSections.map(({ id, href, title, icon }) => (
+                            <li key={id}>
+                              <RoadmapNavLink href={href} label={title} icon={icon} active={navPath === href} className="h-9 gap-2.5 px-2.5" />
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
                   ) : null}
-                </div>
-                {!sidebarCollapsed ? (
-                  <ul id="roadmap-admin-navigation" hidden={!adminMenuOpen} className="ml-5 mt-1 space-y-0.5 border-l border-sidebar-border pl-2">
-                    {roadmapAdminSections.map(({ id, href, title, icon }) => (
-                      <li key={id}>
-                        <RoadmapNavLink href={href} label={title} icon={icon} active={pathname === href} className="h-9 gap-2.5 px-2.5" />
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </li>
-            ) : null}
-          </ul>
+                </li>
+              ) : null}
+            </ul>
+          </div>
         </nav>
 
         <div className={cn('shrink-0 border-t border-sidebar-border/60 py-3', sidebarCollapsed ? 'px-2.5' : 'px-3')}>
@@ -252,7 +324,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="relative flex min-w-0 flex-1 flex-col overflow-clip bg-background md:rounded-tl-2xl md:border-l md:border-t md:border-border dark:md:rounded-tl-none dark:md:border-l-0 dark:md:border-t-0">
-        <header className="flex min-h-16 shrink-0 items-center justify-between gap-x-2 border-b border-border bg-card px-3 py-1 sm:gap-x-4 sm:px-6">
+        <header className="relative flex min-h-16 shrink-0 items-center justify-between gap-x-2 border-b border-border bg-card px-3 py-1 sm:gap-x-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <span className="hidden size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary sm:flex md:hidden">
               <GitBranch className="size-5" strokeWidth={1.7} aria-hidden="true" />
@@ -282,8 +354,9 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
             </button>
             <ProfileMenu auth={auth} mobile />
           </div>
+          {pendingPath ? <span aria-hidden="true" className="roadmap-nav-progress pointer-events-none absolute inset-x-0 -bottom-px h-0.5 bg-primary" /> : null}
         </header>
-        <div ref={pageContent} className="flex min-h-0 flex-1 flex-col">
+        <div ref={pageContent} data-pending={pendingPath ? '' : undefined} className="roadmap-page flex min-h-0 flex-1 flex-col">
           {auth.user ? <RoadmapProjectSelection key={auth.user.id} userId={auth.user.id}>{children}</RoadmapProjectSelection> : null}
         </div>
       </div>

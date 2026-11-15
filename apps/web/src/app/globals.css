@@ -141,6 +141,66 @@ html:has(.roadmap-frame) {
   to { opacity: 1; }
 }
 
+/* Подложка активного пункта меню: переезжает между вкладками. */
+.roadmap-nav-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 320ms cubic-bezier(0.23, 1, 0.32, 1),
+    width 320ms cubic-bezier(0.23, 1, 0.32, 1),
+    height 320ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 160ms ease;
+}
+
+/* Пока сервер отвечает на переход, старая страница слегка гаснет —
+   задержка, чтобы быстрые переходы не мигали. */
+.roadmap-page {
+  transition: opacity 180ms ease;
+}
+
+.roadmap-page[data-pending] {
+  opacity: 0.55;
+  transition-delay: 90ms;
+}
+
+.roadmap-nav-progress {
+  transform-origin: left;
+  animation: roadmap-nav-progress 2.4s cubic-bezier(0.1, 0.7, 0.2, 1) 120ms both;
+}
+
+@keyframes roadmap-nav-progress {
+  from { transform: scaleX(0); opacity: 1; }
+  to { transform: scaleX(0.9); opacity: 1; }
+}
+
+/* Появление содержимого при переключении вкладок внутри страницы. */
+.roadmap-fade-in {
+  animation: roadmap-fade-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@keyframes roadmap-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roadmap-nav-indicator {
+    transition: opacity 160ms ease;
+  }
+
+  .roadmap-nav-progress {
+    animation: none;
+    transform: scaleX(0.9);
+  }
+
+  .roadmap-fade-in {
+    animation: none;
+  }
+}
+
 body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));

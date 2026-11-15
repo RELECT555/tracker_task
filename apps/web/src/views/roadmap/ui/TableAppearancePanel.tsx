@@ -55,11 +55,11 @@ export function TableAppearancePanel({ id, preferences, onChange, onReset, statu
   const errorMessage = disabled ? 'Не удалось загрузить настройки.' : 'Не удалось сохранить настройки.';
   return <>
     <div className="flex shrink-0 gap-6 border-b border-border px-6" role="group" aria-label="Раздел настроек">
-      {([['appearance', 'Оформление'], ['columns', 'Столбцы']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={section === value} aria-controls={`${id}-${value}`} onClick={() => { setSection(value); content.current?.scrollTo(0, 0); }} className={cn('-mb-px border-b-2 pb-3 pt-1 text-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring', section === value ? 'border-foreground font-semibold text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>{label}</button>)}
+      {([['appearance', 'Оформление'], ['columns', 'Столбцы']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={section === value} aria-controls={`${id}-${value}`} onClick={() => { setSection(value); content.current?.scrollTo(0, 0); }} className={cn('-mb-px border-b-2 pb-3 pt-1 text-sm transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring', section === value ? 'border-foreground font-semibold text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>{label}</button>)}
     </div>
     <div ref={content} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6">
       <fieldset disabled={disabled || status === 'loading'} className="min-w-0 disabled:opacity-60">
-        <div id={`${id}-appearance`} hidden={section !== 'appearance'}>
+        <div id={`${id}-appearance`} hidden={section !== 'appearance'} className="roadmap-fade-in">
           <section className="pb-5 pt-5" aria-labelledby={`${id}-colors`}>
             <div className="mb-3 flex items-center justify-between gap-2"><h3 id={`${id}-colors`} className="text-sm font-semibold">Цветовая схема</h3>{!selectedPalette ? <span className="text-xs text-muted-foreground">Своя схема</span> : null}</div>
             <div className="grid grid-cols-3 gap-x-3 gap-y-3.5">
@@ -90,7 +90,7 @@ export function TableAppearancePanel({ id, preferences, onChange, onReset, statu
             <Toggle label="Чередовать фон строк" checked={preferences.stripedRows} onChange={(stripedRows) => onChange({ stripedRows })} />
           </section>
         </div>
-        <div id={`${id}-columns`} hidden={section !== 'columns'}>
+        <div id={`${id}-columns`} hidden={section !== 'columns'} className="roadmap-fade-in">
           <section className="py-5" aria-labelledby={`${id}-metrics`}>
             <h3 id={`${id}-metrics`} className="mb-2 text-sm font-semibold">Что показывать</h3><p className="mb-3 text-xs leading-5 text-muted-foreground">Название задачи и план видны всегда.</p>
             <div className="divide-y divide-border/60">
