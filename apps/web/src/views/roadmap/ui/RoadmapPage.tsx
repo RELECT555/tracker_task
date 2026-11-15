@@ -38,6 +38,7 @@ import { useRoadmapTablePreferences } from '../model/use-roadmap-table-preferenc
 import { getTableAppearanceProps } from '../model/table-appearance';
 import { TableAppearanceSettings } from './TableAppearanceSettings';
 import { CreatedTasksPanel } from './CreatedTasksPanel';
+import { AgentPanel } from '@/features/roadmap-agent/ui/AgentPanel';
 import './table-appearance.css';
 import { ColumnResizeHandle, planColumnOffset, ResizablePlanTable, type PlanColumn } from './ResizablePlanTable';
 import { PlanTableSkeleton, PortfolioTableSkeleton } from './PlanTableSkeleton';
@@ -1134,14 +1135,13 @@ export function RoadmapPage() {
                 {syncMutation.isPending ? 'Загружаем проект…' : 'Загрузить проект из Azure'}
               </Button>}
             </div>
-            {plan || isAllProjects ? <div className="min-w-0 flex-1 basis-full xl:basis-[34rem]">
-              <RoadmapSummaryStrip
-                summary={isAllProjects ? overviewSummary : summary && view === 'periods' ? { ...summary, planHours: quarterTotalHours } : summary}
-                month={Boolean(selectedMonth)}
-                loading={isAllProjects ? overviewLoading : planQuery.isLoading}
-              />
-            </div> : null}
           </div>
+          {plan || isAllProjects ? <RoadmapSummaryStrip
+            summary={isAllProjects ? overviewSummary : summary && view === 'periods' ? { ...summary, planHours: quarterTotalHours } : summary}
+            month={Boolean(selectedMonth)}
+            loading={isAllProjects ? overviewLoading : planQuery.isLoading}
+            projects={isAllProjects && !overviewLoading ? overviewProjects.length : undefined}
+          /> : null}
 
           {demoMode ? (
             <section role="status" className="rounded-xl border border-primary/20 bg-primary/[0.035] p-4 text-sm text-foreground">
@@ -1302,6 +1302,13 @@ export function RoadmapPage() {
                         />
                       </PopoverContent>
                     </Popover> : null}
+                    {!demoMode && roadmapProjectId ? <AgentPanel
+                      key={roadmapProjectId}
+                      projectId={roadmapProjectId}
+                      quarterKey={currentQuarterKey}
+                      canEditPlan={canEditPlan}
+                      onApplied={() => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] })}
+                    /> : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {columnWidths.hasCustomWidths ? (

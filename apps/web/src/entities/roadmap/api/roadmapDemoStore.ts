@@ -317,6 +317,10 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
       return clone(role);
     }
     case 'deleteRole': {
+      const removed = state.roles.find((item) => item.id === arg0);
+      if (removed && !state.roleCatalog.some((item) => item.name === removed.name)) {
+        state.roleCatalog.push({ id: `template-${crypto.randomUUID()}`, name: removed.name, color: removed.color, isMock: removed.isMock });
+      }
       state.roles = state.roles.filter((item) => item.id !== arg0);
       state.plan.workItems.forEach((item) => { item.allocations = item.allocations.filter((allocation) => allocation.roleId !== arg0); });
       state.plan.roles = rolesOf(state); return { deleted: true };

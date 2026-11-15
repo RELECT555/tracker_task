@@ -37,5 +37,6 @@ import { RoadmapTablePreferencesService } from './roadmap-table-preferences.serv
     RoadmapTablePreferencesService,
     AdminRoleGuard,
   ],
+  exports: [RoadmapService, RoadmapProjectAccessService],
 })
 export class RoadmapModule {}

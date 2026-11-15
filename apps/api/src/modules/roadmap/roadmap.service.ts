@@ -1269,7 +1269,29 @@ export class RoadmapService {
         'Роль уже используется в плане проекта. Сначала снимите её назначения с фич.',
       );
     }
-    await this.prisma.roadmapRole.delete({ where: { id } });
+    await this.prisma.$transaction(async (tx) => {
+      const role = await tx.roadmapRole.findUnique({
+        where: { id },
+        select: { projectId: true, name: true, color: true, isMock: true },
+      });
+      await tx.roadmapRole.delete({ where: { id } });
+      // A role removed from a project goes back to the catalog so it can be re-added or used elsewhere.
+      if (!role?.projectId) return;
+      const inCatalog = await tx.roadmapRole.findFirst({
+        where: { projectId: null, name: role.name },
+        select: { id: true },
+      });
+      if (!inCatalog) {
+        await tx.roadmapRole.create({
+          data: {
+            projectId: null,
+            name: role.name,
+            color: role.color,
+            isMock: role.isMock,
+          },
+        });
+      }
+    });
     return { deleted: true };
   }
 
