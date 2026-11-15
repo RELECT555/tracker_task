@@ -1,61 +1,71 @@
-/* Previews and live tables share the same palette, resolved by the app theme. */
+/*
+ * The table scheme is derived from one accent color (--roadmap-accent) and a strength factor (--roadmap-k),
+ * so any picked color gives a coherent result in both themes. Without an accent the table keeps its base look.
+ * Preview swatches and the live table share these variables.
+ */
 .roadmap-table-appearance,
 .roadmap-palette-preview {
-  --roadmap-palette-header: var(--roadmap-palette-light-header);
-  --roadmap-palette-subheader: var(--roadmap-palette-light-subheader);
-  --roadmap-palette-epic: var(--roadmap-palette-light-epic);
-  --roadmap-palette-epic-hover: var(--roadmap-palette-light-epic-hover);
-  --roadmap-palette-stripe: var(--roadmap-palette-light-stripe);
-  --roadmap-palette-row-hover: var(--roadmap-palette-light-row-hover);
-  --roadmap-palette-footer: var(--roadmap-palette-light-footer);
-  --roadmap-palette-border: var(--roadmap-palette-light-border);
-  --roadmap-palette-accent: var(--roadmap-palette-light-accent);
-  --roadmap-palette-text: var(--roadmap-palette-light-text);
-  --roadmap-palette-muted: var(--roadmap-palette-light-muted);
-  --roadmap-palette-surface: var(--roadmap-palette-light-surface);
+  --roadmap-palette-surface: var(--color-card);
+  --roadmap-palette-text: var(--color-foreground);
+  --roadmap-palette-muted: var(--color-muted-foreground);
+  --roadmap-palette-accent: var(--color-primary);
+  --roadmap-palette-header: color-mix(in srgb, var(--color-muted) 40%, var(--color-card));
+  --roadmap-palette-subheader: color-mix(in srgb, var(--color-muted) 25%, var(--color-card));
+  --roadmap-palette-epic: color-mix(in srgb, var(--color-muted) 30%, var(--color-card));
+  --roadmap-palette-epic-hover: color-mix(in srgb, var(--color-muted) 45%, var(--color-card));
+  --roadmap-palette-stripe: color-mix(in srgb, var(--color-muted) 23%, var(--color-card));
+  --roadmap-palette-row-hover: color-mix(in srgb, var(--color-muted) 15%, var(--color-card));
+  --roadmap-palette-footer: color-mix(in srgb, var(--color-muted) 40%, var(--color-card));
+  --roadmap-palette-border: var(--color-border);
 }
 
-.dark .roadmap-table-appearance,
-.dark .roadmap-palette-preview {
-  --roadmap-palette-header: var(--roadmap-palette-dark-header);
-  --roadmap-palette-subheader: var(--roadmap-palette-dark-subheader);
-  --roadmap-palette-epic: var(--roadmap-palette-dark-epic);
-  --roadmap-palette-epic-hover: var(--roadmap-palette-dark-epic-hover);
-  --roadmap-palette-stripe: var(--roadmap-palette-dark-stripe);
-  --roadmap-palette-row-hover: var(--roadmap-palette-dark-row-hover);
-  --roadmap-palette-footer: var(--roadmap-palette-dark-footer);
-  --roadmap-palette-border: var(--roadmap-palette-dark-border);
-  --roadmap-palette-accent: var(--roadmap-palette-dark-accent);
-  --roadmap-palette-text: var(--roadmap-palette-dark-text);
-  --roadmap-palette-muted: var(--roadmap-palette-dark-muted);
-  --roadmap-palette-surface: var(--roadmap-palette-dark-surface);
+.roadmap-table-appearance[data-accent='true'],
+.roadmap-palette-preview[data-accent='true'] {
+  --roadmap-k: 1;
+  --roadmap-header-color: var(--roadmap-accent);
+  --roadmap-epic-color: var(--roadmap-accent);
+  --roadmap-palette-accent: var(--roadmap-accent);
+  --roadmap-palette-header: color-mix(in srgb, var(--roadmap-header-color) calc(var(--roadmap-k) * 12%), var(--color-card));
+  --roadmap-palette-subheader: color-mix(in srgb, var(--roadmap-header-color) calc(var(--roadmap-k) * 7%), var(--color-card));
+  --roadmap-palette-epic: color-mix(in srgb, var(--roadmap-epic-color) calc(var(--roadmap-k) * 8%), var(--color-card));
+  --roadmap-palette-epic-hover: color-mix(in srgb, var(--roadmap-epic-color) calc(var(--roadmap-k) * 14%), var(--color-card));
+  --roadmap-palette-stripe: color-mix(in srgb, var(--roadmap-accent) calc(var(--roadmap-k) * 4%), var(--color-card));
+  --roadmap-palette-row-hover: color-mix(in srgb, var(--roadmap-accent) calc(var(--roadmap-k) * 7%), var(--color-card));
+  --roadmap-palette-footer: color-mix(in srgb, var(--roadmap-header-color) calc(var(--roadmap-k) * 12%), var(--color-card));
+  --roadmap-palette-border: color-mix(in srgb, var(--roadmap-accent) calc(var(--roadmap-k) * 12%), var(--color-border));
 }
 
-/* The baseline retains the original table CSS. Custom picks keep the tint fallback. */
-.roadmap-table-appearance[data-palette='custom'][data-header-tint='true'] .roadmap-plan-table > thead,
-.roadmap-table-appearance[data-palette='custom'][data-header-tint='true'] .roadmap-plan-table > thead > tr {
-  background-color: color-mix(in srgb, var(--roadmap-header-tint) 12%, var(--color-card));
+.dark .roadmap-table-appearance[data-accent='true'],
+.dark .roadmap-palette-preview[data-accent='true'] {
+  --roadmap-palette-header: color-mix(in srgb, var(--roadmap-header-color) calc(var(--roadmap-k) * 20%), var(--color-card));
+  --roadmap-palette-subheader: color-mix(in srgb, var(--roadmap-header-color) calc(var(--roadmap-k) * 12%), var(--color-card));
+  --roadmap-palette-epic: color-mix(in srgb, var(--roadmap-epic-color) calc(var(--roadmap-k) * 14%), var(--color-card));
+  --roadmap-palette-epic-hover: color-mix(in srgb, var(--roadmap-epic-color) calc(var(--roadmap-k) * 22%), var(--color-card));
+  --roadmap-palette-stripe: color-mix(in srgb, var(--roadmap-accent) calc(var(--roadmap-k) * 7%), var(--color-card));
+  --roadmap-palette-row-hover: color-mix(in srgb, var(--roadmap-accent) calc(var(--roadmap-k) * 12%), var(--color-card));
+  --roadmap-palette-footer: color-mix(in srgb, var(--roadmap-header-color) calc(var(--roadmap-k) * 20%), var(--color-card));
+  --roadmap-palette-border: color-mix(in srgb, var(--roadmap-accent) calc(var(--roadmap-k) * 16%), var(--color-border));
 }
 
-.roadmap-table-appearance[data-palette='custom'][data-epic-tint='true'] .roadmap-plan-table > tbody > :is([data-row-kind='epic'], [data-row-kind='project']) {
-  background-color: color-mix(in srgb, var(--roadmap-epic-tint) 9%, var(--color-card));
+.roadmap-table-appearance[data-accent='true'] .roadmap-plan-table > thead,
+.roadmap-table-appearance[data-accent='true'] .roadmap-plan-table > thead > tr:first-child {
+  background-color: var(--roadmap-palette-header);
 }
 
-.roadmap-table-appearance[data-palette='custom'][data-epic-tint='true'] .roadmap-plan-table > tbody > :is([data-row-kind='epic'], [data-row-kind='project']):hover {
-  background-color: color-mix(in srgb, var(--roadmap-epic-tint) 15%, var(--color-card));
+.roadmap-table-appearance[data-accent='true'] .roadmap-plan-table > thead > tr:not(:first-child) {
+  background-color: var(--roadmap-palette-subheader);
 }
 
-.dark .roadmap-table-appearance[data-palette='custom'][data-header-tint='true'] .roadmap-plan-table > thead,
-.dark .roadmap-table-appearance[data-palette='custom'][data-header-tint='true'] .roadmap-plan-table > thead > tr {
-  background-color: color-mix(in srgb, var(--roadmap-header-tint) 20%, var(--color-card));
+.roadmap-table-appearance[data-accent='true'] .roadmap-plan-table > tbody > :is([data-row-kind='epic'], [data-row-kind='project']) {
+  background-color: var(--roadmap-palette-epic);
 }
 
-.dark .roadmap-table-appearance[data-palette='custom'][data-epic-tint='true'] .roadmap-plan-table > tbody > :is([data-row-kind='epic'], [data-row-kind='project']) {
-  background-color: color-mix(in srgb, var(--roadmap-epic-tint) 16%, var(--color-card));
+.roadmap-table-appearance[data-accent='true'] .roadmap-plan-table > tbody > :is([data-row-kind='epic'], [data-row-kind='project']):hover {
+  background-color: var(--roadmap-palette-epic-hover);
 }
 
-.dark .roadmap-table-appearance[data-palette='custom'][data-epic-tint='true'] .roadmap-plan-table > tbody > :is([data-row-kind='epic'], [data-row-kind='project']):hover {
-  background-color: color-mix(in srgb, var(--roadmap-epic-tint) 23%, var(--color-card));
+.roadmap-table-appearance[data-accent='true'] .roadmap-plan-table > tbody > [data-row-kind='feature']:hover {
+  background-color: var(--roadmap-palette-row-hover);
 }
 
 .roadmap-table-appearance[data-striped='true'] .roadmap-plan-table > tbody > [data-row-kind='feature']:nth-child(even) {
@@ -66,42 +76,20 @@
   background-color: color-mix(in srgb, var(--color-muted) 35%, var(--color-card));
 }
 
-.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > thead,
-.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > thead > tr:first-child {
-  background-color: var(--roadmap-palette-header);
-  color: var(--roadmap-palette-muted);
-}
-
-.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > thead > tr:not(:first-child) {
-  background-color: var(--roadmap-palette-subheader);
-}
-
-.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > thead .text-muted-foreground {
-  color: var(--roadmap-palette-muted);
-}
-
-.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > tbody > :is([data-row-kind='epic'], [data-row-kind='project']) {
-  background-color: var(--roadmap-palette-epic);
-}
-
-.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > tbody > :is([data-row-kind='epic'], [data-row-kind='project']):hover {
-  background-color: var(--roadmap-palette-epic-hover);
-}
-
-.roadmap-table-appearance[data-palette-preset='true'][data-striped='true'] .roadmap-plan-table > tbody > [data-row-kind='feature']:nth-child(even) {
+.roadmap-table-appearance[data-accent='true'][data-striped='true'] .roadmap-plan-table > tbody > [data-row-kind='feature']:nth-child(even) {
   background-color: var(--roadmap-palette-stripe);
 }
 
-.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > tbody > [data-row-kind='feature']:hover {
+.roadmap-table-appearance[data-accent='true'][data-striped='true'] .roadmap-plan-table > tbody > [data-row-kind='feature']:hover {
   background-color: var(--roadmap-palette-row-hover);
 }
 
-.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > tfoot,
-.roadmap-table-appearance[data-palette-preset='true'] .roadmap-plan-table > tfoot > tr {
+.roadmap-table-appearance[data-accent='true'] .roadmap-plan-table > tfoot,
+.roadmap-table-appearance[data-accent='true'] .roadmap-plan-table > tfoot > tr {
   background-color: var(--roadmap-palette-footer);
 }
 
-.roadmap-table-appearance[data-palette-preset='true'][data-separators='standard'] .roadmap-plan-table :is(thead, tbody, tfoot, tr, th, td) {
+.roadmap-table-appearance[data-accent='true'][data-separators='standard'] .roadmap-plan-table :is(thead, tbody, tfoot, tr, th, td) {
   border-color: var(--roadmap-palette-border);
 }
 
@@ -198,4 +186,9 @@
 
 .roadmap-table-appearance[data-density='compact'] .roadmap-plan-table [data-plan-action] {
   margin-top: 0;
+}
+
+/* Plan and fact keep the table's own look. Only the unattributed fact column is set apart, since it is not a role. */
+.roadmap-plan-table [data-tone='unattributed'] {
+  border-left-style: dashed;
 }

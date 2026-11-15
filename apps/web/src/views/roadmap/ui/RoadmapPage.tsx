@@ -129,6 +129,17 @@ function displayHours(hours: number | string | null) {
   return hours === null ? '—' : `${hoursFormat.format(Number(hours))} ч`;
 }
 
+/** Thin fact-vs-plan bar under the fact hours: fills up to the plan, turns amber once the fact exceeds it. */
+function FactProgress({ planned, actual }: { planned: number; actual: number }) {
+  if (!(planned > 0) || !(actual > 0)) return null;
+  const over = actual > planned;
+  return (
+    <span aria-hidden="true" title={`Факт ${Math.round((actual / planned) * 100)}% от плана`} className="absolute inset-x-3 bottom-1 block h-[3px] overflow-hidden rounded-full bg-border/40">
+      <span className={cn('block h-full rounded-full', over ? 'bg-amber-500/80' : 'bg-primary/60')} style={{ width: `${Math.min(100, (actual / planned) * 100)}%` }} />
+    </span>
+  );
+}
+
 /** Table cell value: the unit lives in the column header, and zero reads as empty. */
 function cellHours(hours: number | string | null) {
   return hours === null || Number(hours) === 0 ? '—' : hoursFormat.format(Number(hours));
@@ -693,6 +704,7 @@ export function RoadmapPage() {
   });
   const [selectedMonthKey, setSelectedMonthKey] = useState('');
   const [expandedEpics, setExpandedEpics] = useState<Set<string>>(() => new Set());
+  const [stateFilter, setStateFilter] = useState<Set<string>>(() => new Set());
   const [rolePickerOpen, setRolePickerOpen] = useState(false);
   const createEpicTrigger = useRef<HTMLButtonElement>(null);
   const [createTarget, setCreateTarget] = useState<{
@@ -897,7 +909,18 @@ export function RoadmapPage() {
   const plannedItems = useMemo(() => summary?.items ?? [], [summary]);
   const epics = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'epic'), [plannedItems]);
   const features = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'feature'), [plannedItems]);
-  const standaloneFeatures = features.filter((feature) => !epics.some((epic) => epic.externalId === feature.parentExternalId));
+  const stateOptions = useMemo(() => Array.from(new Set([...epics, ...features].map((item) => item.state?.trim()).filter((state): state is string => Boolean(state)))).sort((a, b) => a.localeCompare(b, 'ru')), [epics, features]);
+  const stateCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of [...epics, ...features]) {
+      const state = item.state?.trim();
+      if (state) counts.set(state, (counts.get(state) ?? 0) + 1);
+    }
+    return counts;
+  }, [epics, features]);
+  const activeStateFilter = useMemo(() => new Set(Array.from(stateFilter).filter((state) => stateOptions.includes(state))), [stateFilter, stateOptions]);
+  const matchesState = (item: RoadmapWorkItem) => activeStateFilter.size === 0 || activeStateFilter.has(item.state?.trim() ?? '');
+  const standaloneFeatures = features.filter((feature) => !epics.some((epic) => epic.externalId === feature.parentExternalId) && matchesState(feature));
   const rolePlan = summary?.rolePlan ?? getRoadmapRolePlan([], []);
   const visibleRoles = summary?.visibleRoles ?? [];
   const totalHours = summary?.planHours ?? 0;
@@ -960,20 +983,26 @@ export function RoadmapPage() {
   };
 
   const renderFactCell = (hours: number | null, key: string) => (
-    <td key={key} className={cn(
+    <td key={key} data-tone={key === 'unattributed' ? 'unattributed' : undefined} className={cn(
       'whitespace-nowrap border-l border-border/40 px-3 py-2.5 text-right text-sm tabular-nums',
-      hours ? 'text-foreground' : 'text-muted-foreground',
+      hours ? 'text-foreground' : 'text-muted-foreground/40',
     )}>{cellHours(hours)}</td>
   );
 
-  const pinnedCellClass = (id: string) => (
-    pinnedColumns === 'totals' || (pinnedColumns === 'name' && id === 'name')
-      ? cn(
-        'md:sticky md:left-[var(--roadmap-pinned-left)] md:z-10 md:bg-inherit',
-        id === (pinnedColumns === 'totals' ? preferences.showFact ? 'summary:fact' : 'summary:plan' : 'name')
-          && 'md:shadow-[1px_0_0_var(--color-border),5px_0_6px_-5px_rgb(0_0_0/0.18)]',
-      ) : undefined
-  );
+  const pinnedCellClass = (id: string) => {
+    if (pinnedColumns === 'none') return undefined;
+    const edge = 'shadow-[1px_0_0_var(--color-border),5px_0_6px_-5px_rgb(0_0_0/0.18)]';
+    if (id === 'name') {
+      // With totals pinned the edge moves to the last totals column once the table is wide enough to pin them.
+      return cn('md:sticky md:left-[var(--roadmap-pinned-left)] md:z-10 md:bg-inherit', `md:${edge}`, pinnedColumns === 'totals' && '@2xl:shadow-none');
+    }
+    if (pinnedColumns !== 'totals') return undefined;
+    // Pinning name + plan + fact would leave almost no scrolling area in a narrow panel, so totals pin only in a wide table.
+    return cn(
+      '@2xl:sticky @2xl:left-[var(--roadmap-pinned-left)] @2xl:z-10 @2xl:bg-inherit',
+      id === (preferences.showFact ? 'summary:fact' : 'summary:plan') && `@2xl:${edge}`,
+    );
+  };
   const pinnedCellStyle = (id: string) => ({
     '--roadmap-pinned-left': planColumnOffset(id === 'name' ? [] : id === 'summary:plan' ? ['name'] : ['name', 'summary:plan']),
   } as CSSProperties);
@@ -1052,11 +1081,12 @@ export function RoadmapPage() {
             </div>
           )}
         </th>
-        <td style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:plan'), itemHours ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+        <td data-tone="plan" style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:plan'), itemHours ? 'font-medium text-foreground' : 'text-muted-foreground/40')}>
           {cellHours(itemHours)}
         </td>
-        {preferences.showFact ? <td style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:fact'), Number(actualHours) ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+        {preferences.showFact ? <td data-tone="fact" style={pinnedCellStyle('summary:fact')} className={cn('relative whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:fact'), Number(actualHours) ? 'font-medium text-foreground' : 'text-muted-foreground/40')}>
           {cellHours(actualHours)}
+          {preferences.showFactProgress ? <FactProgress planned={itemHours} actual={Number(actualHours ?? 0)} /> : null}
         </td> : null}
         {detailRoles.map((role) => {
           const planned = plannedByRole?.get(role.id) ?? 0;
@@ -1460,12 +1490,33 @@ export function RoadmapPage() {
                       >
                       <thead className="sticky top-0 z-20 bg-card [&_th]:isolate">
                         <tr className="border-b border-border bg-[color-mix(in_srgb,var(--color-muted)_40%,var(--color-card))] text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          <th scope="col" data-column-id="name" rowSpan={headerRowSpan} style={pinnedCellStyle('name')} className={cn('group/head relative px-3 py-2.5 pr-5 @lg:px-4 @lg:pr-5', pinnedCellClass('name'))}><div className="flex items-center justify-between gap-1 @lg:gap-3"><span>Эпик / фича</span>{canCreateWorkItem ? <Button ref={createEpicTrigger} type="button" variant="ghost" size="icon" className="size-8 shrink-0 opacity-0 transition-opacity focus-visible:opacity-100 group-hover/head:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100" aria-label="Создать эпик" title="Создать эпик" aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)}><Plus aria-hidden="true" className="size-4" /></Button> : null}</div><ColumnResizeHandle columnId="name" /></th>
-                          <th scope="col" data-column-id="summary:plan" rowSpan={headerRowSpan} style={pinnedCellStyle('summary:plan')} className={cn('relative border-l border-border/60 px-3 py-2.5 text-right', pinnedCellClass('summary:plan'))} title={selectedMonth ? 'План выбранного месяца' : 'Назначения выбранного квартала. При их отсутствии используется общая оценка Azure на карточке, без привязки к кварталу.'}>
+                          <th scope="col" data-column-id="name" rowSpan={headerRowSpan} style={pinnedCellStyle('name')} className={cn('group/head relative px-3 py-2.5 pr-5 @lg:px-4 @lg:pr-5', pinnedCellClass('name'))}><div className="flex items-center justify-between gap-1 @lg:gap-3"><span className="flex items-center gap-1"><span>Эпик / фича</span>{stateOptions.length > 1 ? <Popover>
+                            <PopoverTrigger asChild><button type="button" aria-label="Фильтр по статусам" title="Фильтр по статусам" className={cn('inline-flex h-6 items-center gap-0.5 rounded-md px-1 normal-case tracking-normal transition-colors hover:bg-card hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring', activeStateFilter.size > 0 && 'bg-card text-foreground')}>{activeStateFilter.size > 0 ? <span className="text-[10px] tabular-nums">{activeStateFilter.size}</span> : null}<ChevronDown aria-hidden="true" className="size-3.5" /></button></PopoverTrigger>
+                            <PopoverContent align="start" side="bottom" sideOffset={6} collisionPadding={16} className="w-60 overflow-hidden rounded-xl p-0 normal-case tracking-normal">
+                              <div className="flex items-center justify-between border-b border-border px-3 py-2"><p className="text-xs font-semibold text-foreground">Статусы</p>{activeStateFilter.size > 0 ? <button type="button" className="rounded text-xs font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring" onClick={() => setStateFilter(new Set())}>Сбросить</button> : <span className="text-xs text-muted-foreground">Все</span>}</div>
+                              <ul className="roadmap-scrollbar max-h-64 overflow-y-auto p-1.5">
+                                {stateOptions.map((state) => {
+                                  const checked = activeStateFilter.has(state);
+                                  return <li key={state}><label className={cn('flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted', checked && 'bg-primary/5')}>
+                                    <input type="checkbox" className="peer sr-only" checked={checked} onChange={() => setStateFilter((current) => {
+                                      const next = new Set(activeStateFilter.size ? current : []);
+                                      if (next.has(state)) next.delete(state);
+                                      else next.add(state);
+                                      return next;
+                                    })} />
+                                    <span aria-hidden="true" className={cn('flex size-4 shrink-0 items-center justify-center rounded border transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring', checked ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-background')}>{checked ? <Check className="size-3" strokeWidth={3} /> : null}</span>
+                                    <WorkItemStateBadge state={state} />
+                                    <span className="ml-auto text-xs tabular-nums text-muted-foreground">{stateCounts.get(state) ?? 0}</span>
+                                  </label></li>;
+                                })}
+                              </ul>
+                            </PopoverContent>
+                          </Popover> : null}</span>{canCreateWorkItem ? <Button ref={createEpicTrigger} type="button" variant="ghost" size="icon" className="size-8 shrink-0 opacity-0 transition-opacity focus-visible:opacity-100 group-hover/head:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100" aria-label="Создать эпик" title="Создать эпик" aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)}><Plus aria-hidden="true" className="size-4" /></Button> : null}</div><ColumnResizeHandle columnId="name" /></th>
+                          <th scope="col" data-tone="plan" data-column-id="summary:plan" rowSpan={headerRowSpan} style={pinnedCellStyle('summary:plan')} className={cn('relative border-l border-border/60 px-3 py-2.5 text-right', pinnedCellClass('summary:plan'))} title={selectedMonth ? 'План выбранного месяца' : 'Назначения выбранного квартала. При их отсутствии используется общая оценка Azure на карточке, без привязки к кварталу.'}>
                             <span className="block">План</span><span className="text-[10px] font-normal normal-case">итого, ч</span>
                             <ColumnResizeHandle columnId="summary:plan" />
                           </th>
-                          {preferences.showFact ? <th scope="col" data-column-id="summary:fact" rowSpan={headerRowSpan} style={pinnedCellStyle('summary:fact')} className={cn('relative px-3 py-2.5 text-right', pinnedCellClass('summary:fact'))} title={selectedMonth ? 'Изменение Completed Work за выбранный календарный месяц (UTC)' : 'Суммарный факт за всё время'}>
+                          {preferences.showFact ? <th scope="col" data-tone="fact" data-column-id="summary:fact" rowSpan={headerRowSpan} style={pinnedCellStyle('summary:fact')} className={cn('relative px-3 py-2.5 text-right', pinnedCellClass('summary:fact'))} title={selectedMonth ? 'Изменение Completed Work за выбранный календарный месяц (UTC)' : 'Суммарный факт за всё время'}>
                             <span className="block">Факт</span><span className="text-[10px] font-normal normal-case">{selectedMonth ? 'за месяц, ч' : 'всего, ч'}</span>
                             <ColumnResizeHandle columnId="summary:fact" />
                           </th> : null}
@@ -1497,7 +1548,7 @@ export function RoadmapPage() {
                               </div>
                             </th>;
                           })}
-                          {showUnattributedFact ? <th scope="col" rowSpan={2} data-column-id="fact:unattributed" title="Факт участников, для которых не определена единственная роль в проекте" className="relative border-l border-border/60 px-3 py-2.5 text-right">Без роли<span className="block text-[10px] font-normal normal-case">факт, ч</span><ColumnResizeHandle columnId="fact:unattributed" /></th> : null}
+                          {showUnattributedFact ? <th scope="col" rowSpan={2} data-tone="unattributed" data-column-id="fact:unattributed" title="Факт участников, для которых не определена единственная роль в проекте" className="relative border-l border-border/60 px-3 py-2.5 text-right">Без роли<span className="block text-[10px] font-normal normal-case">факт, ч</span><ColumnResizeHandle columnId="fact:unattributed" /></th> : null}
                         </tr>
                         {headerRowSpan === 2 ? <tr className="border-b border-border bg-muted/20 text-right text-[11px] font-medium text-muted-foreground">
                           {detailRoles.map((role) => <Fragment key={role.id}>
@@ -1509,7 +1560,9 @@ export function RoadmapPage() {
                       </thead>
                       <tbody>
                         {epics.map((epic) => {
-                          const children = features.filter((feature) => feature.parentExternalId === epic.externalId);
+                          const allChildren = features.filter((feature) => feature.parentExternalId === epic.externalId);
+                          const children = allChildren.filter(matchesState);
+                          if (!matchesState(epic) && children.length === 0) return null;
                           const collapsed = !expandedEpics.has(epic.id);
                           return <Fragment key={epic.id}>
                             {renderItemRow(epic, true, children.length, collapsed, () => setExpandedEpics((current) => {
@@ -1539,8 +1592,8 @@ export function RoadmapPage() {
                       {headerRowSpan === 2 ? <tfoot className="sticky bottom-0 z-20 bg-card">
                         <tr className="border-t-2 border-border bg-[color-mix(in_srgb,var(--color-muted)_40%,var(--color-card))] text-sm font-semibold text-foreground">
                           <th scope="row" style={pinnedCellStyle('name')} className={cn('px-3 py-3 @lg:px-4', pinnedCellClass('name'))}>Итого по проекту</th>
-                          <td style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:plan'))}>{cellHours(totalHours)}</td>
-                          {preferences.showFact ? <td style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:fact'), !totalActualHours && 'text-muted-foreground')}>{cellHours(totalActualHours)}</td> : null}
+                          <td data-tone="plan" style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:plan'))}>{cellHours(totalHours)}</td>
+                          {preferences.showFact ? <td data-tone="fact" style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:fact'), !totalActualHours && 'text-muted-foreground')}>{cellHours(totalActualHours)}</td> : null}
                           {detailRoles.map((role) => {
                             const hours = rolePlan.byProject.get(role.id) ?? 0;
                             return <Fragment key={role.id}>

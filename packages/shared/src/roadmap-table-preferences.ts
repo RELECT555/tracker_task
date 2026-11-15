@@ -11,6 +11,11 @@ export const roadmapTablePreferencesSchema = z.object({
   version: z.literal(1),
   density: z.enum(['standard', 'compact', 'comfortable']),
   fontSize: z.enum(['standard', 'small', 'large']),
+  /** Base color the whole table scheme is derived from; null keeps the neutral look. */
+  accentTint: tintSchema.default(null),
+  /** How strongly the accent washes headers, epic rows, stripes and hovers. */
+  tintStrength: z.enum(['soft', 'standard', 'strong']).default('standard'),
+  /** Optional overrides: null derives the color from the accent. */
   headerTint: tintSchema,
   epicTint: tintSchema,
   stripedRows: z.boolean(),
@@ -19,6 +24,8 @@ export const roadmapTablePreferencesSchema = z.object({
   pinnedColumns: z.enum(['none', 'name', 'totals']),
   showFact: z.boolean(),
   showDelta: z.boolean(),
+  /** Added after v1 shipped: preferences saved earlier have no value and fall back to off. */
+  showFactProgress: z.boolean().default(false),
   showRoleDetails: z.boolean(),
   plannedRolesOnly: z.boolean(),
   columnWidths: z.record(columnIdSchema, z.number().finite().min(80).max(2400))
@@ -27,19 +34,22 @@ export const roadmapTablePreferencesSchema = z.object({
 
 export type RoadmapTablePreferences = z.infer<typeof roadmapTablePreferencesSchema>;
 
-/** Keep these defaults aligned with the original roadmap table presentation. */
+/** Defaults: the graphite scheme (accent #64748b); the original uncolored table is the "no color" preset. */
 export const DEFAULT_ROADMAP_TABLE_PREFERENCES: RoadmapTablePreferences = {
   version: 1,
   density: 'standard',
   fontSize: 'standard',
+  accentTint: '#64748b',
+  tintStrength: 'standard',
   headerTint: null,
   epicTint: null,
   stripedRows: false,
   wrapTitles: true,
   separators: 'standard',
-  pinnedColumns: 'name',
+  pinnedColumns: 'totals',
   showFact: true,
   showDelta: true,
+  showFactProgress: false,
   showRoleDetails: true,
   plannedRolesOnly: true,
   columnWidths: {},

@@ -6,7 +6,7 @@ import type { RoadmapTablePreferences } from '@tracker/shared';
 import { Button } from '@/shared/ui/button';
 import { SearchableSelect } from '@/shared/ui/searchable-select';
 import { cn } from '@/shared/lib/utils';
-import { TABLE_PALETTES, getTablePalette, getPalettePreviewProps } from '../model/table-palettes';
+import { TABLE_PALETTES, TINT_STRENGTHS, getTablePalette, getPalettePreviewProps, effectiveAccent } from '../model/table-palettes';
 import type { TableAppearanceSettingsProps } from './TableAppearanceSettings';
 
 
@@ -38,8 +38,8 @@ function ColorControl({ label, value, fallback, onChange }: {
   </div>;
 }
 
-function PalettePreview({ palette }: { palette: (typeof TABLE_PALETTES)[number] }) {
-  return <span {...getPalettePreviewProps(palette)} aria-hidden="true">
+function PalettePreview({ palette, strength }: { palette: (typeof TABLE_PALETTES)[number]; strength: RoadmapTablePreferences['tintStrength'] }) {
+  return <span {...getPalettePreviewProps(palette, strength)} aria-hidden="true">
     <span className="palette-preview-head"><span /><span /><span /></span>
     <span className="palette-preview-epic"><i /><span /><span /></span>
     <span className="palette-preview-row"><span /><span /><span /></span>
@@ -65,15 +65,21 @@ export function TableAppearancePanel({ id, preferences, onChange, onReset, statu
             <div className="grid grid-cols-3 gap-x-3 gap-y-3.5">
               {TABLE_PALETTES.map((palette) => {
                 const selected = selectedPalette?.id === palette.id;
-                return <button key={palette.id} type="button" aria-label={palette.name} aria-pressed={selected} title={palette.description} onClick={() => onChange({ headerTint: palette.headerTint, epicTint: palette.epicTint })} className="group min-w-0 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card">
-                  <span className={cn('block overflow-hidden rounded-md border p-1', selected ? 'border-primary ring-1 ring-primary' : 'border-border group-hover:border-muted-foreground/60')}><PalettePreview palette={palette} /></span>
+                return <button key={palette.id} type="button" aria-label={palette.name} aria-pressed={selected} title={palette.description} onClick={() => onChange({ accentTint: palette.accent, headerTint: null, epicTint: null })} className="group min-w-0 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card">
+                  <span className={cn('block overflow-hidden rounded-md border p-1', selected ? 'border-primary ring-1 ring-primary' : 'border-border group-hover:border-muted-foreground/60')}><PalettePreview palette={palette} strength={preferences.tintStrength} /></span>
                   <span className={cn('mt-2 flex items-center justify-between gap-1 px-0.5 text-xs', selected ? 'font-semibold text-foreground' : 'text-muted-foreground')}>{palette.name}<Check aria-hidden="true" className={cn('size-3.5 text-primary', !selected && 'invisible')} /></span>
                 </button>;
               })}
             </div>
+            <div className="mt-4" role="group" aria-label="Насыщенность цвета">
+              <p className="mb-2 text-xs text-muted-foreground">Насыщенность</p>
+              <div className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-muted/40 p-1">
+                {TINT_STRENGTHS.map((item) => <button key={item.value} type="button" aria-pressed={preferences.tintStrength === item.value} disabled={effectiveAccent(preferences) === null} onClick={() => onChange({ tintStrength: item.value })} className={cn('h-8 rounded-md text-xs transition-colors focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default disabled:opacity-45', preferences.tintStrength === item.value ? 'bg-card font-semibold text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{item.label}</button>)}
+              </div>
+            </div>
             <details className="group/custom mt-4 border-t border-border pt-3">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-sm py-1 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">Свои цвета<ChevronDown aria-hidden="true" className="size-3.5 group-open/custom:rotate-180" /></summary>
-              <div className="grid grid-cols-2 gap-4 pb-1 pt-4"><ColorControl label="Шапка таблицы" value={preferences.headerTint} fallback="#64748b" onChange={(headerTint) => onChange({ headerTint })} /><ColorControl label="Эпики и проекты" value={preferences.epicTint} fallback="#64748b" onChange={(epicTint) => onChange({ epicTint })} /></div>
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-sm py-1 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">Свои цвета и акцент<ChevronDown aria-hidden="true" className="size-3.5 group-open/custom:rotate-180" /></summary>
+              <div className="grid grid-cols-2 gap-4 pb-1 pt-4"><div className="col-span-2"><ColorControl label="Акцентный цвет" value={preferences.accentTint ?? (preferences.headerTint === null && preferences.epicTint === null ? null : effectiveAccent(preferences))} fallback="#2f6fe4" onChange={(accentTint) => onChange({ accentTint })} /></div><ColorControl label="Шапка таблицы" value={preferences.headerTint} fallback={effectiveAccent(preferences) ?? '#64748b'} onChange={(headerTint) => onChange({ headerTint })} /><ColorControl label="Эпики и проекты" value={preferences.epicTint} fallback={effectiveAccent(preferences) ?? '#64748b'} onChange={(epicTint) => onChange({ epicTint })} /></div>
             </details>
           </section>
           <section className="border-t border-border py-5" aria-labelledby={`${id}-density`}>
@@ -97,6 +103,7 @@ export function TableAppearancePanel({ id, preferences, onChange, onReset, statu
               <Toggle label="Показывать факт" description="Затраченное время рядом с планом" checked={preferences.showFact} onChange={(showFact) => onChange({ showFact })} />
               <Toggle label="Детализация по ролям" description="Показатели для каждой роли проекта" checked={preferences.showRoleDetails} onChange={(showRoleDetails) => onChange({ showRoleDetails })} />
               <Toggle label="Показывать дельту по ролям" description="Разница между фактом и планом" checked={preferences.showDelta} disabled={!preferences.showRoleDetails} onChange={(showDelta) => onChange({ showDelta })} />
+              <Toggle label="Полоска факта к плану" description="Шкала выполнения плана под часами факта" checked={preferences.showFactProgress} disabled={!preferences.showFact} onChange={(showFactProgress) => onChange({ showFactProgress })} />
               <Toggle label="Только роли с планом" description="Скрыть роли без оценок в этом периоде" checked={preferences.plannedRolesOnly} onChange={(plannedRolesOnly) => onChange({ plannedRolesOnly })} />
             </div>
           </section>
