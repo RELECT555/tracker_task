@@ -1,9 +1,8 @@
 'use client';
 
-import Link from 'next/link';
+import Link, { useLinkStatus } from 'next/link';
 import { usePathname } from 'next/navigation';
-import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useTheme } from 'next-themes';
 import { ChartNoAxesCombined, ChevronDown, ChevronUp, GitBranch, House, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Settings2, Sun, type LucideIcon } from 'lucide-react';
 import { RoadmapProjectSelection } from '@/entities/roadmap/model/roadmap-project-selection';
@@ -15,7 +14,6 @@ import { cn } from '@/shared/lib/utils';
 
 const SIDEBAR_STORAGE_KEY = 'roadmap:sidebar-collapsed';
 const ADMIN_LABEL = 'Администрирование';
-const RoadmapTopbarContext = createContext<HTMLDivElement | null>(null);
 
 const roadmapLinks = [
   { href: routes.home, label: 'Главная', icon: House },
@@ -83,15 +81,24 @@ type RoadmapNavItem = {
   className?: string;
 };
 
+function RoadmapLinkPending() {
+  const { pending } = useLinkStatus();
+  return pending ? (
+    <span role="status" className="roadmap-link-pending pointer-events-none absolute right-1.5 top-1.5 size-1.5 rounded-full bg-sidebar-primary">
+      <span className="sr-only">Открываем страницу…</span>
+    </span>
+  ) : null;
+}
+
 function RoadmapNavLink({ href, label, icon: Icon, active, collapsed, className }: RoadmapNavItem) {
   return (
     <Link
       href={href}
-      aria-label={collapsed ? label : undefined}
+      aria-label={label}
       title={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex h-10 items-center rounded-lg text-sm transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sidebar-primary',
+        'relative flex h-10 items-center rounded-lg text-sm transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sidebar-primary',
         collapsed ? 'justify-center' : 'gap-3 px-3',
         active ? 'bg-sidebar-accent font-medium text-sidebar-primary' : 'text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
         className,
@@ -99,13 +106,9 @@ function RoadmapNavLink({ href, label, icon: Icon, active, collapsed, className 
     >
       <Icon className="size-[18px] shrink-0" strokeWidth={1.5} aria-hidden="true" />
       {!collapsed && <span>{label}</span>}
+      <RoadmapLinkPending />
     </Link>
   );
-}
-
-export function RoadmapTopbar({ children }: { children: ReactNode }) {
-  const container = useContext(RoadmapTopbarContext);
-  return container ? createPortal(children, container) : null;
 }
 
 export function RoadmapFrame({ children }: { children: ReactNode }) {
@@ -114,13 +117,27 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
   const { theme, setTheme } = useTheme();
   const [themeMounted, setThemeMounted] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [topbarContent, setTopbarContent] = useState<HTMLDivElement | null>(null);
+  const pageContent = useRef<HTMLDivElement>(null);
+  const lastPathname = useRef(pathname);
   const isPlanPage = pathname === routes.roadmap;
   const isAdmin = isAdminUser(auth.user);
   const isAdminHome = pathname === routes.roadmapAdminHome;
   const activeAdminSection = roadmapAdminSections.find(({ href }) => pathname === href);
   const isAdminSection = isAdminHome || pathname.startsWith(`${routes.roadmapAdminHome}/`);
   const [adminMenuOpen, setAdminMenuOpen] = useState(Boolean(activeAdminSection));
+
+  useLayoutEffect(() => {
+    if (lastPathname.current === pathname) return;
+    lastPathname.current = pathname;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const animation = pageContent.current?.animate?.([{ opacity: 0.76 }, { opacity: 1 }], {
+      duration: 160,
+      easing: 'cubic-bezier(0.23, 1, 0.32, 1)',
+    });
+    return () => animation?.cancel();
+  }, [pathname]);
+
   useEffect(() => setThemeMounted(true), []);
   useEffect(() => {
     try {
@@ -235,7 +252,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="relative flex min-w-0 flex-1 flex-col overflow-clip bg-background md:rounded-tl-2xl md:border-l md:border-t md:border-border dark:md:rounded-tl-none dark:md:border-l-0 dark:md:border-t-0">
-        <header className={cn('flex shrink-0 items-center justify-between gap-x-2 gap-y-2 border-b border-border bg-card px-3 sm:gap-x-4 sm:px-6', isPlanPage ? 'min-h-14 flex-wrap py-2' : 'min-h-16 py-3')}>
+        <header className="flex min-h-16 shrink-0 items-center justify-between gap-x-2 border-b border-border bg-card px-3 py-1 sm:gap-x-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <span className="hidden size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary sm:flex md:hidden">
               <GitBranch className="size-5" strokeWidth={1.7} aria-hidden="true" />
@@ -249,7 +266,6 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
               </ol>
             </nav>
           </div>
-          {isPlanPage ? <div ref={setTopbarContent} className="order-last w-full empty:hidden lg:order-none lg:w-auto" /> : null}
           <div className="flex shrink-0 items-center gap-2">
             {isAdmin && !isAdminSection ? (
               <Link href={routes.roadmapAdminHome} aria-label={ADMIN_LABEL} title={ADMIN_LABEL} className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring md:hidden">
@@ -262,9 +278,9 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
             <ProfileMenu auth={auth} mobile />
           </div>
         </header>
-        <RoadmapTopbarContext.Provider value={topbarContent}>
+        <div ref={pageContent} className="flex min-h-0 flex-1 flex-col">
           {auth.user ? <RoadmapProjectSelection key={auth.user.id} userId={auth.user.id}>{children}</RoadmapProjectSelection> : null}
-        </RoadmapTopbarContext.Provider>
+        </div>
       </div>
     </div>
   );
