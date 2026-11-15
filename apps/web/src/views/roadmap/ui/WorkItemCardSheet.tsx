@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, ArrowLeft, ChevronRight, ExternalLink, Lock, Pencil, RefreshCw, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ChevronRight, ExternalLink, FileText, History, Lock, MessageSquare, Pencil, RefreshCw, X, type LucideIcon } from 'lucide-react';
 import type { RoadmapAllocation, RoadmapWorkItem } from '@/entities/roadmap/api/roadmapApi';
 import { workItemCardApi, workItemCardQueryKey, type WorkItemCard, type WorkItemCardPerson, type WorkItemCardUpdate } from '@/entities/roadmap/api/workItemCardApi';
 import { AzureWorkItemIcon } from '@/entities/roadmap/ui/AzureWorkItemIcon';
@@ -62,6 +62,15 @@ const syncTone: Record<string, { label: string; dot: string; text?: string }> = 
 function SyncStatus({ allocation }: { allocation: RoadmapAllocation }) {
   const tone = syncTone[allocation.azureSyncStatus ?? ''] ?? { label: 'Не отправлено', dot: 'bg-muted-foreground/40' };
   return <span className={cn('inline-flex items-center gap-1.5', tone.text)}><span aria-hidden="true" className={cn('size-1.5 rounded-full', tone.dot)} />{tone.label}</span>;
+}
+
+/** One quiet empty state for every tab, so an empty panel reads as intentional rather than broken. */
+function EmptyState({ icon: Icon, text, action }: { icon: LucideIcon; text: string; action?: ReactNode }) {
+  return <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-6 py-10 text-center">
+    <span aria-hidden="true" className="flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground"><Icon className="size-4" /></span>
+    <p className="text-sm text-muted-foreground">{text}</p>
+    {action}
+  </div>;
 }
 
 function Property({ label, wide, children }: { label: string; wide?: boolean; children: ReactNode }) {
@@ -207,7 +216,8 @@ function CardContent({ titleId, projectId, externalId, planItem, taskAllocations
     retry: (count, error) => !(error instanceof ApiError && (error.status ?? 500) < 500) && count < 2,
   });
   const allocations = planItem?.allocations.length ? planItem.allocations : taskAllocations;
-  const [tab, setTab] = useState<Tab>(allocations.length ? 'plan' : 'description');
+  // Picked once the card loads: open on the first tab that has something to show.
+  const [chosenTab, setTab] = useState<Tab | null>(allocations.length ? 'plan' : null);
 
   const update = useMutation({
     mutationFn: (input: Omit<WorkItemCardUpdate, 'rev'>) => workItemCardApi.update(projectId, externalId, { rev: card.data!.rev, ...input }),
@@ -225,7 +235,7 @@ function CardContent({ titleId, projectId, externalId, planItem, taskAllocations
     onClose={onClose}
     crumbs={<>
       {item?.parent ? <>
-        <button type="button" onClick={() => onOpen(item.parent!.id)} title={item.parent.title} className="inline-flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+        <button type="button" onClick={() => onOpen(item.parent!.id)} title={item.parent.title} className="inline-flex min-h-8 min-w-0 items-center gap-1.5 rounded-md px-1.5 hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
           <AzureWorkItemIcon type={item.parent.type} className="size-3.5" />
           <span className="truncate">{item.parent.title}</span>
         </button>
@@ -275,6 +285,24 @@ function CardContent({ titleId, projectId, externalId, planItem, taskAllocations
     { id: 'discussion', label: 'Обсуждение', count: item.comments.length },
     { id: 'history', label: 'История' },
   ];
+  const hasDescription = Boolean(item.descriptionHtml || item.acceptanceCriteriaHtml);
+  const tab: Tab = chosenTab ?? (hasDescription || item.canEdit ? 'description'
+    : item.children.length ? 'children'
+      : item.comments.length ? 'discussion'
+        : 'description');
+  const tabId = (entry: Tab) => `${titleId}-tab-${entry}`;
+  const onTabKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const index = tabs.findIndex((entry) => entry.id === tab);
+    const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length
+      : event.key === 'ArrowLeft' ? (index - 1 + tabs.length) % tabs.length
+        : event.key === 'Home' ? 0
+          : event.key === 'End' ? tabs.length - 1
+            : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    setTab(tabs[next].id);
+    document.getElementById(tabId(tabs[next].id))?.focus();
+  };
 
   return <div className="flex h-full flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
     {header(item)}
@@ -282,17 +310,18 @@ function CardContent({ titleId, projectId, externalId, planItem, taskAllocations
     <div className="min-h-0 flex-1 overflow-y-auto">
       <section className="px-6 pt-5 pb-6">
         <EditableTitle id={titleId} value={item.title} editable={item.canEdit} saving={update.isPending} onSave={(title) => update.mutate({ title })} />
-        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
-          {!item.canEdit && item.readOnlyReason ? <span title={item.readOnlyReason} className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-foreground/70"><Lock aria-hidden="true" className="size-3" />Только просмотр<span className="sr-only">: {item.readOnlyReason}</span></span> : null}
-          {changed ? <span>Изменено {changed}{item.changedBy ? <> · <span className="text-foreground/80">{item.changedBy.name}</span></> : null}</span> : null}
-        </p>
+        {changed ? <p className="mt-1.5 text-xs text-muted-foreground">Изменено {changed}{item.changedBy ? ` · ${item.changedBy.name}` : ''}</p> : null}
+        {!item.canEdit && item.readOnlyReason ? <p className="mt-3 flex items-start gap-1.5 text-xs text-muted-foreground">
+          <Lock aria-hidden="true" className="mt-px size-3.5 shrink-0" />
+          <span><span className="font-medium text-foreground/80">Только просмотр.</span> {item.readOnlyReason}</span>
+        </p> : null}
 
         {update.error ? <div role="alert" className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-destructive/8 px-3 py-2 text-sm text-destructive">
           <span className="flex min-w-0 items-start gap-2"><AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />{update.error.message}</span>
           {conflict ? <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={refresh}>Обновить карточку</Button> : null}
         </div> : null}
 
-        <dl className="mt-5 grid grid-cols-1 gap-x-6 gap-y-4 rounded-xl border border-border/70 bg-muted/25 px-4 py-4 sm:grid-cols-2">
+        <dl className="mt-6 grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
           <Property label="Состояние">
             {item.canEdit && item.states.length ? (
               <SearchableSelect
@@ -336,12 +365,15 @@ function CardContent({ titleId, projectId, externalId, planItem, taskAllocations
         </dl>
       </section>
 
-      <div role="tablist" aria-label="Разделы карточки" className="sticky top-0 z-10 flex gap-5 overflow-x-auto border-b border-border bg-card px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div role="tablist" aria-label="Разделы карточки" onKeyDown={onTabKey} className="sticky top-0 z-10 flex gap-5 overflow-x-auto border-y border-border bg-card px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((entry) => <button
           key={entry.id}
+          id={tabId(entry.id)}
           type="button"
           role="tab"
           aria-selected={tab === entry.id}
+          aria-controls={`${titleId}-panel`}
+          tabIndex={tab === entry.id ? 0 : -1}
           onClick={() => setTab(entry.id)}
           className={cn('-mb-px inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 py-2.5 text-sm transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring', tab === entry.id ? 'border-foreground font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}
         >
@@ -349,7 +381,7 @@ function CardContent({ titleId, projectId, externalId, planItem, taskAllocations
         </button>)}
       </div>
 
-      <div role="tabpanel" className="px-6 py-5">
+      <div role="tabpanel" id={`${titleId}-panel`} aria-labelledby={tabId(tab)} className="px-6 py-5">
         {tab === 'description' ? <DescriptionTab item={item} saving={update.isPending} onSave={(description) => update.mutateAsync({ description })} /> : null}
         {tab === 'plan' ? <PlanTab allocations={allocations} currentTaskId={externalId} canEditPlan={canEditPlan} writeEnabled={writeEnabled} onOpen={onOpen} onRetry={onRetryAllocation} retrying={retrying} /> : null}
         {tab === 'children' ? <ChildrenTab item={item} onOpen={onOpen} /> : null}
@@ -466,8 +498,9 @@ function DescriptionTab({ item, saving, onSave }: { item: WorkItemCard; saving: 
   const editable = item.canEdit && item.descriptionEditable;
   return <div className="space-y-6">
     <div className="group/description relative">
-      {item.descriptionHtml ? <SafeAzureHtml html={item.descriptionHtml} title="Описание из Azure DevOps" /> : <p className="text-sm text-muted-foreground">Описания нет.</p>}
-      {editable ? <Button type="button" size="sm" variant="ghost" className="mt-2 h-7 gap-1.5 px-2 text-xs text-muted-foreground" onClick={() => setDraft(item.descriptionText)}><Pencil aria-hidden="true" className="size-3.5" />{item.descriptionHtml ? 'Изменить' : 'Добавить описание'}</Button> : null}
+      {item.descriptionHtml ? <SafeAzureHtml html={item.descriptionHtml} title="Описание из Azure DevOps" />
+        : <EmptyState icon={FileText} text="Описания нет" action={editable ? <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setDraft('')}><Pencil aria-hidden="true" className="size-3.5" />Добавить описание</Button> : null} />}
+      {editable && item.descriptionHtml ? <Button type="button" size="sm" variant="ghost" className="mt-2 h-7 gap-1.5 px-2 text-xs text-muted-foreground" onClick={() => setDraft(item.descriptionText)}><Pencil aria-hidden="true" className="size-3.5" />Изменить</Button> : null}
       {item.canEdit && !item.descriptionEditable ? <p className="mt-3 text-xs text-muted-foreground">Описание с форматированием меняется в Azure DevOps, чтобы не потерять разметку.</p> : null}
     </div>
     {item.acceptanceCriteriaHtml ? <section>
@@ -587,7 +620,7 @@ function DiscussionTab({ item, projectId }: { item: WorkItemCard; projectId: str
           <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere]">{entry.text}</p>
         </div>
       </li>)}
-    </ul> : <p className="text-sm text-muted-foreground">Комментариев пока нет.</p>}
+    </ul> : <EmptyState icon={MessageSquare} text="Комментариев пока нет" />}
   </div>;
 }
 
@@ -607,7 +640,7 @@ function groupHistory(history: WorkItemCard['history']) {
 }
 
 function HistoryTab({ item }: { item: WorkItemCard }) {
-  if (!item.history.length) return <p className="text-sm text-muted-foreground">Изменений пока нет.</p>;
+  if (!item.history.length) return <EmptyState icon={History} text="Изменений пока нет" />;
   return <ol className="relative space-y-5 before:absolute before:top-2 before:bottom-2 before:left-[5px] before:w-px before:bg-border">
     {groupHistory(item.history).map((entry) => <li key={entry.id} className="relative pl-6">
       <span aria-hidden="true" className="absolute top-1.5 left-0 size-[11px] rounded-full border-2 border-card bg-muted-foreground/40" />
