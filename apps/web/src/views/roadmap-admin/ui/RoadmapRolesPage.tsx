@@ -153,7 +153,6 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
       {!loading && selectedProjectId && (!rolesQuery.isError || rolesQuery.data) && (
         <RoleAssignmentBoard
           key={selectedProjectId}
-          projectName={projectName}
           roles={projectRoles}
           availableRoles={availableTemplates}
           catalogSize={catalog.length}
