@@ -89,6 +89,12 @@ const UNKNOWN_CREATE =
 const ORIGINAL_ESTIMATE = 'Microsoft.VSTS.Scheduling.OriginalEstimate';
 const REMAINING_WORK = 'Microsoft.VSTS.Scheduling.RemainingWork';
 const COMPLETED_WORK = 'Microsoft.VSTS.Scheduling.CompletedWork';
+/** Fields that `updateTask` writes only when they actually changed. */
+const UPDATE_MANAGED_FIELDS = new Set([
+  'System.AssignedTo',
+  ORIGINAL_ESTIMATE,
+  REMAINING_WORK,
+]);
 const allocationContext = {
   role: true,
   workItem: { include: { project: true } },
@@ -1256,8 +1262,11 @@ export class RoadmapAzureSyncService {
             { referenceName },
           ]),
         );
+        // Assignee and estimates are diffed above; re-applying their rules would rewrite them on every push.
         const evaluation = evaluateWriteRules(
-          input.settings.writeRules,
+          input.settings.writeRules.filter(
+            (rule) => !UPDATE_MANAGED_FIELDS.has(rule.targetField),
+          ),
           this.templateContext(
             input.allocation,
             input.assignee,
