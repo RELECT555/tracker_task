@@ -4,9 +4,10 @@ import Link, { useLinkStatus } from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { ArrowRight, ChartNoAxesCombined, GitBranch, Layers3 } from 'lucide-react';
+import { ArrowRight, ChartNoAxesCombined, CircleHelp, GitBranch, Layers3 } from 'lucide-react';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { useAuth } from '@/features/auth/model/useAuth';
+import { TourLauncherButton } from '@/features/product-tour/ui/TourLauncher';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
 import type { AzureProject } from '@/entities/roadmap/api/roadmapApi';
@@ -91,6 +92,9 @@ export function HomePage() {
             <Link href={routes.roadmapAnalytics} prefetch={false} className={styles.secondary}>
               <ChartNoAxesCombined aria-hidden="true" className="size-4" /> Аналитика
             </Link>
+            <TourLauncherButton className={styles.secondary}>
+              <CircleHelp aria-hidden="true" className="size-4" /> Тур по продукту
+            </TourLauncherButton>
           </div>
         </div>
       </section>

@@ -1201,7 +1201,7 @@ export function RoadmapPage() {
   />;
   const switchGroupClass = 'inline-flex items-stretch divide-x divide-border rounded-md border border-border bg-card';
   // Both switches control the per-role columns, so they sit in one joined group.
-  const roleColumnControls = <div role="group" aria-label="Столбцы по ролям" className={switchGroupClass}>
+  const roleColumnControls = <div role="group" aria-label="Столбцы по ролям" data-tour="plan-roles" className={switchGroupClass}>
     <RoadmapToolbarSwitch
       label="По ролям"
       icon={<Users />}
@@ -1211,7 +1211,7 @@ export function RoadmapPage() {
     />
     {plannedRolesSwitch(!showRoleDetails)}
   </div>;
-  const periodControls = <div role="group" aria-label="Период" className="flex h-8 items-center rounded-md border border-border bg-card shadow-xs">
+  const periodControls = <div role="group" aria-label="Период" data-tour="plan-period" className="flex h-8 items-center rounded-md border border-border bg-card shadow-xs">
     <Button type="button" variant="ghost" size="icon" className="h-full w-7 rounded-r-none" aria-label="Предыдущий квартал" onClick={() => shiftQuarter(-1)}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></Button>
     <span aria-live="polite" className="min-w-16 text-center text-xs font-semibold tabular-nums">{currentQuarterLabel}</span>
     <Button type="button" variant="ghost" size="icon" className="h-full w-7 rounded-l-none" aria-label="Следующий квартал" onClick={() => shiftQuarter(1)}><ChevronRight aria-hidden="true" className="h-4 w-4" /></Button>
@@ -1241,6 +1241,7 @@ export function RoadmapPage() {
           <h1 className="sr-only">План проекта</h1>
           <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-6 gap-y-4">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <div data-tour="plan-project" className="min-w-0 max-w-full">
               <AzureProjectPicker
                 projects={projects}
                 includeAllProjects
@@ -1249,6 +1250,7 @@ export function RoadmapPage() {
                 disabled={catalogLoading || !projectSelectionReady}
                 placeholder={plan?.name ?? (demoMode ? 'Демо-проект' : configured ? 'Выбрать проект Azure DevOps' : 'Выбрать локальный проект')}
               />
+              </div>
               {!isAllProjects ? planSyncInfo : null}
               {plan && !canEditPlan ? <span className="text-sm text-muted-foreground">Только просмотр</span> : null}
               {plan && createdTasks.length > 0 ? <CreatedTasksPanel items={createdTasks} /> : null}
@@ -1299,7 +1301,7 @@ export function RoadmapPage() {
             </PlanNotice> : null}
           </div>
 
-          {isAllProjects ? <section {...appearanceProps} aria-label="Планы всех проектов" className={cn(appearanceProps.className, 'min-w-0 overflow-hidden rounded-xl border border-border bg-card')}>
+          {isAllProjects ? <section {...appearanceProps} data-tour="plan-table" aria-label="Планы всех проектов" className={cn(appearanceProps.className, 'min-w-0 overflow-hidden rounded-xl border border-border bg-card')}>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
               <div>
                 <h2 className="font-medium text-foreground">Все проекты</h2>
@@ -1347,6 +1349,7 @@ export function RoadmapPage() {
               {focusMode ? <div className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm" aria-hidden="true" /> : null}
               <section
                 {...appearanceProps}
+                data-tour="plan-table"
                 role={focusMode ? 'dialog' : undefined}
                 aria-modal={focusMode ? true : undefined}
                 aria-label={focusMode ? 'Режим заполнения плана' : undefined}
@@ -1416,7 +1419,7 @@ export function RoadmapPage() {
                         {pushPreviewOpen ? <AzurePushPreview projectId={roadmapProjectId} onDone={() => setPushPreviewOpen(false)} /> : null}
                       </PopoverContent>
                     </Popover> : null}
-                    <Button type="button" variant={focusMode ? 'secondary' : 'outline'} size="sm" onClick={() => {
+                    <Button type="button" data-tour="plan-focus" variant={focusMode ? 'secondary' : 'outline'} size="sm" onClick={() => {
                       if (!focusMode && view === 'periods') setExpandedEpics(new Set(epics.map((epic) => epic.id)));
                       setFocusMode((current) => !current);
                     }} className="h-8 px-2.5" aria-label={focusMode ? 'Выйти из режима фокуса' : 'Включить режим фокуса'} title={focusMode ? 'Выйти из режима фокуса' : 'Режим фокуса'}>

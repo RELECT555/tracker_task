@@ -7,6 +7,8 @@ import { useTheme } from 'next-themes';
 import { ChartNoAxesCombined, ChevronDown, ChevronUp, GitBranch, House, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Settings2, Sun, type LucideIcon } from 'lucide-react';
 import { RoadmapProjectSelection } from '@/entities/roadmap/model/roadmap-project-selection';
 import { useAuth } from '@/features/auth/model/useAuth';
+import { ProductTour } from '@/features/product-tour/ui/ProductTour';
+import { TourLauncherIcon } from '@/features/product-tour/ui/TourLauncher';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { roadmapAdminSections } from '@/shared/config/roadmap-admin-sections';
 import { routes } from '@/shared/config/routes';
@@ -234,6 +236,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
 
   return (
     <div className="roadmap-frame relative flex h-dvh overflow-clip bg-sidebar dark:bg-background">
+      <ProductTour enabled={Boolean(auth.user)} isAdmin={isAdmin} />
       <aside id="roadmap-sidebar" className={cn('hidden h-full shrink-0 flex-col border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground md:flex', sidebarCollapsed ? 'w-16' : 'w-64')}>
         <div className={cn('flex h-16 shrink-0 items-center gap-2', sidebarCollapsed ? 'justify-center' : 'justify-between pl-5 pr-3')}>
           <button
@@ -270,7 +273,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
           ) : null}
         </div>
 
-        <nav aria-label="Навигация Roadmap" className={cn('min-h-0 flex-1 roadmap-scrollbar overflow-auto py-5', sidebarCollapsed ? 'px-2.5' : 'px-3')}>
+        <nav aria-label="Навигация Roadmap" data-tour="nav" className={cn('min-h-0 flex-1 roadmap-scrollbar overflow-auto py-5', sidebarCollapsed ? 'px-2.5' : 'px-3')}>
           <div ref={navList} className="relative">
             <span ref={navIndicator} aria-hidden="true" className="roadmap-nav-indicator rounded-lg bg-sidebar-accent" />
             <ul className="space-y-1">
@@ -281,7 +284,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
               ))}
               {isAdmin ? (
                 <li>
-                  <div className={cn('flex items-center rounded-lg transition-colors duration-200', isNavAdminSection && 'bg-sidebar-accent/50')}>
+                  <div data-tour="nav-admin" className={cn('flex items-center rounded-lg transition-colors duration-200', isNavAdminSection && 'bg-sidebar-accent/50')}>
                     <RoadmapNavLink
                       href={routes.roadmapAdminHome}
                       label={ADMIN_LABEL}
@@ -353,7 +356,8 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
                 <Settings2 className="size-4" strokeWidth={1.7} aria-hidden="true" />
               </Link>
             ) : null}
-            <button type="button" onClick={cycleTheme} title={`Тема: ${themeLabel}`} aria-label={`Тема: ${themeLabel}. Нажмите, чтобы переключить`} className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+            <TourLauncherIcon />
+            <button type="button" data-tour="theme" onClick={cycleTheme} title={`Тема: ${themeLabel}`} aria-label={`Тема: ${themeLabel}. Нажмите, чтобы переключить`} className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
               <ThemeIcon className="size-4" aria-hidden="true" />
             </button>
             <ProfileMenu auth={auth} mobile />

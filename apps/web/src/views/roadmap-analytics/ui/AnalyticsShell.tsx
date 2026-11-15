@@ -40,7 +40,7 @@ function QuarterSwitcher({ quarter, onShift }: { quarter: QuarterRef; onShift: (
 }
 
 function ViewTabs({ view, query }: { view: AnalyticsView; query: string }) {
-  return <nav aria-label="Разделы аналитики" className="flex w-full rounded-lg border border-border/70 bg-card p-0.5 sm:w-fit dark:border-border">
+  return <nav aria-label="Разделы аналитики" data-tour="analytics-tabs" className="flex w-full rounded-lg border border-border/70 bg-card p-0.5 sm:w-fit dark:border-border">
     {views.map((item) => {
       const active = item.key === view;
       return <Link
