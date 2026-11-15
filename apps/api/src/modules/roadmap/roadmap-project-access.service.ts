@@ -3,12 +3,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { RoadmapProjectRole } from '@prisma/client';
+import type { Prisma, RoadmapProjectRole } from '@prisma/client';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import type { AuthenticatedUser } from '../../shared/presentation/decorators/current-user.decorator';
 
 type ProjectTarget =
   { projectId: string } | { workItemId: string } | { allocationIds: string[] };
+
+export function roadmapProjectReadFilter(email?: string): Prisma.RoadmapProjectWhereInput {
+  return email === undefined ? {} : { access: { some: { email: email.trim().toLowerCase() } } };
+}
 
 @Injectable()
 export class RoadmapProjectAccessService {
@@ -43,10 +47,7 @@ export class RoadmapProjectAccessService {
 
   async localProjects(email?: string) {
     const projects = await this.prisma.roadmapProject.findMany({
-      where:
-        email === undefined
-          ? undefined
-          : { access: { some: { email: email.trim().toLowerCase() } } },
+      where: roadmapProjectReadFilter(email),
       orderBy: { name: 'asc' },
       select: {
         id: true,

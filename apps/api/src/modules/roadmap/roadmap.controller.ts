@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { ArrayMaxSize, ArrayMinSize, IsArray, ArrayUnique, IsDateString, IsIn, IsNumber, IsOptional, IsString, IsUUID, Matches, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { ArrayMaxSize, ArrayMinSize, IsArray, ArrayUnique, IsBoolean, IsDateString, IsIn, IsNumber, IsOptional, IsString, IsUUID, Matches, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import type { RoadmapPortfolioInput } from '@tracker/shared';
 import { Type } from 'class-transformer';
 import { CurrentUser, type AuthenticatedUser } from '../../shared/presentation/decorators/current-user.decorator';
 import { AdminRoleGuard } from '../admin/presentation/guards/admin-role.guard';
@@ -47,6 +48,14 @@ class PushToAzureDto {
   @IsOptional() @IsArray() @ArrayUnique() @IsString({ each: true }) allocationIds?: string[];
 }
 
+class PortfolioDto implements RoadmapPortfolioInput {
+  @IsArray() @ArrayUnique() @IsUUID('all', { each: true }) projectIds!: string[];
+  @Matches(/^(?!0000)\d{4}-Q[1-4]$/) quarterKey!: string;
+  @IsOptional() @Matches(/^(?!0000)\d{4}-(0[1-9]|1[0-2])$/) monthKey?: string;
+  @IsOptional() @IsBoolean() plannedRolesOnly?: boolean;
+  @IsOptional() @IsBoolean() includeMonthlyFact?: boolean;
+}
+
 class CreateRoadmapWorkItemDto {
   @IsUUID('4') requestId!: string;
   @IsIn(ROADMAP_CREATE_WORK_ITEM_TYPES) type!: RoadmapWorkItemCreateInput['type'];
@@ -74,6 +83,17 @@ export class RoadmapController {
   @Get('projects')
   projects(@CurrentUser() actor: AuthenticatedUser) {
     return actor.isAdmin ? this.roadmap.listAzureProjects() : this.access.localProjects(actor.email);
+  }
+
+  @Get('projects/local')
+  localProjects(@CurrentUser() actor: AuthenticatedUser) {
+    return this.access.localProjects(actor.isAdmin ? undefined : actor.email);
+  }
+
+  @Post('projects/summary')
+  @HttpCode(200)
+  projectSummaries(@CurrentUser() actor: AuthenticatedUser, @Body() input: PortfolioDto) {
+    return this.roadmap.getProjectSummaries(input, actor.isAdmin ? undefined : actor.email);
   }
 
   @Post('projects/:externalId/sync')

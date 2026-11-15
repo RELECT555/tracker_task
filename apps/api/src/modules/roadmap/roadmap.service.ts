@@ -8,9 +8,10 @@ import {
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import type { Prisma } from '@prisma/client';
-import { rebalanceAllocations } from '@tracker/shared';
+import { buildRoadmapPortfolio, getRoadmapSummary, rebalanceAllocations, type RoadmapPortfolioInput } from '@tracker/shared';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
+import { roadmapProjectReadFilter } from './roadmap-project-access.service';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import { AzureDevOpsHttpError, RoadmapIntegrationService, type AzureDevOpsCredentials } from './roadmap-integration.service';
 import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
@@ -47,6 +48,10 @@ type RoadmapHierarchyItem = {
   externalId: string;
   parentExternalId: string | null;
   type: string;
+};
+
+type RoadmapFactItem = RoadmapHierarchyItem & {
+  allocations: { id: string; azureTaskId: string | null }[];
 };
 
 function assertAssignableWorkItem(type: string) {
@@ -271,6 +276,66 @@ export class RoadmapService {
     return importedCount;
   }
 
+  async getProjectSummaries(input: RoadmapPortfolioInput, email?: string) {
+    const { projectIds, quarterKey, monthKey } = input;
+    const projects = await this.prisma.roadmapProject.findMany({
+      where: { id: { in: projectIds }, ...roadmapProjectReadFilter(email) },
+      select: {
+        id: true,
+        roles: {
+          orderBy: { name: 'asc' },
+          select: {
+            id: true, name: true, azureEstimateField: true, defaultPersonExternalId: true,
+            members: { select: { person: { select: { externalId: true, isActive: true } } } },
+          },
+        },
+        workItems: {
+          orderBy: [{ type: 'asc' }, { externalId: 'asc' }],
+          select: {
+            id: true, externalId: true, type: true, parentExternalId: true,
+            actualHours: true, azureCustomFields: true,
+            allocations: {
+              where: monthKey ? undefined : { quarterKey },
+              select: {
+                id: true, roleId: true, personExternalId: true, quarterKey: true, estimatedHours: true, azureTaskId: true,
+                periods: monthKey ? { where: { monthKey }, select: { monthKey: true, hours: true } } : false,
+              },
+            },
+          },
+        },
+      },
+    });
+    const entries = await Promise.all(projects.map(async ({ id, workItems, roles }) => {
+      const byExternalId = new Map(workItems.map((item) => [item.externalId, item]));
+      const cumulativeFact = monthKey
+        ? undefined
+        : rollUpActualHours(workItems, byExternalId, (item) => Number(item.actualHours ?? 0)).workItems;
+      const monthlyFact = monthKey && input.includeMonthlyFact !== false
+        ? await this.calculateProjectFact(workItems, monthKey).catch(() => undefined)
+        : undefined;
+      const summary = getRoadmapSummary({
+        workItems: workItems.map((item) => ({
+          ...item,
+          actualHours: cumulativeFact?.get(item.id) ?? 0,
+          azureCustomFields: item.azureCustomFields && typeof item.azureCustomFields === 'object' && !Array.isArray(item.azureCustomFields)
+            ? item.azureCustomFields
+            : null,
+          allocations: item.allocations.map((allocation) => ({
+            ...allocation,
+            estimatedHours: Number(allocation.estimatedHours),
+            periods: (allocation.periods ?? []).map((period) => ({ monthKey: period.monthKey, hours: Number(period.hours) })),
+          })),
+        })),
+        roles: roles.map(({ members, ...role }) => ({
+          ...role,
+          members: members.map(({ person }) => ({ personExternalId: person.externalId, personIsActive: person.isActive })),
+        })),
+      }, { ...input, monthlyFact });
+      return { id, summary };
+    }));
+    return buildRoadmapPortfolio(entries, input);
+  }
+
   async getProjectPlan(projectId: string, actorId: string, canEditPlan: boolean) {
     const project = await this.prisma.roadmapProject.findUnique({
       where: { id: projectId },
@@ -365,7 +430,10 @@ export class RoadmapService {
       },
     });
     if (!project) throw new NotFoundException('Roadmap project was not found');
+    return this.calculateProjectFact(project.workItems, monthKey);
+  }
 
+  private async calculateProjectFact(items: RoadmapFactItem[], monthKey: string) {
     const monthStart = new Date(`${monthKey}-01T00:00:00.000Z`);
     const now = Date.now();
     if (monthStart.getTime() > now) return { workItems: {}, allocations: {}, totalHours: 0, sourceHours: {} };
@@ -374,7 +442,6 @@ export class RoadmapService {
     const before = new Date(monthStart.getTime() - 1);
     const through = new Date(Math.min(nextMonth.getTime() - 1, now));
 
-    const items = project.workItems;
     const itemByExternalId = new Map(items.map((item) => [item.externalId, item]));
     const linkedAllocations = items
       .filter((item) => item.type.toLowerCase() !== 'epic')
