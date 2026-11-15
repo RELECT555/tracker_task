@@ -1,5 +1,11 @@
-import { RoadmapAnalyticsPage } from '@/views/roadmap-analytics/ui/RoadmapAnalyticsPage';
+import { Suspense } from 'react';
+import { RoadmapCapacityPage } from '@/views/roadmap-analytics/ui/CapacityPage';
 
+// Квартал читается из ?q= на клиенте, чтобы страница оставалась статической.
 export default function Page() {
-  return <RoadmapAnalyticsPage />;
+  return (
+    <Suspense>
+      <RoadmapCapacityPage />
+    </Suspense>
+  );
 }

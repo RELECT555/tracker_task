@@ -33,6 +33,10 @@
   .projectPicker {
     grid-column: auto;
   }
+
+  .headerCompact {
+    grid-template-columns: minmax(0, 1fr) minmax(12rem, 16rem);
+  }
 }
 
 .panel {
@@ -57,23 +61,25 @@
 }
 
 .primaryMetric {
-  grid-column: 1 / -1;
   background: color-mix(in srgb, var(--color-primary) 7%, var(--color-card));
 }
 
-.columns {
+.columns,
+.pair {
   display: grid;
   align-items: start;
   gap: 1rem;
 }
 
+@container (min-width: 45rem) {
+  .pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @container (min-width: 60rem) {
   .metrics {
-    grid-template-columns: 1.2fr repeat(4, minmax(0, 1fr));
-  }
-
-  .primaryMetric {
-    grid-column: auto;
+    grid-template-columns: 1.2fr repeat(3, minmax(0, 1fr));
   }
 
   .columns {
@@ -141,12 +147,12 @@
   table-layout: fixed;
 }
 
-.epicsTable :where(thead th:first-child) { width: 30%; }
-.epicsTable :where(thead th:nth-child(2)) { width: 14%; }
-.epicsTable :where(thead th:nth-child(n + 3):nth-child(-n + 5)) { width: 12%; }
-.epicsTable :where(thead th:last-child) { width: 20%; }
+/* Обе таблицы эпиков: название | сводка | два числовых столбца. */
+.epicsTable :where(thead th:first-child) { width: 40%; }
+.epicsTable :where(thead th:nth-child(2)) { width: 30%; }
+.epicsTable :where(thead th:nth-child(n + 3)) { width: 15%; }
 
-.epicsTable :where(:is(th, td):nth-child(n + 3):nth-child(-n + 5)) {
+.epicsTable :where(:is(th, td):nth-child(n + 3)) {
   text-align: right;
 }
 
@@ -170,7 +176,7 @@
 
   .epicsTable tr {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem 0.625rem;
     padding: 0.875rem 1rem;
     border-top: 1px solid hsl(var(--border) / 0.55);
@@ -184,8 +190,7 @@
   }
 
   .epicsTable th:first-child,
-  .epicsTable td:nth-child(2),
-  .epicsTable td:last-child {
+  .epicsTable td:nth-child(2) {
     grid-column: 1 / -1;
   }
 

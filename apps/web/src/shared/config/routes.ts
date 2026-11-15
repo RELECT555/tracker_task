@@ -3,6 +3,7 @@ export const routes = {
   login: '/login',
   roadmap: '/roadmap',
   roadmapAnalytics: '/roadmap/analytics',
+  roadmapAnalyticsProgress: '/roadmap/analytics/progress',
   roadmapAdminHome: '/roadmap/admin',
   roadmapAdmin: '/roadmap/admin/integrations',
   roadmapAdminUsers: '/roadmap/admin/users',

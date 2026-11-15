@@ -23,6 +23,8 @@ const roadmapLinks = [
   { href: routes.roadmapAnalytics, label: 'Аналитика', icon: ChartNoAxesCombined },
 ];
 
+const isAnalyticsPath = (path: string) => path === routes.roadmapAnalytics || path.startsWith(`${routes.roadmapAnalytics}/`);
+
 function initials(fullName: string) {
   return fullName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
 }
@@ -226,7 +228,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
     { label: 'Главная', href: routes.home },
     ...(isPlanPage ? [{ label: 'План проекта' }] : []),
     ...(isAdminSection ? [{ label: ADMIN_LABEL, href: isAdminHome ? undefined : routes.roadmapAdminHome }] : []),
-    ...(pathname === routes.roadmapAnalytics ? [{ label: 'Аналитика' }] : []),
+    ...(isAnalyticsPath(pathname) ? [{ label: 'Аналитика' }] : []),
     ...(activeAdminSection ? [{ label: activeAdminSection.title }] : []),
   ];
 
@@ -262,7 +264,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
             <ul className="space-y-1">
               {roadmapLinks.map((link) => (
                 <li key={link.href}>
-                  <RoadmapNavLink {...link} active={navPath === link.href} collapsed={sidebarCollapsed} />
+                  <RoadmapNavLink {...link} active={navPath === link.href || (link.href === routes.roadmapAnalytics && isAnalyticsPath(navPath))} collapsed={sidebarCollapsed} />
                 </li>
               ))}
               {isAdmin ? (
