@@ -18,8 +18,7 @@ export const PopoverContent = forwardRef<
       align={align}
       sideOffset={sideOffset}
       className={cn(
-        'z-50 w-auto rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
-        'motion-safe:data-[state=open]:animate-[zoom-in_150ms_ease-out]',
+        'roadmap-popover z-50 w-auto rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
         className,
       )}
       {...props}

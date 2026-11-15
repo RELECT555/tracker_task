@@ -120,25 +120,12 @@
   --radius-sm: calc(var(--radius) - 4px);
 }
 
-html {
-  transition: background-color 0.2s ease, color 0.2s ease;
-}
-
 html:has(.roadmap-frame) {
   overscroll-behavior: none;
 }
 
 .roadmap-frame main.roadmap-scrollbar {
   scrollbar-gutter: stable;
-}
-
-.roadmap-link-pending {
-  animation: roadmap-link-pending 125ms cubic-bezier(0.23, 1, 0.32, 1) 120ms both;
-}
-
-@keyframes roadmap-link-pending {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 /* Подложка активного пункта меню: переезжает между вкладками. */
@@ -205,9 +192,107 @@ html:has(.roadmap-frame) {
   50% { opacity: 0.5; }
 }
 
+/* Поповеры (Radix): появляются из точки привязки, при закрытии быстро гаснут.
+   Radix дожидается окончания анимации закрытия, прежде чем убрать узел. */
+.roadmap-popover {
+  transform-origin: var(--radix-popover-content-transform-origin);
+}
+
+.roadmap-popover[data-state='open'] {
+  animation: roadmap-popover-in 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.roadmap-popover[data-state='closed'] {
+  animation: roadmap-popover-out 110ms ease-in forwards;
+}
+
+@keyframes roadmap-popover-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes roadmap-popover-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: scale(0.97); }
+}
+
+/* Нативные <dialog>: модальные окна по центру и боковые панели.
+   @starting-style задаёт стартовое состояние открытия, allow-discrete
+   держит диалог в top layer, пока идёт анимация закрытия. */
+.roadmap-dialog,
+.roadmap-sheet {
+  opacity: 0;
+  transition:
+    opacity 160ms ease-in,
+    transform 160ms ease-in,
+    overlay 160ms allow-discrete,
+    display 160ms allow-discrete;
+}
+
+.roadmap-dialog {
+  transform: scale(0.97);
+}
+
+.roadmap-sheet {
+  transform: translateX(24px);
+}
+
+.roadmap-dialog[open],
+.roadmap-sheet[open] {
+  opacity: 1;
+  transform: none;
+  transition-duration: 220ms;
+  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@starting-style {
+  .roadmap-dialog[open] {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+
+  .roadmap-sheet[open] {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+.roadmap-dialog::backdrop,
+.roadmap-sheet::backdrop {
+  opacity: 0;
+  transition:
+    opacity 160ms ease-in,
+    overlay 160ms allow-discrete,
+    display 160ms allow-discrete;
+}
+
+.roadmap-dialog[open]::backdrop,
+.roadmap-sheet[open]::backdrop {
+  opacity: 1;
+  transition-duration: 220ms;
+}
+
+@starting-style {
+  .roadmap-dialog[open]::backdrop,
+  .roadmap-sheet[open]::backdrop {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .roadmap-skeleton {
     animation: none;
+  }
+
+  .roadmap-popover[data-state] {
+    animation: none;
+  }
+
+  .roadmap-dialog,
+  .roadmap-sheet,
+  .roadmap-dialog[open],
+  .roadmap-sheet[open] {
+    transform: none;
   }
 
   .roadmap-nav-indicator {

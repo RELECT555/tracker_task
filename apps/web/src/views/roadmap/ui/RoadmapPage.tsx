@@ -471,7 +471,7 @@ function QuarterPlanningGrid({
     {saving ? <p role="status" className="text-xs text-muted-foreground">Сохраняем план…</p> : null}
     <div className={cn('roadmap-scrollbar overflow-auto', focusMode && 'min-h-0 flex-1')}>
       <ResizablePlanTable columns={columns} onColumnResize={(id, width) => columnWidths.commitWidth(id, width, columns.find((column) => column.id === id)!)} onPaste={handlePaste} className="table-fixed border-collapse text-left">
-        <thead className="sticky top-0 z-[3] bg-card/95 backdrop-blur">
+        <thead className="sticky top-0 z-[3] bg-card">
           <tr className="border-b border-border text-xs font-semibold text-muted-foreground">
             <th scope="col" data-column-id="name" className="sticky left-0 top-0 z-20 border-r border-border/80 bg-muted/90 px-4 py-3 pr-5"><span>Задача / назначение</span><ColumnResizeHandle columnId="name" /></th>
             {months.map((month, index) => <th key={month.monthKey} scope="col" data-column-id={`period:month:${index}`} className="relative px-3 py-3 text-right"><span className="block capitalize text-foreground">{month.label}</span><span className="text-[10px] font-normal">план, ч</span><ColumnResizeHandle columnId={`period:month:${index}`} /></th>)}
@@ -492,7 +492,7 @@ function QuarterPlanningGrid({
           })}
           {features.filter((feature) => (!feature.parentExternalId || !epics.some((epic) => epic.externalId === feature.parentExternalId)) && (showUnassigned || feature.allocations.length > 0)).map((feature, index, items) => renderFeature(feature, index === items.length - 1))}
         </tbody>
-        <tfoot className="sticky bottom-0 z-[3] border-t-2 border-border bg-muted/70 shadow-[0_-4px_12px_rgba(0,0,0,0.04)] backdrop-blur">
+        <tfoot className="sticky bottom-0 z-[3] border-t-2 border-border bg-[color-mix(in_srgb,var(--color-muted)_70%,var(--color-card))] shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
           <tr className="text-sm font-semibold text-foreground">
             <th scope="row" className="sticky left-0 z-20 border-r border-border/80 bg-muted/90 px-4 py-3">Итого по проекту</th>
             {months.map((month) => <td key={month.monthKey} className="px-3 py-3 text-right tabular-nums">{monthHours(totalAllocations, month.monthKey)} ч</td>)}

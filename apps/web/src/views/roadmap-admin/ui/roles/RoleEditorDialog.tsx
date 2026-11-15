@@ -109,7 +109,7 @@ export function RoleEditorDialog({ projectId, projectName, role, roleNames, peop
       aria-busy={pending}
       onCancel={(event) => { event.preventDefault(); requestClose(); }}
       onClose={onClose}
-      className="m-auto max-h-none w-[min(36rem,calc(100%-2rem))] overflow-visible rounded-xl border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/50"
+      className="roadmap-dialog m-auto max-h-none w-[min(36rem,calc(100%-2rem))] overflow-visible rounded-xl border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/50"
     >
       <form noValidate onSubmit={(event) => { event.preventDefault(); if (canSave && !confirmDiscard) save.mutate(); }} className="flex max-h-[calc(100dvh-2rem)] flex-col">
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">

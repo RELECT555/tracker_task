@@ -30,7 +30,7 @@ export function RemoveRoleDialog({ roleName, projectName, pending, error, onClos
       aria-busy={pending}
       onCancel={(event) => { if (pending) event.preventDefault(); }}
       onClose={onClose}
-      className="m-auto w-[min(28rem,calc(100%-2rem))] rounded-xl border border-border bg-card p-5 text-foreground shadow-xl backdrop:bg-black/50"
+      className="roadmap-dialog m-auto w-[min(28rem,calc(100%-2rem))] rounded-xl border border-border bg-card p-5 text-foreground shadow-xl backdrop:bg-black/50"
     >
       <h2 id={`${id}-title`} className="text-base font-semibold">Убрать роль из проекта?</h2>
       <p id={`${id}-description`} className="mt-2 wrap-anywhere text-sm leading-relaxed text-muted-foreground">

@@ -123,7 +123,7 @@ export function CreateAzureWorkItem({ externalProjectId, projectName, items, peo
         aria-labelledby={`${id}-heading`}
         onCancel={(event) => { if (submitting.current) event.preventDefault(); }}
         onClose={onClose}
-        className="m-auto max-h-none w-[min(32rem,calc(100vw-2rem))] overflow-visible rounded-xl border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/50"
+        className="roadmap-dialog m-auto max-h-none w-[min(32rem,calc(100vw-2rem))] overflow-visible rounded-xl border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/50"
       >
         <div className="max-h-[calc(100dvh-2rem-2px)] overflow-y-auto overscroll-contain rounded-[inherit]">
           <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">

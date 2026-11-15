@@ -1,6 +1,6 @@
 'use client';
 
-import Link, { useLinkStatus } from 'next/link';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useTheme } from 'next-themes';
@@ -83,15 +83,6 @@ type RoadmapNavItem = {
   className?: string;
 };
 
-function RoadmapLinkPending() {
-  const { pending } = useLinkStatus();
-  return pending ? (
-    <span role="status" className="roadmap-link-pending pointer-events-none absolute right-1.5 top-1.5 size-1.5 rounded-full bg-sidebar-primary">
-      <span className="sr-only">Открываем страницу…</span>
-    </span>
-  ) : null;
-}
-
 function RoadmapNavLink({ href, label, icon: Icon, active, collapsed, className }: RoadmapNavItem) {
   return (
     <Link
@@ -109,7 +100,6 @@ function RoadmapNavLink({ href, label, icon: Icon, active, collapsed, className 
     >
       <Icon className="size-[18px] shrink-0" strokeWidth={1.5} aria-hidden="true" />
       {!collapsed && <span>{label}</span>}
-      <RoadmapLinkPending />
     </Link>
   );
 }

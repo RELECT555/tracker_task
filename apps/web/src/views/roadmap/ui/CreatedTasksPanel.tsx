@@ -34,7 +34,7 @@ export function CreatedTasksPanel({ items }: { items: CreatedTaskItem[] }) {
       <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold tabular-nums text-primary">{items.length}</span>
     </Button>
     <dialog ref={dialog} aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`}
-      className="table-settings-panel fixed inset-y-0 left-auto right-0 m-0 h-dvh max-h-dvh w-full max-w-md overflow-hidden border-l border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-transparent"
+      className="roadmap-sheet table-settings-panel fixed inset-y-0 left-auto right-0 m-0 h-dvh max-h-dvh w-full max-w-md overflow-hidden border-l border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-transparent"
       onClose={() => { setOpen(false); trigger.current?.focus(); }}
       onKeyDown={(event) => { if (event.key === 'Escape') event.stopPropagation(); }}
       onClick={(event) => {
