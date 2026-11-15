@@ -67,7 +67,7 @@ class QuarterMonthDto {
 
 class RoleHoursDto {
   @IsNumber() @Min(0) @Max(100000) hours!: number;
-  @IsOptional() @Matches(/^d{4}-Q[1-4]$/) quarterKey?: string;
+  @IsOptional() @Matches(/^(?!0000)\d{4}-Q[1-4]$/) quarterKey?: string;
 }
 
 class SaveQuarterAllocationDto {
