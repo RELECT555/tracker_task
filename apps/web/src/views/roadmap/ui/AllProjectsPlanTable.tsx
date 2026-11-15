@@ -1,20 +1,32 @@
 'use client';
 
-import { Fragment, useState } from 'react';
-import { ArrowUpRight, ChevronDown, ChevronRight, FolderOpen, RefreshCw } from 'lucide-react';
-import type { AzureProject, RoadmapProjectPlan, RoadmapRole, RoadmapWorkItem } from '@/entities/roadmap/api/roadmapApi';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getRoadmapSummary, type RoadmapProjectOverview, type RoadmapSummary, type RoadmapSummaryMetrics } from '@tracker/shared';
+import { ArrowUpRight, ChevronDown, ChevronRight, FolderOpen } from 'lucide-react';
+import { getRoadmapMonthlyFact, roadmapApi, type AzureProject, type RoadmapRole, type RoadmapWorkItem } from '@/entities/roadmap/api/roadmapApi';
+import { isRoadmapDemoMode } from '@/entities/roadmap/api/roadmapDemo';
 import { AzureWorkItemIcon } from '@/entities/roadmap/ui/AzureWorkItemIcon';
-import { Button } from '@/shared/ui/button';
+import { QueryErrorNotice } from '@/shared/ui/error-notice';
 import { cn } from '@/shared/lib/utils';
-import type { RoadmapSummary, RoadmapSummaryTotals } from '../model/roadmap-summary';
 
-export interface AllProjectsPlanEntry {
-  project: AzureProject;
-  plan?: RoadmapProjectPlan;
-  summary?: RoadmapSummary;
-  loading: boolean;
-  error: boolean;
-  onRetry: () => void;
+type ProjectSummary = RoadmapSummary<RoadmapWorkItem, RoadmapRole>;
+
+type ImportedProject = AzureProject & { roadmapId: string };
+
+type DetailPeriod = {
+  quarterKey: string;
+  monthKey?: string;
+  plannedRolesOnly: boolean;
+  showFact: boolean;
+  refreshInterval: number | false;
+};
+
+function toggle(set: Set<string>, key: string) {
+  const next = new Set(set);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  return next;
 }
 
 const numberFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
@@ -24,7 +36,7 @@ function hours(value: number | null) {
   return value === null ? '—' : `${numberFormat.format(value)} ч`;
 }
 
-function Metrics({ summary, showFact = true }: { summary?: Pick<RoadmapSummaryTotals, 'epics' | 'features' | 'planHours' | 'actualHours' | 'roles' | 'participants'>; showFact?: boolean }) {
+function Metrics({ summary, showFact = true }: { summary?: RoadmapSummaryMetrics; showFact?: boolean }) {
   return <>
     <td className={cn(metricClass, 'text-muted-foreground')}>{summary ? numberFormat.format(summary.epics) : '—'}</td>
     <td className={cn(metricClass, 'text-muted-foreground')}>{summary ? numberFormat.format(summary.features) : '—'}</td>
@@ -69,7 +81,7 @@ function assignmentCounts(items: RoadmapWorkItem[], visibleRoles: RoadmapRole[],
   return { roles: relevantRoles.length, participants: participants.size };
 }
 
-function itemSummary(item: RoadmapWorkItem, summary: RoadmapSummary) {
+function itemSummary(item: RoadmapWorkItem, summary: ProjectSummary) {
   const items = descendantItems(item, summary.items);
   const byRole = summary.rolePlan.byItem.get(item.id);
   return {
@@ -81,7 +93,7 @@ function itemSummary(item: RoadmapWorkItem, summary: RoadmapSummary) {
   };
 }
 
-function unattachedSummary(summary: RoadmapSummary, planHours: number) {
+function unattachedSummary(summary: ProjectSummary, planHours: number) {
   const byExternalId = new Map(summary.items.map((item) => [item.externalId, item]));
   const items = summary.items.filter((item) => {
     let current: RoadmapWorkItem | undefined = item;
@@ -102,7 +114,7 @@ function unattachedSummary(summary: RoadmapSummary, planHours: number) {
   };
 }
 
-function groupItems(summary: RoadmapSummary) {
+function groupItems(summary: ProjectSummary) {
   const epics = summary.items.filter((item) => item.type.toLowerCase() === 'epic');
   const features = summary.items.filter((item) => item.type.toLowerCase() === 'feature');
   const byExternalId = new Map(summary.items.map((item) => [item.externalId, item]));
@@ -122,22 +134,46 @@ function groupItems(summary: RoadmapSummary) {
   return { epics, featuresByEpic, standaloneFeatures };
 }
 
-export function AllProjectsPlanTable({ projects, onSelectProject, monthKey, showFact = true }: {
-  projects: AllProjectsPlanEntry[];
-  onSelectProject: (projectId: string) => void;
-  monthKey?: string;
-  showFact?: boolean;
-}) {
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
-  const [expandedEpics, setExpandedEpics] = useState<Set<string>>(() => new Set());
-  const toggle = (set: Set<string>, key: string) => {
-    const next = new Set(set);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    return next;
-  };
+function ProjectPlanDetails({
+  projectId, quarterKey, monthKey, plannedRolesOnly, showFact, refreshInterval, expandedEpics, onToggleEpic,
+}: DetailPeriod & { projectId: string; expandedEpics: ReadonlySet<string>; onToggleEpic: (key: string) => void }) {
+  const client = useQueryClient();
+  const demoMode = isRoadmapDemoMode();
+  const planQuery = useQuery({
+    queryKey: ['roadmap', 'plan', projectId],
+    queryFn: () => roadmapApi.plan(projectId),
+    refetchInterval: refreshInterval,
+    retry: false,
+  });
+  const plan = planQuery.isError ? undefined : planQuery.data;
+  const factQuery = useQuery({
+    queryKey: ['roadmap', 'monthly-fact', projectId, monthKey ?? ''],
+    queryFn: ({ signal }) => getRoadmapMonthlyFact(projectId, monthKey ?? '', signal),
+    enabled: Boolean(plan && monthKey && !demoMode),
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: refreshInterval,
+    retry: false,
+  });
+  const previousImport = useRef<string | null>(null);
+  const syncedAt = plan?.syncedAt;
+  useEffect(() => {
+    if (!demoMode && previousImport.current && syncedAt && previousImport.current !== syncedAt) {
+      void client.invalidateQueries({ queryKey: ['roadmap', 'monthly-fact', projectId] });
+    }
+    previousImport.current = syncedAt ?? null;
+  }, [client, demoMode, projectId, syncedAt]);
 
-  const renderItem = (projectId: string, item: RoadmapWorkItem, summary: RoadmapSummary, child = false, features: RoadmapWorkItem[] = []) => {
+  const monthlyFact = factQuery.data;
+  const summary = useMemo(() => plan ? getRoadmapSummary(plan, {
+    quarterKey, monthKey, monthlyFact, plannedRolesOnly,
+  }) : undefined, [plan, quarterKey, monthKey, monthlyFact, plannedRolesOnly]);
+  const columns = showFact ? 7 : 6;
+  if (planQuery.isPending) return <tr><td colSpan={columns} className="px-4 py-3 text-sm text-muted-foreground" role="status">Загружаем детали проекта…</td></tr>;
+  if (!summary) return <tr><td colSpan={columns} className="px-4 py-3">
+    <QueryErrorNotice title="Не удалось загрузить детали проекта" queries={[planQuery]} />
+  </td></tr>;
+
+  const renderItem = (item: RoadmapWorkItem, summary: ProjectSummary, child = false, features: RoadmapWorkItem[] = []) => {
     const epic = item.type.toLowerCase() === 'epic';
     const key = `${projectId}:${item.id}`;
     const expanded = expandedEpics.has(key);
@@ -150,7 +186,7 @@ export function AllProjectsPlanTable({ projects, onSelectProject, monthKey, show
               type="button"
               aria-label={`${expanded ? 'Свернуть' : 'Развернуть'} эпик ${item.title}`}
               aria-expanded={expanded}
-              onClick={() => setExpandedEpics((current) => toggle(current, key))}
+              onClick={() => onToggleEpic(key)}
               className="-ml-1 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
             ><ExpandIcon aria-hidden="true" className="size-4" /></button> : <span aria-hidden="true" className="size-6 shrink-0" />}
             <AzureWorkItemIcon type={item.type} className="mt-1 shrink-0" />
@@ -162,9 +198,42 @@ export function AllProjectsPlanTable({ projects, onSelectProject, monthKey, show
         </th>
         <Metrics summary={itemSummary(item, summary)} showFact={showFact} />
       </tr>
-      {epic && expanded ? features.map((feature) => renderItem(projectId, feature, summary, true)) : null}
+      {epic && expanded ? features.map((feature) => renderItem(feature, summary, true)) : null}
     </Fragment>;
   };
+
+  const groups = groupItems(summary);
+  const unattachedPlanHours = [...summary.rolePlan.byUnattached.values()].reduce((sum, value) => sum + value, 0);
+  return <>
+    {factQuery.isError ? <tr><td colSpan={columns} className="px-4 py-3">
+      <QueryErrorNotice title="Не удалось загрузить факт за месяц" queries={[factQuery]} />
+    </td></tr> : null}
+    {groups.epics.map((epic) => renderItem(epic, summary, false, groups.featuresByEpic.get(epic.id) ?? []))}
+    {groups.standaloneFeatures.map((feature) => renderItem(feature, summary))}
+    {unattachedPlanHours > 0 ? <tr className="border-b border-border/60 bg-card last:border-b-0">
+      <th scope="row" className="px-4 py-3 pl-9 text-left font-normal">
+        План без эпика / фичи
+        <span className="mt-1 block text-xs text-muted-foreground">Назначения на карточках без связи с эпиком или фичей</span>
+      </th>
+      <Metrics summary={unattachedSummary(summary, unattachedPlanHours)} showFact={showFact} />
+    </tr> : null}
+    {!groups.epics.length && !groups.standaloneFeatures.length && !unattachedPlanHours
+      ? <tr><td colSpan={columns} className="px-4 py-3 text-sm text-muted-foreground">В проекте нет деталей за выбранный период.</td></tr>
+      : null}
+  </>;
+}
+
+export function AllProjectsPlanTable({
+  projects, summaries, loading, onSelectProject, ...period
+}: DetailPeriod & {
+  projects: ImportedProject[];
+  summaries?: Record<string, RoadmapProjectOverview>;
+  loading: boolean;
+  onSelectProject: (projectId: string) => void;
+}) {
+  const { monthKey, showFact } = period;
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
+  const [expandedEpics, setExpandedEpics] = useState<Set<string>>(() => new Set());
 
   return <div className="roadmap-scrollbar min-w-0 overflow-x-auto">
     <table className="roadmap-plan-table w-full min-w-[880px] table-fixed border-collapse text-left">
@@ -189,12 +258,10 @@ export function AllProjectsPlanTable({ projects, onSelectProject, monthKey, show
           <th scope="col" className="px-3 py-3 text-right font-medium">Участники</th>
         </tr>
       </thead>
-      {projects.map(({ project, summary, loading, error, onRetry }) => {
+      {projects.map((project) => {
+        const summary = summaries?.[project.roadmapId];
         const expanded = expandedProjects.has(project.id);
         const ExpandIcon = expanded ? ChevronDown : ChevronRight;
-        const unattachedPlanHours = [...(summary?.rolePlan.byUnattached.values() ?? [])].reduce((sum, value) => sum + value, 0);
-        const canExpand = Boolean(summary && (summary.epics || summary.features || unattachedPlanHours > 0));
-        const groups = expanded && summary ? groupItems(summary) : undefined;
         return <tbody key={project.id} className="border-b border-border last:border-b-0">
           <tr data-row-kind="project" className="bg-muted/30">
             <th scope="row" className="px-4 py-3 text-left font-normal">
@@ -203,35 +270,26 @@ export function AllProjectsPlanTable({ projects, onSelectProject, monthKey, show
                   type="button"
                   aria-label={`${expanded ? 'Свернуть' : 'Развернуть'} проект ${project.name}`}
                   aria-expanded={expanded}
-                  disabled={!canExpand}
+                  disabled={!expanded && !summary?.canExpand}
                   onClick={() => setExpandedProjects((current) => toggle(current, project.id))}
                   className="-ml-1 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-30"
                 ><ExpandIcon aria-hidden="true" className="size-4" /></button>
                 <FolderOpen aria-hidden="true" className="mt-1 size-4 shrink-0 text-primary" />
                 <div className="min-w-0 flex-1">
                   <p data-plan-title title={project.name} className="break-words text-sm font-semibold leading-snug text-foreground [overflow-wrap:anywhere]">{project.name}</p>
-                  {loading ? <p role="status" className="mt-1 text-xs text-muted-foreground">Загружаем план…</p>
-                    : error ? <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                      <span className="text-destructive">Не удалось загрузить данные</span>
-                      <Button type="button" size="sm" variant="ghost" onClick={onRetry} className="h-7 gap-1 px-1.5 text-xs"><RefreshCw aria-hidden="true" className="size-3" />Повторить</Button>
-                    </div>
-                      : <button type="button" onClick={() => onSelectProject(project.id)} aria-label={`Открыть план проекта ${project.name}`} className="mt-1 inline-flex items-center gap-1 rounded-sm text-xs text-muted-foreground hover:text-primary focus-visible:outline-2 focus-visible:outline-ring">Открыть план<ArrowUpRight aria-hidden="true" className="size-3" /></button>}
+                  {summary ? <button type="button" onClick={() => onSelectProject(project.id)} aria-label={`Открыть план проекта ${project.name}`} className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Открыть план<ArrowUpRight aria-hidden="true" className="size-3" /></button>
+                    : <p className="mt-1 text-xs text-muted-foreground">{loading ? 'Загружаем сводку…' : 'Сводка недоступна'}</p>}
                 </div>
               </div>
             </th>
-            <Metrics summary={summary} showFact={showFact} />
+            <Metrics summary={summary?.metrics} showFact={showFact} />
           </tr>
-          {groups && summary ? <>
-            {groups.epics.map((epic) => renderItem(project.id, epic, summary, false, groups.featuresByEpic.get(epic.id) ?? []))}
-            {groups.standaloneFeatures.map((feature) => renderItem(project.id, feature, summary))}
-            {unattachedPlanHours > 0 ? <tr className="border-b border-border/60 bg-card last:border-b-0">
-              <th scope="row" className="py-3 pl-9 pr-4 text-left text-sm font-medium text-foreground">
-                План без эпика / фичи
-                <span className="mt-1 block text-xs font-normal text-muted-foreground">Назначения на карточках без связи с эпиком или фичей</span>
-              </th>
-              <Metrics summary={unattachedSummary(summary, unattachedPlanHours)} showFact={showFact} />
-            </tr> : null}
-          </> : null}
+          {expanded && summary ? <ProjectPlanDetails
+            {...period}
+            projectId={project.roadmapId}
+            expandedEpics={expandedEpics}
+            onToggleEpic={(key) => setExpandedEpics((current) => toggle(current, key))}
+          /> : null}
         </tbody>;
       })}
       {!projects.length ? <tbody><tr><td colSpan={showFact ? 7 : 6} className="px-4 py-8 text-center text-sm text-muted-foreground">Нет загруженных проектов. Выберите проект в списке выше, чтобы открыть или загрузить его план.</td></tr></tbody> : null}

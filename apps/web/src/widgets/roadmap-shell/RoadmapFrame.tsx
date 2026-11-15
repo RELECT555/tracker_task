@@ -267,8 +267,13 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
             </nav>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {isPlanPage ? (
+              <Link href={routes.roadmapAnalytics} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-border bg-card px-2 text-xs font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring md:hidden">
+                Аналитика
+              </Link>
+            ) : null}
             {isAdmin && !isAdminSection ? (
-              <Link href={routes.roadmapAdminHome} aria-label={ADMIN_LABEL} title={ADMIN_LABEL} className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring md:hidden">
+              <Link href={routes.roadmapAdminHome} prefetch={pathname === routes.home ? false : undefined} aria-label={ADMIN_LABEL} title={ADMIN_LABEL} className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring md:hidden">
                 <Settings2 className="size-4" strokeWidth={1.7} aria-hidden="true" />
               </Link>
             ) : null}

@@ -1,10 +1,10 @@
-import type { RoadmapSummaryTotals } from '../model/roadmap-summary';
+import type { RoadmapSummaryMetrics } from '@tracker/shared';
 import { cn } from '@/shared/lib/utils';
 
 const countFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
 
 export function RoadmapSummaryStrip({ summary, month, loading = false }: {
-  summary?: RoadmapSummaryTotals;
+  summary?: RoadmapSummaryMetrics;
   month: boolean;
   loading?: boolean;
 }) {

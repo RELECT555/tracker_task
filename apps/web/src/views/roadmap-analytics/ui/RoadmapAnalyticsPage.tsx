@@ -4,8 +4,12 @@ import { useId, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, CalendarClock, ChevronLeft, ChevronRight, CircleCheck, TrendingUp, UserX } from 'lucide-react';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
+import { isRoadmapDemoMode } from '@/entities/roadmap/api/roadmapDemo';
 import { useRoadmapProject } from '@/entities/roadmap/model/roadmap-project-selection';
+import { useRoadmapCatalog } from '@/entities/roadmap/model/use-roadmap-catalog';
 import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
+import { isAdminUser } from '@/features/auth/lib/is-admin';
+import { useAuth } from '@/features/auth/model/useAuth';
 import { Button } from '@/shared/ui/button';
 import { Card } from '@/shared/ui/card';
 import { QueryErrorNotice } from '@/shared/ui/error-notice';
@@ -191,10 +195,10 @@ function StatusCard({ statuses, total }: { statuses: RoadmapAnalytics['statuses'
 }
 
 export function RoadmapAnalyticsPage() {
-  const projectsQuery = useQuery({ queryKey: ['roadmap', 'azure-projects'], queryFn: roadmapApi.projects });
-  const projects = projectsQuery.data?.data ?? [];
+  const { user } = useAuth();
+  const { projects, azureQuery: projectsQuery, localQuery, loading: catalogLoading } = useRoadmapCatalog(isAdminUser(user) && !isRoadmapDemoMode());
   const [quarter, setQuarter] = useState(currentQuarterRef);
-  const { project, ready: projectSelectionReady, selectProject } = useRoadmapProject(projects);
+  const { project, ready: projectSelectionReady, selectProject } = useRoadmapProject(projects, { catalogLoading: projectsQuery.isLoading });
   const activeProjectId = project?.id ?? '';
   const roadmapProjectId = project?.roadmapId ?? '';
 
@@ -214,8 +218,8 @@ export function RoadmapAnalyticsPage() {
     }
     return lookup;
   }, [plan]);
-  const error = projectsQuery.error ?? planQuery.error;
-  const loading = !projectSelectionReady || projectsQuery.isLoading || planQuery.isLoading;
+  const error = localQuery.error ?? projectsQuery.error ?? planQuery.error;
+  const loading = !projectSelectionReady || catalogLoading || (projectsQuery.isLoading && !project) || planQuery.isLoading;
   const syncTimestamp = Date.parse(plan?.syncedAt ?? '');
   const syncedAt = Number.isFinite(syncTimestamp) ? new Date(syncTimestamp) : null;
   const contextKey = `${roadmapProjectId}-${quarter.key}`;
@@ -230,10 +234,10 @@ export function RoadmapAnalyticsPage() {
           </p> : null}
         </div>
         <QuarterSwitcher quarter={quarter} onShift={(offset) => setQuarter((current) => shiftQuarter(current, offset))} />
-        <AzureProjectPicker projects={projects} value={activeProjectId} onChange={selectProject} disabled={projectsQuery.isLoading || !projectSelectionReady} placeholder="Выбрать проект" className={styles.projectPicker} />
+        <AzureProjectPicker projects={projects} value={activeProjectId} onChange={selectProject} disabled={catalogLoading || !projectSelectionReady} placeholder="Выбрать проект" className={styles.projectPicker} />
       </header>
 
-      <QueryErrorNotice title="Не удалось загрузить аналитику" queries={[projectsQuery, ...(roadmapProjectId ? [planQuery] : [])]} />
+      <QueryErrorNotice title="Не удалось загрузить аналитику" queries={[localQuery, projectsQuery, ...(roadmapProjectId ? [planQuery] : [])]} />
 
       {loading ? <div className="space-y-4" role="status">
         <span className="sr-only">Загрузка аналитики</span>

@@ -1,15 +1,16 @@
 'use client';
 
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { aggregateRoadmapSummaries, azureRoleEstimate, getRoadmapFactRoots, getRoadmapRolePlan, getRoadmapSummary } from '@tracker/shared';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, ExternalLink, Maximize2, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
 import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
-import { AzurePushPreview } from '@/entities/roadmap/ui/AzurePushPreview';
 import { AzureWorkItemIcon } from '@/entities/roadmap/ui/AzureWorkItemIcon';
 import { Button } from '@/shared/ui/button';
 import { QueryErrorNotice } from '@/shared/ui/error-notice';
@@ -28,18 +29,25 @@ import {
 } from '@/entities/roadmap/api/roadmapApi';
 import { isRoadmapDemoMode } from '@/entities/roadmap/api/roadmapDemo';
 import { ALL_ROADMAP_PROJECTS, useRoadmapProject } from '@/entities/roadmap/model/roadmap-project-selection';
-import { aggregateRoadmapSummaries, getRoadmapFactRoots, getRoadmapSummary } from '../model/roadmap-summary';
+import { useRoadmapCatalog } from '@/entities/roadmap/model/use-roadmap-catalog';
 import { RoadmapSummaryStrip } from './RoadmapSummaryStrip';
-import { AllProjectsPlanTable } from './AllProjectsPlanTable';
 import { getRoadmapRoleFact } from '../model/roadmap-role-fact';
-import { azureRoleEstimate, getRoadmapRolePlan } from '../model/roadmap-role-plan';
 import { type ColumnWidthsApi, type ColumnWidthConfig } from '../model/use-roadmap-column-widths';
 import { useRoadmapTablePreferences } from '../model/use-roadmap-table-preferences';
 import { getTableAppearanceProps } from '../model/table-appearance';
 import { TableAppearanceSettings } from './TableAppearanceSettings';
 import './table-appearance.css';
-import { CreateAzureWorkItem } from './CreateAzureWorkItem';
 import { ColumnResizeHandle, planColumnOffset, ResizablePlanTable, type PlanColumn } from './ResizablePlanTable';
+
+const AzurePushPreview = dynamic(() => import('@/entities/roadmap/ui/AzurePushPreview').then((module) => module.AzurePushPreview), {
+  loading: () => <p role="status" className="p-3 text-sm text-muted-foreground">Загружаем предварительный просмотр…</p>,
+});
+const CreateAzureWorkItem = dynamic(() => import('./CreateAzureWorkItem').then((module) => module.CreateAzureWorkItem), {
+  loading: () => <p role="status" className="fixed bottom-4 right-4 z-50 rounded-lg border border-border bg-card px-3 py-2 text-sm">Загружаем форму…</p>,
+});
+const AllProjectsPlanTable = dynamic(() => import('./AllProjectsPlanTable').then((module) => module.AllProjectsPlanTable), {
+  loading: () => <p role="status" className="p-4 text-sm text-muted-foreground">Загружаем таблицу…</p>,
+});
 
 const NAME_COLUMN = { defaultWidth: 440, minWidth: 280, grow: true };
 const SUMMARY_COLUMN = { defaultWidth: 120, minWidth: 96, maxWidth: 480 };
@@ -53,6 +61,7 @@ function planColumn(widths: ColumnWidths, id: string, label: string, sizing: Col
   return { ...sizing, id, label, width: widths.getWidth(id, sizing), customized: widths.hasCustomWidth(id) };
 }
 const PLAN_REFRESH_INTERVAL = 60_000;
+const EMPTY_OVERVIEW = aggregateRoadmapSummaries([]);
 const FEATURE_COUNT_PLURALS = new Intl.PluralRules('ru-RU');
 // Monthly (period) planning is temporarily disabled; stored month values are kept untouched.
 const PERIOD_PLANNING_ENABLED = false;
@@ -643,20 +652,21 @@ export function RoadmapPage() {
 
   const connectionQuery = useQuery({ queryKey: ['roadmap', 'connection'], queryFn: roadmapApi.connection, enabled: canConfigure });
   const configured = connectionQuery.data?.configured ?? false;
-  const projectsQuery = useQuery({ queryKey: ['roadmap', 'azure-projects'], queryFn: roadmapApi.projects });
+  const { projects, azureProjects, azureQuery: projectsQuery, localQuery, loading: catalogLoading } = useRoadmapCatalog(canConfigure && !demoMode);
   const peopleQuery = useQuery({ queryKey: ['roadmap', 'people'], queryFn: roadmapApi.people, enabled: canConfigure });
-  const roleCatalogQuery = useQuery({ queryKey: ['roadmap', 'admin', 'role-catalog'], queryFn: roadmapApi.roleCatalog, enabled: canConfigure });
-  const projects = useMemo(() => projectsQuery.data?.data ?? [], [projectsQuery.data?.data]);
+  const roleCatalogQuery = useQuery({ queryKey: ['roadmap', 'admin', 'role-catalog'], queryFn: roadmapApi.roleCatalog, enabled: canConfigure && rolePickerOpen });
   const people = peopleQuery.data?.data ?? [];
   const needsPeopleSync = canConfigure && peopleQuery.isSuccess && people.length === 0;
   const usingCachedProjects = projectsQuery.data?.source === 'cache';
-  const { project: selectedProject, ready: projectSelectionReady, selectProject, isAllProjects } = useRoadmapProject(projects, { allowAll: true });
+  const { project: selectedProject, savedProject, ready: projectSelectionReady, selectProject, isAllProjects } = useRoadmapProject(projects, { allowAll: true, catalogLoading: projectsQuery.isLoading });
   const activeAzureProjectId = isAllProjects ? ALL_ROADMAP_PROJECTS : selectedProject?.id ?? '';
-  const roadmapProjectId = selectedProject?.roadmapId ?? '';
+  const savedPlanId = !isAllProjects && !selectedProject && (!projectsQuery.data || localQuery.isLoading) ? savedProject.roadmapId : undefined;
+  const roadmapProjectId = savedPlanId ?? selectedProject?.roadmapId ?? '';
   const showRoleDetails = preferences.showRoleDetails;
   const setRoleBreakdown = (expanded: boolean) => tableSettings.change({ showRoleDetails: expanded });
   const projectIsSynced = Boolean(selectedProject?.imported && selectedProject.planSynced !== false);
-  const canImportProject = Boolean(canConfigure && !demoMode && configured && selectedProject && !usingCachedProjects && !projectIsSynced);
+  const azureProject = projectsQuery.data?.source === 'azure' ? azureProjects.find((project) => project.id === selectedProject?.id) : undefined;
+  const canImportProject = Boolean(canConfigure && !demoMode && configured && azureProject && !projectIsSynced);
   const roleSettingsHref = roadmapProjectId ? `${routes.roadmapAdminRoles}?projectId=${encodeURIComponent(roadmapProjectId)}` : routes.roadmapAdminRoles;
 
   const planQuery = useQuery({
@@ -669,7 +679,9 @@ export function RoadmapPage() {
       ? 3000
       : !demoMode && projectIsSynced ? PLAN_REFRESH_INTERVAL : false,
   });
-  const plan = planQuery.isError ? undefined : planQuery.data;
+  const plan = !planQuery.isError && (!savedPlanId || planQuery.data?.externalId === savedProject.projectId)
+    ? planQuery.data
+    : undefined;
   const canEditPlan = plan?.canEditPlan === true || (demoMode && canConfigure);
   const lastPlanImport = useRef<{ projectId: string; syncedAt: string } | null>(null);
   const syncedAt = plan?.syncedAt;
@@ -682,7 +694,7 @@ export function RoadmapPage() {
   }, [demoMode, queryClient, roadmapProjectId, syncedAt]);
   const createdTaskIds = new Set(plan?.azure?.createdTaskIds);
   const createdTasks = plan?.workItems.filter((item) => createdTaskIds.has(item.externalId)) ?? [];
-  const createProject = canConfigure && configured && !demoMode && projectsQuery.data?.source === 'azure' ? selectedProject : undefined;
+  const createProject = canConfigure && configured && !demoMode ? azureProject : undefined;
   const canCreateWorkItem = Boolean(createProject && plan?.externalId === createProject.id);
   function openCreateWorkItem(trigger: HTMLButtonElement, parentExternalId?: string) {
     if (!createProject || !canCreateWorkItem) return;
@@ -720,6 +732,7 @@ export function RoadmapPage() {
       }));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['roadmap', 'azure-projects'] }),
+        queryClient.invalidateQueries({ queryKey: ['roadmap', 'local-projects'] }),
         queryClient.invalidateQueries({ queryKey: ['roadmap', 'admin', 'roles'] }),
         queryClient.invalidateQueries({ queryKey: ['roadmap', 'roles', result.projectId] }),
         queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', result.projectId] }),
@@ -760,53 +773,34 @@ export function RoadmapPage() {
   const summary = useMemo(() => plan ? getRoadmapSummary(plan, {
     quarterKey: currentQuarterKey, monthKey, monthlyFact, plannedRolesOnly,
   }) : undefined, [plan, currentQuarterKey, monthKey, monthlyFact, plannedRolesOnly]);
-  // Reuse each project's normal plan cache; the portfolio makes no write or import requests.
-  const overviewProjects = isAllProjects ? projects.filter((project) => project.imported && project.roadmapId) : [];
-  const overviewPlanQueries = useQueries({ queries: overviewProjects.map((project) => ({
-    queryKey: ['roadmap', 'plan', project.roadmapId],
-    queryFn: () => roadmapApi.plan(project.roadmapId!),
-    refetchInterval: demoMode ? false as const : PLAN_REFRESH_INTERVAL,
-    retry: false,
-  })) });
-  const overviewFactQueries = useQueries({ queries: overviewProjects.map((project, index) => ({
-    queryKey: ['roadmap', 'monthly-fact', project.roadmapId, selectedMonthKey],
-    queryFn: ({ signal }: { signal: AbortSignal }) => getRoadmapMonthlyFact(project.roadmapId!, selectedMonthKey, signal),
-    enabled: Boolean(monthKey && overviewPlanQueries[index].data && !overviewPlanQueries[index].isError && !demoMode),
-    staleTime: 5 * 60 * 1000,
-    refetchInterval: PLAN_REFRESH_INTERVAL,
-    retry: false,
-  })) });
-  const overviewLastImports = useRef(new Map<string, string>());
-  useEffect(() => {
-    if (demoMode) return;
-    for (const query of overviewPlanQueries) {
-      const projectPlan = query.isError ? undefined : query.data;
-      if (!projectPlan?.syncedAt) continue;
-      const previous = overviewLastImports.current.get(projectPlan.id);
-      overviewLastImports.current.set(projectPlan.id, projectPlan.syncedAt);
-      if (previous && previous !== projectPlan.syncedAt) {
-        void queryClient.invalidateQueries({ queryKey: ['roadmap', 'monthly-fact', projectPlan.id] });
-      }
-    }
-  }, [demoMode, overviewPlanQueries, queryClient]);
-  const overviewRows = overviewProjects.map((project, index) => {
-    const query = overviewPlanQueries[index];
-    const projectPlan = query.isError ? undefined : query.data;
-    return {
-      project, plan: projectPlan,
-      summary: projectPlan ? getRoadmapSummary(projectPlan, {
-        quarterKey: currentQuarterKey, monthKey,
-        monthlyFact: overviewFactQueries[index].data, plannedRolesOnly,
-      }) : undefined,
-      loading: query.isPending,
-      error: query.isError,
-      onRetry: () => { void query.refetch(); },
-    };
+  const overviewProjects = isAllProjects
+    ? azureProjects.filter((project): project is AzureProject & { roadmapId: string } => Boolean(project.imported && project.roadmapId))
+    : [];
+  const overviewInput = {
+    projectIds: overviewProjects.map((project) => project.roadmapId),
+    quarterKey: currentQuarterKey,
+    monthKey,
+    plannedRolesOnly,
+  };
+  const overviewQuery = useQuery({
+    queryKey: ['roadmap', 'portfolio', overviewInput],
+    queryFn: ({ signal }) => roadmapApi.projectSummaries({ ...overviewInput, includeMonthlyFact: false }, signal),
+    enabled: overviewProjects.length > 0,
+    staleTime: 0,
+    refetchInterval: demoMode ? false : PLAN_REFRESH_INTERVAL,
   });
-  const overviewLoading = projectsQuery.isLoading || overviewRows.some((row) => row.loading);
-  const overviewIncomplete = overviewRows.some((row) => !row.summary) || projectsQuery.isError;
-  const overviewSummary = overviewLoading || overviewIncomplete ? undefined
-    : aggregateRoadmapSummaries(overviewRows.flatMap((row) => row.summary ? [row.summary] : []));
+  const overviewFactQuery = useQuery({
+    queryKey: ['roadmap', 'portfolio', overviewInput, 'monthly-fact'],
+    queryFn: ({ signal }) => roadmapApi.projectSummaries(overviewInput, signal),
+    enabled: Boolean(overviewProjects.length && monthKey && !demoMode),
+    staleTime: 0,
+    refetchInterval: PLAN_REFRESH_INTERVAL,
+  });
+  const overviewData = overviewFactQuery.data ?? overviewQuery.data;
+  const overviewLoading = projectsQuery.isLoading || (overviewProjects.length > 0 && overviewQuery.isPending);
+  const overviewSummary = overviewData?.totals ?? (
+    !overviewLoading && !projectsQuery.isError && !overviewProjects.length ? EMPTY_OVERVIEW : undefined
+  );
   const plannedItems = useMemo(() => summary?.items ?? [], [summary]);
   const epics = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'epic'), [plannedItems]);
   const features = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'feature'), [plannedItems]);
@@ -1046,12 +1040,12 @@ export function RoadmapPage() {
     );
   }
 
-  const loadQueries = [projectsQuery, ...(canConfigure ? [connectionQuery, peopleQuery, roleCatalogQuery] : []), ...(roadmapProjectId ? [planQuery] : [])];
+  const loadQueries = [projectsQuery, ...(canConfigure ? [localQuery, connectionQuery, peopleQuery, roleCatalogQuery] : []), ...(roadmapProjectId ? [planQuery] : []), ...(overviewProjects.length ? [overviewQuery] : [])];
   const mutationErrors = [isSelectedProjectSync ? syncMutation.error : null, saveMutation.error, saveQuarterMutation.error, splitMutation.error, addRoleMutation.error, pushAllocationMutation.error];
-  const loadingMessage = projectsQuery.isLoading || !projectSelectionReady
-    ? 'Загружаем проекты Azure DevOps…'
-    : planQuery.isLoading
-      ? 'Загружаем план проекта…'
+  const loadingMessage = planQuery.isLoading
+    ? 'Загружаем план проекта…'
+    : catalogLoading || (projectsQuery.isLoading && !selectedProject) || !projectSelectionReady
+      ? 'Загружаем список проектов…'
       : connectionQuery.isLoading
         ? 'Проверяем подключение к Azure DevOps…'
         : null;
@@ -1115,8 +1109,8 @@ export function RoadmapPage() {
                 includeAllProjects
                 value={activeAzureProjectId}
                 onChange={selectProject}
-                disabled={projectsQuery.isLoading || !projectSelectionReady}
-                placeholder={demoMode ? 'Демо-проект' : configured ? 'Выбрать проект Azure DevOps' : 'Выбрать локальный проект'}
+                disabled={catalogLoading || !projectSelectionReady}
+                placeholder={plan?.name ?? (demoMode ? 'Демо-проект' : configured ? 'Выбрать проект Azure DevOps' : 'Выбрать локальный проект')}
               />
               {plan && !canEditPlan ? <span className="text-sm text-muted-foreground">Только просмотр</span> : null}
               {canImportProject && <Button
@@ -1183,26 +1177,43 @@ export function RoadmapPage() {
                 <h2 className="font-medium text-foreground">Все проекты</h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">Импортированных проектов: {overviewProjects.length}. Раскройте проект, чтобы увидеть эпики и фичи.</p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">{appearanceSettings}{overviewRows.some((row) => row.summary) ? <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5" disabled={overviewPlanQueries.some((query) => query.isFetching)} onClick={() => {
-                void Promise.all(overviewPlanQueries.map((query) => query.refetch()));
-                if (monthKey && !demoMode) void Promise.all(overviewFactQueries.map((query) => query.refetch()));
+              <div className="flex flex-wrap items-center gap-2">{appearanceSettings}{overviewData ? <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5" disabled={overviewQuery.isFetching || overviewFactQuery.isFetching} onClick={() => {
+                void overviewQuery.refetch();
+                void queryClient.refetchQueries({ queryKey: ['roadmap', 'plan'], type: 'active' });
+                if (monthKey && !demoMode) {
+                  void overviewFactQuery.refetch();
+                  void queryClient.refetchQueries({ queryKey: ['roadmap', 'monthly-fact'], type: 'active' });
+                }
               }}><RefreshCw aria-hidden="true" className="size-3.5" />Обновить</Button> : null}</div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
               {plannedRoleFilter}
               <div className="flex flex-wrap items-center gap-2">{periodControls}</div>
             </div>
-            {overviewLoading || overviewIncomplete ? <p role="status" className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
-              {overviewLoading ? 'Загружаем планы проектов…' : 'Общая сводка недоступна: загрузите планы с ошибкой кнопкой «Повторить».'}
+            {overviewLoading ? <p role="status" className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+              Загружаем сводку проектов…
             </p> : null}
-            {monthKey ? <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
-              <p role="status">{demoMode ? 'Факт за месяц доступен в проектах Azure DevOps.' : overviewFactQueries.some((query) => query.isError) ? 'Не удалось загрузить факт за месяц для части проектов.' : overviewFactQueries.some((query) => query.isFetching) ? 'Загружаем факт за месяц…' : 'План и факт за выбранный месяц.'}</p>
-              <QueryErrorNotice title="Не удалось загрузить факт за месяц" queries={overviewFactQueries} />
+            {overviewData && !overviewSummary ? <p role="status" className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+              Данные части проектов недоступны. Обновите сводку.
+            </p> : null}
+            {monthKey && overviewProjects.length ? <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+              <p role="status">{demoMode ? 'Факт за месяц доступен в проектах Azure DevOps.' : overviewFactQuery.isPending ? 'Загружаем факт за месяц…' : overviewFactQuery.data?.factIncomplete ? 'Не удалось загрузить факт за месяц для части проектов.' : overviewFactQuery.isSuccess ? 'План и факт за выбранный месяц.' : null}</p>
+              <QueryErrorNotice title="Не удалось загрузить факт за месяц" queries={[overviewFactQuery]} />
             </div> : null}
             {!projectsQuery.isLoading && !overviewProjects.length ? <div className="px-6 py-10 text-center text-sm text-muted-foreground">
               <p>Пока нет импортированных проектов.</p>
               <p className="mt-1">Выберите отдельный проект в списке, чтобы открыть или загрузить его план.</p>
-            </div> : <AllProjectsPlanTable projects={overviewRows} onSelectProject={selectProject} monthKey={monthKey} showFact={preferences.showFact} />}
+            </div> : <AllProjectsPlanTable
+              projects={overviewProjects}
+              summaries={overviewData?.projects}
+              loading={overviewLoading}
+              onSelectProject={selectProject}
+              quarterKey={currentQuarterKey}
+              monthKey={monthKey}
+              plannedRolesOnly={plannedRolesOnly}
+              showFact={preferences.showFact}
+              refreshInterval={demoMode ? false : PLAN_REFRESH_INTERVAL}
+            />}
           </section> : plan ? (
             <>
               {createdTasks.length > 0 && (
