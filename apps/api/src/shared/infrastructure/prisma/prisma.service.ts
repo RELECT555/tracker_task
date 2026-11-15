@@ -4,7 +4,18 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
+
+const CONNECTIVITY_ERROR_CODES = new Set(['P1001', 'P1002', 'P1008', 'P1017']);
+
+/** True when a Prisma error means the database could not be reached, not that a query was wrong. */
+export function isDatabaseUnavailable(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientInitializationError ||
+    (error instanceof Prisma.PrismaClientKnownRequestError &&
+      CONNECTIVITY_ERROR_CODES.has(error.code))
+  );
+}
 
 @Injectable()
 export class PrismaService
@@ -12,49 +23,29 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   private readonly logger = new Logger(PrismaService.name);
-  private connected = false;
 
-  get isConnected(): boolean {
-    return this.connected;
-  }
-
+  /** The API starts without a database; Prisma reconnects lazily on the first query. */
   async onModuleInit(): Promise<void> {
-    await this.tryConnect();
-  }
-
-  async tryConnect(): Promise<boolean> {
     try {
       await this.$connect();
-      this.connected = true;
-      return true;
     } catch (error) {
-      this.connected = false;
       this.logger.warn(
         'PostgreSQL unavailable — API starts in degraded mode. See README.md',
       );
       this.logger.debug(error);
-      return false;
     }
   }
 
   async ping(): Promise<boolean> {
-    if (!this.connected) {
-      await this.tryConnect();
-    }
-    if (!this.connected) return false;
-
     try {
       await this.$queryRaw`SELECT 1`;
       return true;
     } catch {
-      this.connected = false;
       return false;
     }
   }
 
   async onModuleDestroy(): Promise<void> {
-    if (this.connected) {
-      await this.$disconnect();
-    }
+    await this.$disconnect();
   }
 }

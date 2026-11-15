@@ -43,6 +43,11 @@ type StoredIntegration = {
 
 export const AZURE_WEBHOOK_SECRET_HEADER = 'x-roadmap-webhook-secret';
 
+const AZURE_REQUEST_TIMEOUT_MS = 30_000;
+const AZURE_MAX_RETRIES = 2;
+const AZURE_MAX_RETRY_DELAY_MS = 5_000;
+const RETRYABLE_GATEWAY_STATUSES = new Set([502, 503, 504]);
+
 /** Azure DevOps answered with a non-success HTTP status. */
 export class AzureDevOpsHttpError extends BadGatewayException {
   constructor(
@@ -198,6 +203,7 @@ export class RoadmapIntegrationService {
           Authorization: `Basic ${Buffer.from(`:${pat}`).toString('base64')}`,
           Accept: 'application/json',
         },
+        signal: AbortSignal.timeout(AZURE_REQUEST_TIMEOUT_MS),
       },
     ).catch(() => {
       throw new BadGatewayException(
@@ -224,30 +230,56 @@ export class RoadmapIntegrationService {
     };
   }
 
-  /** Calls the Azure DevOps REST API with the configured PAT and throws on non-success statuses. */
+  /**
+   * Calls the Azure DevOps REST API with the configured PAT and throws on non-success statuses.
+   * Requests without their own signal time out after 30 s. A 429 is retried for any method because
+   * Azure did not process the request; gateway errors are retried for GET only, so writes are never repeated.
+   */
   async request(
     url: string,
     init?: RequestInit,
     credentials?: { pat: string },
   ) {
     const { pat } = credentials ?? (await this.getCredentials());
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        ...init,
-        headers: {
-          Authorization: `Basic ${Buffer.from(`:${pat}`).toString('base64')}`,
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          ...init?.headers,
-        },
-      });
-    } catch {
-      throw new BadGatewayException('Could not reach Azure DevOps');
-    }
-    if (!response.ok)
+    const idempotent = (init?.method ?? 'GET').toUpperCase() === 'GET';
+    for (let attempt = 0; ; attempt += 1) {
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          ...init,
+          signal: init?.signal ?? AbortSignal.timeout(AZURE_REQUEST_TIMEOUT_MS),
+          headers: {
+            Authorization: `Basic ${Buffer.from(`:${pat}`).toString('base64')}`,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            ...init?.headers,
+          },
+        });
+      } catch {
+        throw new BadGatewayException('Could not reach Azure DevOps');
+      }
+      if (response.ok) return response;
+      const retryable =
+        response.status === 429 ||
+        (idempotent && RETRYABLE_GATEWAY_STATUSES.has(response.status));
+      if (retryable && attempt < AZURE_MAX_RETRIES) {
+        await response.body?.cancel();
+        await new Promise((resolve) =>
+          setTimeout(resolve, this.retryDelayMs(response, attempt)),
+        );
+        continue;
+      }
       throw new AzureDevOpsHttpError(response.status, await response.text());
-    return response;
+    }
+  }
+
+  private retryDelayMs(response: Response, attempt: number) {
+    const retryAfter = Number(response.headers.get('retry-after'));
+    const requested =
+      Number.isFinite(retryAfter) && retryAfter > 0
+        ? retryAfter * 1000
+        : 500 * 2 ** attempt;
+    return Math.min(requested, AZURE_MAX_RETRY_DELAY_MS);
   }
 
   async requestJson<T>(

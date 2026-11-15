@@ -699,6 +699,7 @@ export class RoadmapService {
     const credentials = await this.integration.getCredentials();
     const people: AzurePerson[] = [];
     let continuationToken: string | null = null;
+    const seenTokens = new Set<string>();
     do {
       const query = new URLSearchParams({ 'api-version': '7.1-preview.1' });
       if (continuationToken) query.set('continuationToken', continuationToken);
@@ -710,6 +711,11 @@ export class RoadmapService {
       const data = (await response.json()) as { value: AzurePerson[] };
       people.push(...(data.value ?? []));
       continuationToken = response.headers.get('x-ms-continuationtoken');
+      if (continuationToken) {
+        if (seenTokens.has(continuationToken))
+          throw new BadGatewayException('Azure DevOps repeated the users page');
+        seenTokens.add(continuationToken);
+      }
     } while (continuationToken);
     const serviceAccountPattern =
       /\b(?:agent pool service|build service|(?:project )?collection service accounts?|azure devops service|visual studio team services|team foundation service|release management service|adminpbi)\b/i;
@@ -724,7 +730,8 @@ export class RoadmapService {
         !serviceAccountPattern.test(identity)
       );
     });
-    if (people.length && !validPeople.length) {
+    // An empty or fully filtered answer (for example a PAT without Graph access) must not deactivate everyone.
+    if (!validPeople.length) {
       throw new BadGatewayException(
         'Azure DevOps did not return any eligible human user profiles; the existing user list was left unchanged',
       );

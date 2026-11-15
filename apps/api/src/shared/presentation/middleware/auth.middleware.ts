@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
 import { TokenService } from '../../../modules/identity/infrastructure/token.service';
-import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import {
+  isDatabaseUnavailable,
+  PrismaService,
+} from '../../infrastructure/prisma/prisma.service';
 import type { AuthenticatedUser } from '../decorators/current-user.decorator';
 
 @Injectable()
@@ -17,15 +20,6 @@ export class AuthMiddleware implements NestMiddleware {
   ) {}
 
   async use(req: Request, _res: Response, next: NextFunction): Promise<void> {
-    if (!this.prisma.isConnected) {
-      throw new ServiceUnavailableException({
-        error: {
-          code: 'DB_UNAVAILABLE',
-          message: 'Database is not available. Run: docker compose up -d',
-        },
-      });
-    }
-
     const authHeader = req.header('authorization');
     const token = authHeader?.startsWith('Bearer ')
       ? authHeader.slice('Bearer '.length).trim()
@@ -39,15 +33,25 @@ export class AuthMiddleware implements NestMiddleware {
       throw this.unauthorized('Invalid or expired access token');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        email: true,
-        isActive: true,
-        roles: { select: { role: { select: { code: true } } } },
-      },
-    });
+    const user = await this.prisma.user
+      .findUnique({
+        where: { id },
+        select: {
+          id: true,
+          email: true,
+          isActive: true,
+          roles: { select: { role: { select: { code: true } } } },
+        },
+      })
+      .catch((error: unknown) => {
+        if (!isDatabaseUnavailable(error)) throw error;
+        throw new ServiceUnavailableException({
+          error: {
+            code: 'DB_UNAVAILABLE',
+            message: 'Database is not available',
+          },
+        });
+      });
     if (!user?.isActive) throw this.unauthorized('Account is inactive');
 
     (req as Request & { user: AuthenticatedUser }).user = {

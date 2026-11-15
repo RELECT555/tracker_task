@@ -56,7 +56,6 @@ describe('Roadmap authentication and project scope (e2e)', () => {
     const fixture = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue({
-        isConnected: true,
         user: {
           findUnique: ({ where }: { where: { id?: string; email?: string } }) =>
             Promise.resolve(

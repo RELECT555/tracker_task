@@ -41,17 +41,19 @@ function fixture(
     findUnique: jest.fn(() =>
       Promise.resolve(row && { ...row, project: selectedProject }),
     ),
-    createMany: jest.fn(({ data }: { data: RoadmapWorkItemCreateRequest }) => {
-      if (row) return Promise.resolve({ count: 0 });
-      row = {
-        azureId: null,
-        azureTitle: null,
-        azureState: null,
-        ...data,
-        updatedAt: new Date(),
-      };
-      return Promise.resolve({ count: 1 });
-    }),
+    createMany: jest.fn(
+      ({ data }: { data: Partial<RoadmapWorkItemCreateRequest> }) => {
+        if (row) return Promise.resolve({ count: 0 });
+        row = {
+          azureId: null,
+          azureTitle: null,
+          azureState: null,
+          ...data,
+          updatedAt: new Date(),
+        } as RoadmapWorkItemCreateRequest;
+        return Promise.resolve({ count: 1 });
+      },
+    ),
     update: jest.fn(
       ({ data }: { data: Partial<RoadmapWorkItemCreateRequest> }) => {
         row = { ...row!, ...data, updatedAt: new Date() };
