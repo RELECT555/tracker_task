@@ -526,10 +526,25 @@ function DiscussionTab({ item, projectId }: { item: WorkItemCard; projectId: str
   </div>;
 }
 
+/** Folds runs of link-only updates by the same person into one entry, so bulk re-parenting reads as one change. */
+function groupHistory(history: WorkItemCard['history']) {
+  const grouped: WorkItemCard['history'] = [];
+  for (const entry of history) {
+    const previous = grouped.at(-1);
+    const linkOnly = (value: typeof entry) => !value.created && !value.changes.length;
+    if (previous && linkOnly(previous) && linkOnly(entry) && previous.author?.name === entry.author?.name) {
+      grouped[grouped.length - 1] = { ...previous, linksAdded: previous.linksAdded + entry.linksAdded, linksRemoved: previous.linksRemoved + entry.linksRemoved };
+    } else {
+      grouped.push(entry);
+    }
+  }
+  return grouped;
+}
+
 function HistoryTab({ item }: { item: WorkItemCard }) {
   if (!item.history.length) return <p className="text-sm text-muted-foreground">Изменений пока нет.</p>;
   return <ol className="relative space-y-5 before:absolute before:top-2 before:bottom-2 before:left-[5px] before:w-px before:bg-border">
-    {item.history.map((entry) => <li key={entry.id} className="relative pl-6">
+    {groupHistory(item.history).map((entry) => <li key={entry.id} className="relative pl-6">
       <span aria-hidden="true" className="absolute top-1.5 left-0 size-[11px] rounded-full border-2 border-card bg-muted-foreground/40" />
       <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">{entry.author?.name ?? '—'}</span> · {formatDate(entry.changedAt, true)}</p>
       <dl className="mt-1.5 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
