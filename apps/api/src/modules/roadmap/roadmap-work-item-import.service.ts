@@ -1,6 +1,7 @@
 import { BadGatewayException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
+import { azureWorkItemWebUrl } from './azure-work-item-url';
 import {
   AzureDevOpsCredentials,
   RoadmapIntegrationService,
@@ -31,6 +32,7 @@ const WORK_ITEM_BATCH_SIZE = 200;
 const COMPLETED_WORK = 'Microsoft.VSTS.Scheduling.CompletedWork';
 const CREATED_DATE = 'System.CreatedDate';
 const ASSIGNED_TO = 'System.AssignedTo';
+const TEAM_PROJECT = 'System.TeamProject';
 
 function completedWork(item: AzureWorkItem | undefined) {
   const value = item?.fields[COMPLETED_WORK];
@@ -88,6 +90,7 @@ export class RoadmapWorkItemImportService {
         'System.WorkItemType',
         'System.State',
         'System.Parent',
+        TEAM_PROJECT,
         COMPLETED_WORK,
         ASSIGNED_TO,
         ...customFields,
@@ -258,7 +261,10 @@ export class RoadmapWorkItemImportService {
       type: stringValue(fields['System.WorkItemType'], 'Feature')!,
       title: stringValue(fields['System.Title'], `Work item ${item.id}`)!,
       state: stringValue(fields['System.State']),
-      url: item.url,
+      // В ответе API `url` — REST-адрес; для ссылок в интерфейсе нужна карточка.
+      url:
+        azureWorkItemWebUrl(item.url, fields[TEAM_PROJECT], item.id) ??
+        item.url,
       actualHours: completedWork(item),
       azureCustomFields: azureCustomFields as Prisma.InputJsonObject,
     };

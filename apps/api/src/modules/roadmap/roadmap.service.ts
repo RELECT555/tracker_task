@@ -15,6 +15,7 @@ import {
   type RoadmapPortfolioInput,
 } from '@tracker/shared';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
+import { azureWorkItemWebUrl } from './azure-work-item-url';
 import { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
 import { roadmapProjectReadFilter } from './roadmap-project-access.service';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
@@ -570,7 +571,9 @@ export class RoadmapService {
               project.name,
               item.externalId,
             )
-          : item.url,
+          : // Старые импорты хранят REST-адрес — отдаём ссылку на карточку.
+            (azureWorkItemWebUrl(item.url, project.name, item.externalId) ??
+            item.url),
       };
     });
     return {
