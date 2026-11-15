@@ -13,7 +13,7 @@ import type { TableAppearanceSettingsProps } from './TableAppearanceSettings';
 function Toggle({ label, description, checked, onChange, disabled }: {
   label: string; description?: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean;
 }) {
-  return <label className={cn('flex min-h-10 cursor-pointer items-center justify-between gap-4 py-2 text-sm', disabled && 'cursor-default opacity-45')}>
+  return <label className={cn('flex min-h-12 cursor-pointer items-center justify-between gap-4 py-2 text-sm', disabled && 'cursor-default opacity-45')}>
     <span className="min-w-0"><span className="block">{label}</span>{description ? <span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span> : null}</span>
     <span className="relative h-5 w-9 shrink-0">
       <input type="checkbox" role="switch" aria-label={label} checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} className="peer absolute inset-0 z-10 size-full cursor-pointer opacity-0 disabled:cursor-default" />
@@ -60,7 +60,7 @@ export function TableAppearancePanel({ id, preferences, onChange, onReset, statu
     <div ref={content} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6">
       <fieldset disabled={disabled || status === 'loading'} className="min-w-0 disabled:opacity-60">
         <div id={`${id}-appearance`} hidden={section !== 'appearance'} className="roadmap-fade-in">
-          <section className="pb-5 pt-5" aria-labelledby={`${id}-colors`}>
+          <section className="py-5" aria-labelledby={`${id}-colors`}>
             <div className="mb-3 flex items-center justify-between gap-2"><h3 id={`${id}-colors`} className="text-sm font-semibold">Цветовая схема</h3>{!selectedPalette ? <span className="text-xs text-muted-foreground">Своя схема</span> : null}</div>
             <div className="grid grid-cols-3 gap-x-3 gap-y-3.5">
               {TABLE_PALETTES.map((palette) => {
@@ -82,17 +82,17 @@ export function TableAppearancePanel({ id, preferences, onChange, onReset, statu
               {([['compact', 'Компактно'], ['standard', 'Обычно'], ['comfortable', 'Просторно']] as const).map(([value, label]) => <button key={value} type="button" aria-label={label} aria-pressed={preferences.density === value} onClick={() => onChange({ density: value })} className={cn('flex flex-col items-center gap-1.5 rounded-md px-1 py-2.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50', preferences.density === value ? 'bg-card font-medium text-foreground shadow-sm ring-1 ring-border/60' : 'text-muted-foreground hover:text-foreground')}><span aria-hidden="true" className={cn('flex h-5 w-7 flex-col justify-center', value === 'compact' ? 'gap-0.5' : value === 'standard' ? 'gap-1' : 'gap-1.5')}><i className="h-px w-full bg-current" /><i className="h-px w-full bg-current" /><i className="h-px w-full bg-current" /></span>{label}</button>)}
             </div>
           </section>
-          <section className="space-y-2 border-t border-border py-4" aria-labelledby={`${id}-details`}>
-            <h3 id={`${id}-details`} className="pb-1 text-sm font-semibold">Текст и линии</h3>
-            <label className="grid min-h-11 grid-cols-2 items-center gap-4 text-sm"><span>Размер текста</span><span className="relative"><SearchableSelect searchable={false} portalContainer={portalContainer}value={preferences.fontSize} onChange={(value) => onChange({ fontSize: value as RoadmapTablePreferences['fontSize'] })} options={[{ value: 'small', label: 'Мелкий' }, { value: 'standard', label: 'Обычный' }, { value: 'large', label: 'Крупный' }]} /></span></label>
-            <label className="grid min-h-11 grid-cols-2 items-center gap-4 text-sm"><span>Разделители</span><span className="relative"><SearchableSelect searchable={false} portalContainer={portalContainer}value={preferences.separators} onChange={(value) => onChange({ separators: value as RoadmapTablePreferences['separators'] })} options={[{ value: 'subtle', label: 'Мягкие' }, { value: 'standard', label: 'Базовые' }, { value: 'strong', label: 'Контрастные' }]} /></span></label>
+          <section className="border-t border-border py-5" aria-labelledby={`${id}-details`}>
+            <h3 id={`${id}-details`} className="mb-2 text-sm font-semibold">Текст и линии</h3>
+            <label className="grid min-h-12 grid-cols-2 items-center gap-4 text-sm"><span>Размер текста</span><span className="relative"><SearchableSelect searchable={false} portalContainer={portalContainer} value={preferences.fontSize} onChange={(value) => onChange({ fontSize: value as RoadmapTablePreferences['fontSize'] })} options={[{ value: 'small', label: 'Мелкий' }, { value: 'standard', label: 'Обычный' }, { value: 'large', label: 'Крупный' }]} /></span></label>
+            <label className="grid min-h-12 grid-cols-2 items-center gap-4 text-sm"><span>Разделители</span><span className="relative"><SearchableSelect searchable={false} portalContainer={portalContainer} value={preferences.separators} onChange={(value) => onChange({ separators: value as RoadmapTablePreferences['separators'] })} options={[{ value: 'subtle', label: 'Мягкие' }, { value: 'standard', label: 'Базовые' }, { value: 'strong', label: 'Контрастные' }]} /></span></label>
             <Toggle label="Переносить названия" checked={preferences.wrapTitles} onChange={(wrapTitles) => onChange({ wrapTitles })} />
             <Toggle label="Чередовать фон строк" checked={preferences.stripedRows} onChange={(stripedRows) => onChange({ stripedRows })} />
           </section>
         </div>
         <div id={`${id}-columns`} hidden={section !== 'columns'} className="roadmap-fade-in">
           <section className="py-5" aria-labelledby={`${id}-metrics`}>
-            <h3 id={`${id}-metrics`} className="mb-2 text-sm font-semibold">Что показывать</h3><p className="mb-3 text-xs leading-5 text-muted-foreground">Название задачи и план видны всегда.</p>
+            <h3 id={`${id}-metrics`} className="text-sm font-semibold">Что показывать</h3><p className="mb-2 mt-1 text-xs leading-5 text-muted-foreground">Название задачи и план видны всегда.</p>
             <div className="divide-y divide-border/60">
               <Toggle label="Показывать факт" description="Затраченное время рядом с планом" checked={preferences.showFact} onChange={(showFact) => onChange({ showFact })} />
               <Toggle label="Детализация по ролям" description="Показатели для каждой роли проекта" checked={preferences.showRoleDetails} onChange={(showRoleDetails) => onChange({ showRoleDetails })} />
@@ -100,14 +100,14 @@ export function TableAppearancePanel({ id, preferences, onChange, onReset, statu
               <Toggle label="Только роли с планом" description="Скрыть роли без оценок в этом периоде" checked={preferences.plannedRolesOnly} onChange={(plannedRolesOnly) => onChange({ plannedRolesOnly })} />
             </div>
           </section>
-          <section className="space-y-3 border-t border-border py-5">
-            <label className="block space-y-3 text-sm font-semibold"><span>Закрепление столбцов</span><span className="relative block"><SearchableSelect searchable={false} portalContainer={portalContainer}value={preferences.pinnedColumns} onChange={(value) => onChange({ pinnedColumns: value as RoadmapTablePreferences['pinnedColumns'] })} options={[{ value: 'none', label: 'Без закрепления' }, { value: 'name', label: 'Закрепить название' }, { value: 'totals', label: 'Название и итоги' }]} /></span></label>
-            <p className="text-xs leading-5 text-muted-foreground">Закреплённые столбцы остаются на месте при горизонтальной прокрутке.</p>
+          <section className="border-t border-border py-5">
+            <label className="block text-sm font-semibold"><span>Закрепление столбцов</span><span className="relative mt-3 block"><SearchableSelect searchable={false} portalContainer={portalContainer} value={preferences.pinnedColumns} onChange={(value) => onChange({ pinnedColumns: value as RoadmapTablePreferences['pinnedColumns'] })} options={[{ value: 'none', label: 'Без закрепления' }, { value: 'name', label: 'Закрепить название' }, { value: 'totals', label: 'Название и итоги' }]} /></span></label>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">Закреплённые столбцы остаются на месте при горизонтальной прокрутке.</p>
           </section>
-          <section className="space-y-3 border-t border-border py-5">
+          <section className="border-t border-border py-5">
             <h3 className="text-sm font-semibold">Ширина столбцов</h3>
-            <p className="text-xs leading-5 text-muted-foreground">Чтобы изменить ширину, потяните границу столбца в шапке таблицы.</p>
-            {onResetWidths ? <Button type="button" variant="outline" className="h-9 gap-2 text-xs" disabled={!hasCustomWidths} onClick={onResetWidths}><RotateCcw aria-hidden="true" className="size-3.5" />Сбросить ширину столбцов</Button> : null}
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">Чтобы изменить ширину, потяните границу столбца в шапке таблицы.</p>
+            {onResetWidths ? <Button type="button" variant="outline" className="mt-3 h-9 gap-2 text-xs" disabled={!hasCustomWidths} onClick={onResetWidths}><RotateCcw aria-hidden="true" className="size-3.5" />Сбросить ширину столбцов</Button> : null}
           </section>
         </div>
       </fieldset>

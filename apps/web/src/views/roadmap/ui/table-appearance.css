@@ -165,11 +165,10 @@
 
 /* Compact rows keep the name cell on one line: title on the left, id, state and counts in a fixed column on the right. */
 .roadmap-table-appearance[data-density='compact'] .roadmap-plan-table [data-plan-name] {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  column-gap: 0.5rem;
-  row-gap: 0.125rem;
+  column-gap: 0.75rem;
 }
 
 .roadmap-table-appearance[data-density='compact'] .roadmap-plan-table [data-plan-name] > :first-child {
@@ -178,8 +177,10 @@
 }
 
 .roadmap-table-appearance[data-density='compact'] .roadmap-plan-table [data-plan-meta] {
-  flex: none;
-  flex-wrap: nowrap;
+  /* Same columns for epics and features, so id, state and count line up in every row. */
+  display: grid;
+  grid-template-columns: 2.75rem 4.25rem 4.25rem;
+  column-gap: 0.375rem;
   margin-top: 0;
   padding-left: 0;
 }

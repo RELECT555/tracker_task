@@ -457,7 +457,7 @@ export function AllProjectsPlanTable({
         ><Download aria-hidden="true" className="size-3.5" />Экспорт CSV</Button>
       </div>
     </div>
-    <div className="roadmap-scrollbar max-h-[70vh] min-w-0 overflow-auto" onKeyDown={onToggleKeyDown}>
+    <div className="roadmap-scrollbar relative max-h-[70vh] min-w-0 overflow-auto" onKeyDown={onToggleKeyDown}>
     <table className={cn('roadmap-plan-table w-full table-fixed border-collapse text-left', showFact ? 'min-w-[1100px]' : 'min-w-[880px]')}>
       <caption className="sr-only">Сводный план проектов. Раскройте проект, затем эпик, чтобы увидеть фичи. Заголовки столбцов сортируют проекты.</caption>
       <colgroup>

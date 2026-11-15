@@ -55,7 +55,7 @@ export function TableAppearanceSettings(props: TableAppearanceSettingsProps) {
       {status === 'error' ? <span aria-hidden="true" className="size-1.5 rounded-full bg-destructive" /> : null}
     </Button>
     {status === 'error' ? <span id={`${id}-error`} className="sr-only">{errorMessage} Откройте панель, чтобы повторить.</span> : null}
-    <dialog ref={setDialogRef}aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`}
+    <dialog ref={setDialogRef} aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`}
       className="roadmap-sheet table-settings-panel fixed inset-y-0 left-auto right-0 m-0 h-dvh max-h-dvh w-full max-w-md overflow-hidden border-l border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-transparent"
       onClose={() => { setOpen(false); trigger.current?.focus(); }}
       onKeyDown={(event) => { if (event.key === 'Escape') event.stopPropagation(); }}

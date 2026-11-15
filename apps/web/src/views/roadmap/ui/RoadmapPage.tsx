@@ -453,7 +453,7 @@ function QuarterPlanningGrid({
   return <div className={focusMode ? 'flex min-h-0 flex-1 flex-col gap-3' : 'space-y-3'}>
     {legacyPeriods.length ? <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-800 dark:text-amber-200">Сохранены старые периоды без месячной детализации: {legacyHours} ч. Они не распределены по месяцам, но учитываются в проверке общей оценки.</div> : null}
     {saving ? <p role="status" className="text-xs text-muted-foreground">Сохраняем план…</p> : null}
-    <div className={cn('roadmap-scrollbar overflow-auto', focusMode && 'min-h-0 flex-1')}>
+    <div className={cn('roadmap-scrollbar relative overflow-auto', focusMode && 'min-h-0 flex-1')}>
       <ResizablePlanTable columns={columns} onColumnResize={(id, width) => columnWidths.commitWidth(id, width, columns.find((column) => column.id === id)!)} onPaste={handlePaste} className="table-fixed border-collapse text-left">
         <thead className="sticky top-0 z-[3] bg-card">
           <tr className="border-b border-border text-xs font-semibold text-muted-foreground">
@@ -1450,7 +1450,7 @@ export function RoadmapPage() {
                       role="region"
                       aria-label="Таблица плана и факта по ролям"
                       tabIndex={0}
-                      className={cn('@container roadmap-scrollbar min-w-0 overflow-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring', focusMode ? 'min-h-0 flex-1' : 'max-h-[calc(100dvh-7rem)]')}
+                      className={cn('@container roadmap-scrollbar relative min-w-0 overflow-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring', focusMode ? 'min-h-0 flex-1' : 'max-h-[calc(100dvh-7rem)]')}
                     >
                       <ResizablePlanTable
                         key={JSON.stringify([user?.id, roadmapProjectId])}
