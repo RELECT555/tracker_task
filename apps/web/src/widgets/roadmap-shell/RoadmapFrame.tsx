@@ -236,15 +236,6 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
     <div className="roadmap-frame relative flex h-dvh overflow-clip bg-sidebar dark:bg-background">
       <aside id="roadmap-sidebar" className={cn('hidden h-full shrink-0 flex-col border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground md:flex', sidebarCollapsed ? 'w-16' : 'w-64')}>
         <div className={cn('flex h-16 shrink-0 items-center gap-2', sidebarCollapsed ? 'justify-center' : 'justify-between pl-5 pr-3')}>
-          <Link href={routes.home} className={cn('flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-sidebar-primary', sidebarCollapsed && 'hidden')}>
-            <span className="flex size-9 items-center justify-center rounded-lg border border-sidebar-border/60 bg-sidebar-accent text-sidebar-primary">
-              <GitBranch className="size-5" strokeWidth={1.7} aria-hidden="true" />
-            </span>
-            <span>
-              <span className="block text-sm font-semibold tracking-tight">Roadmap</span>
-              <span className="block text-[10px] uppercase tracking-[0.13em] text-sidebar-muted">Планирование</span>
-            </span>
-          </Link>
           <button
             type="button"
             title={sidebarToggleLabel}
@@ -252,10 +243,31 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
             aria-expanded={!sidebarCollapsed}
             aria-controls="roadmap-sidebar"
             onClick={toggleSidebar}
-            className="flex size-10 shrink-0 items-center justify-center rounded-lg text-sidebar-muted transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-sidebar-primary"
+            className="flex items-center gap-3 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-sidebar-primary"
           >
-            <SidebarToggleIcon className="size-5" strokeWidth={1.5} aria-hidden="true" />
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-sidebar-border/60 bg-sidebar-accent text-sidebar-primary transition-colors hover:bg-sidebar-accent/70">
+              <GitBranch className="size-5" strokeWidth={1.7} aria-hidden="true" />
+            </span>
+            {!sidebarCollapsed ? (
+              <span>
+                <span className="block text-sm font-semibold tracking-tight">Roadmap</span>
+                <span className="block text-[10px] uppercase tracking-[0.13em] text-sidebar-muted">Планирование</span>
+              </span>
+            ) : null}
           </button>
+          {!sidebarCollapsed ? (
+            <button
+              type="button"
+              title={sidebarToggleLabel}
+              aria-label={sidebarToggleLabel}
+              aria-expanded={!sidebarCollapsed}
+              aria-controls="roadmap-sidebar"
+              onClick={toggleSidebar}
+              className="flex size-10 shrink-0 items-center justify-center rounded-lg text-sidebar-muted transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-sidebar-primary"
+            >
+              <SidebarToggleIcon className="size-5" strokeWidth={1.5} aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
 
         <nav aria-label="Навигация Roadmap" className={cn('min-h-0 flex-1 roadmap-scrollbar overflow-auto py-5', sidebarCollapsed ? 'px-2.5' : 'px-3')}>
