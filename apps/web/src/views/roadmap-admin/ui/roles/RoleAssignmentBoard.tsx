@@ -1,5 +1,5 @@
 import { type DragEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react';
-import { ArrowDownToLine, GripVertical, LoaderCircle, Plus, Search, Trash2 } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, GripVertical, Info, LoaderCircle, Plus, Search } from 'lucide-react';
 import type { RoadmapRole, RoadmapRoleTemplate } from '@/entities/roadmap/api/roadmapApi';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
@@ -11,6 +11,7 @@ import styles from './role-assignment-board.module.css';
 import { setRoleDragImage } from './role-drag-image';
 
 const roleDragType = 'application/x-roadmap-role';
+const projectRoleDragType = 'application/x-roadmap-project-role';
 const roleNoticeDuration = 4_000;
 const panelClass = 'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card';
 const plurals = new Intl.PluralRules('ru-RU');
@@ -21,6 +22,14 @@ function memberCount(role: RoadmapRole) {
   if (!ids.size) return 'Нет участников';
   const form = plurals.select(ids.size);
   return `${ids.size} ${form === 'one' ? 'участник' : form === 'few' ? 'участника' : 'участников'}`;
+}
+
+function InfoHint({ text }: { text: string }) {
+  return (
+    <span role="img" aria-label={text} title={text} tabIndex={0} className="inline-flex size-4 shrink-0 cursor-help items-center justify-center self-center rounded-full text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+      <Info aria-hidden="true" className="size-3.5" />
+    </span>
+  );
 }
 
 function RoleSearch({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
@@ -78,10 +87,13 @@ export function RoleAssignmentBoard({
   const [catalogSearch, setCatalogSearch] = useState('');
   const [draggedRoleId, setDraggedRoleId] = useState<string>();
   const [overProject, setOverProject] = useState(false);
+  const [draggedProjectRoleId, setDraggedProjectRoleId] = useState<string>();
+  const [overCatalog, setOverCatalog] = useState(false);
   const catalogTerm = normalizeRoleName(catalogSearch);
   const projectTerm = normalizeRoleName(projectSearch);
   const visibleCatalog = availableRoles.filter((role) => normalizeRoleName(role.name).includes(catalogTerm));
   const visibleRoles = roles.filter((role) => normalizeRoleName(role.name).includes(projectTerm));
+  const draggedProjectRole = disabled ? undefined : roles.find((role) => role.id === draggedProjectRoleId);
   const draggedRole = canAdd ? availableRoles.find((role) => role.id === draggedRoleId) : undefined;
 
   useEffect(() => {
@@ -98,6 +110,24 @@ export function RoleAssignmentBoard({
   function resetDrag() {
     setDraggedRoleId(undefined);
     setOverProject(false);
+    setDraggedProjectRoleId(undefined);
+    setOverCatalog(false);
+  }
+
+  function handleCatalogDragOver(event: DragEvent<HTMLElement>) {
+    if (!draggedProjectRole || !event.dataTransfer.types.includes(projectRoleDragType)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setOverCatalog(true);
+  }
+
+  function handleCatalogDrop(event: DragEvent<HTMLElement>) {
+    if (!draggedProjectRole || !event.dataTransfer.types.includes(projectRoleDragType)) return;
+    event.preventDefault();
+    const role = draggedProjectRole;
+    const roleId = event.dataTransfer.getData(projectRoleDragType);
+    resetDrag();
+    if (roleId === role.id) onRemoveRole(role);
   }
 
   function handleDragOver(event: DragEvent<HTMLElement>) {
@@ -138,16 +168,32 @@ export function RoleAssignmentBoard({
 
   return (
     <div className="grid items-start gap-5 lg:grid-cols-[clamp(16rem,24%,20rem)_minmax(0,1fr)]">
-      <section aria-labelledby={`${id}-catalog`} className={panelClass}>
+      <section
+        aria-labelledby={`${id}-catalog`}
+        onDragOver={handleCatalogDragOver}
+        onDragLeave={(event) => {
+          if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+          setOverCatalog(false);
+        }}
+        onDrop={handleCatalogDrop}
+        className={cn('relative motion-safe:transition-colors motion-safe:duration-150', panelClass, draggedProjectRole && 'border-destructive/50', draggedProjectRole && overCatalog && 'ring-2 ring-destructive/25')}
+      >
+        {draggedProjectRole && (
+          <div aria-hidden="true" className={cn(
+            'pointer-events-none absolute inset-2 z-10 flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-destructive/50 bg-card/90 p-4 text-center text-xs font-medium text-foreground',
+            overCatalog && 'border-solid border-destructive bg-destructive/10',
+          )}>
+            <ArrowUpFromLine className="size-5 text-destructive" />
+            {overCatalog ? `Отпустите, чтобы убрать «${draggedProjectRole.name}» из проекта` : `Перетащите сюда «${draggedProjectRole.name}», чтобы убрать из проекта`}
+          </div>
+        )}
         <div className="shrink-0 space-y-3 px-4 pb-3 pt-4">
           <div>
             <div className="flex items-baseline gap-1.5">
               <h2 id={`${id}-catalog`} className="text-balance text-sm font-semibold">Каталог</h2>
               {availableRoles.length > 0 && <span className="text-xs tabular-nums text-muted-foreground">{availableRoles.length}</span>}
+              <InfoHint text="Роли, которых ещё нет в проекте. Перетащите роль в проект или нажмите «+». Чтобы убрать роль из проекта, перетащите её сюда." />
             </div>
-            <p className="mt-0.5 text-pretty text-xs leading-relaxed text-muted-foreground">
-              Роли, которых ещё нет в проекте.<span className="[@media(pointer:coarse)]:hidden"> Перетащите в проект или нажмите «+».</span>
-            </p>
           </div>
           {availableRoles.length > 0 && <RoleSearch label="Поиск в каталоге ролей" value={catalogSearch} onChange={setCatalogSearch} />}
         </div>
@@ -243,10 +289,23 @@ export function RoleAssignmentBoard({
               <ul aria-label="Роли проекта" className="grid grid-cols-1 gap-x-2 gap-y-0.5 @min-[38rem]:grid-cols-2 @min-[60rem]:grid-cols-3">
                 {showDropSlot && <li aria-hidden="true" className="flex [@media(pointer:coarse)]:hidden">{dropSlot}</li>}
                 {visibleRoles.map((role) => (
-                  <li key={role.id} className={cn(
-                    'group relative flex min-w-0 items-center rounded-lg hover:bg-muted/50 focus-within:bg-muted/50',
-                    role.id === addedRole?.id && styles.addedRole,
-                  )}>
+                  <li
+                    key={role.id}
+                    draggable={!disabled}
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = 'move';
+                      event.dataTransfer.setData(projectRoleDragType, role.id);
+                      setRoleDragImage(event.dataTransfer, event.currentTarget, role);
+                      setDraggedProjectRoleId(role.id);
+                    }}
+                    onDragEnd={resetDrag}
+                    className={cn(
+                      'group relative flex min-w-0 items-center rounded-lg hover:bg-muted/50 focus-within:bg-muted/50 motion-safe:transition-opacity motion-safe:duration-150',
+                      !disabled && 'cursor-grab active:cursor-grabbing [@media(pointer:coarse)]:cursor-auto',
+                      draggedProjectRole?.id === role.id && 'opacity-50',
+                      role.id === addedRole?.id && styles.addedRole,
+                    )}
+                  >
                     <button
                       type="button"
                       ref={role.id === addedRole?.id ? addedRoleButton : undefined}
@@ -262,22 +321,11 @@ export function RoleAssignmentBoard({
                       <span className="min-w-0 flex-1">
                         <span className="block break-words text-pretty font-medium leading-5">{role.name}</span>
                         <span id={`${id}-members-${role.id}`} className="mt-0.5 block text-xs text-muted-foreground">
-                          {memberCount(role)}{role.azureEstimateField && <span title="Роль загружена из Azure DevOps"> · Azure</span>}
+                          {memberCount(role)}
                         </span>
                       </span>
                     </button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Убрать роль «${role.name}» из проекта`}
-                      title="Убрать роль из проекта"
-                      disabled={disabled}
-                      onClick={() => onRemoveRole(role)}
-                      className="mr-1 size-8 shrink-0 text-muted-foreground opacity-0 hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:opacity-100"
-                    >
-                      <Trash2 aria-hidden="true" className="size-4" />
-                    </Button>
+                    {role.azureEstimateField && <span className="mr-3 flex shrink-0"><InfoHint text="Роль загружена из Azure DevOps" /></span>}
                   </li>
                 ))}
               </ul>
