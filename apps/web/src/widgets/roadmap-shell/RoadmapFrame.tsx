@@ -65,7 +65,7 @@ function ProfileMenu({ auth, mobile = false, collapsed = false }: {
         </div> : null}
         {!compact ? <ChevronUp className={cn('h-4 w-4 shrink-0 text-sidebar-muted transition-transform', menuOpen && 'rotate-180')} strokeWidth={1.5} aria-hidden="true" /> : null}
       </button>
-      {menuOpen ? <div id={menuId} className={cn('absolute z-50 max-h-[min(24rem,70vh)] overflow-y-auto rounded-lg border border-sidebar-border/50 bg-sidebar shadow-lg', mobile ? 'right-0 top-full mt-2 w-72' : collapsed ? 'bottom-0 left-full ml-2 w-72' : 'bottom-full left-0 right-0 mb-1')}>
+      {menuOpen ? <div id={menuId} className={cn('absolute z-50 max-h-[min(24rem,70vh)] roadmap-scrollbar overflow-y-auto rounded-lg border border-sidebar-border/50 bg-sidebar shadow-lg', mobile ? 'right-0 top-full mt-2 w-72' : collapsed ? 'bottom-0 left-full ml-2 w-72' : 'bottom-full left-0 right-0 mb-1')}>
         {compact ? <div className="border-b border-sidebar-border/40 px-3 py-2">
           <p className="truncate text-sm font-medium text-sidebar-foreground">{displayName}</p>
           <p className="truncate text-xs text-sidebar-muted">{displayEmail}</p>
@@ -258,7 +258,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
           </button>
         </div>
 
-        <nav aria-label="Навигация Roadmap" className={cn('min-h-0 flex-1 overflow-auto py-5', sidebarCollapsed ? 'px-2.5' : 'px-3')}>
+        <nav aria-label="Навигация Roadmap" className={cn('min-h-0 flex-1 roadmap-scrollbar overflow-auto py-5', sidebarCollapsed ? 'px-2.5' : 'px-3')}>
           <div ref={navList} className="relative">
             <span ref={navIndicator} aria-hidden="true" className="roadmap-nav-indicator rounded-lg bg-sidebar-accent" />
             <ul className="space-y-1">

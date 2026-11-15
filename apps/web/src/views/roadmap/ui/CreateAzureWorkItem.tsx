@@ -125,7 +125,7 @@ export function CreateAzureWorkItem({ externalProjectId, projectName, items, peo
         onClose={onClose}
         className="roadmap-dialog m-auto max-h-none w-[min(32rem,calc(100vw-2rem))] overflow-visible rounded-xl border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/50"
       >
-        <div className="max-h-[calc(100dvh-2rem-2px)] overflow-y-auto overscroll-contain rounded-[inherit]">
+        <div className="max-h-[calc(100dvh-2rem-2px)] roadmap-scrollbar overflow-y-auto overscroll-contain rounded-[inherit]">
           <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
             <div className="min-w-0">
               <h2 id={`${id}-heading`} className="text-base font-semibold">{draft.type === 'Epic' ? 'Создать эпик' : isFeature ? 'Создать фичу' : 'Создать задачу'}</h2>

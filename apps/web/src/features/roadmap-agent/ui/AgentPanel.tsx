@@ -121,7 +121,7 @@ export function AgentPanel({ projectId, quarterKey, canEditPlan, onApplied }: {
         <div className="min-w-0"><h3 className="text-sm font-semibold">Ассистент плана</h3><p className="text-xs text-muted-foreground">{canEditPlan ? 'Отвечает по плану и предлагает правки — применяете их вы' : 'Отвечает по плану (только просмотр)'}</p></div>
         <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0" aria-label="Начать диалог заново" title="Начать заново" disabled={!messages.length || chat.isPending} onClick={reset}><RotateCcw aria-hidden="true" className="size-3.5" /></Button>
       </header>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-3" aria-live="polite">
+      <div className="min-h-0 flex-1 space-y-3 roadmap-scrollbar overflow-y-auto overscroll-contain px-4 py-3" aria-live="polite">
         {!messages.length ? <div className="space-y-2 pt-2">
           <p className="text-xs text-muted-foreground">Например:</p>
           {EXAMPLES.map((example) => <button key={example} type="button" onClick={() => send(example)} className="block w-full rounded-md border border-border px-3 py-2 text-left text-xs hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">{example}</button>)}

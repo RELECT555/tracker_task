@@ -307,7 +307,7 @@ function CardContent({ titleId, projectId, externalId, planItem, taskAllocations
   return <div className="flex h-full flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
     {header(item)}
 
-    <div className="min-h-0 flex-1 overflow-y-auto">
+    <div className="min-h-0 flex-1 roadmap-scrollbar overflow-y-auto">
       <section className="px-6 pt-5 pb-6">
         <EditableTitle id={titleId} value={item.title} editable={item.canEdit} saving={update.isPending} onSave={(title) => update.mutate({ title })} />
         {changed ? <p className="mt-1.5 text-xs text-muted-foreground">Изменено {changed}{item.changedBy ? ` · ${item.changedBy.name}` : ''}</p> : null}

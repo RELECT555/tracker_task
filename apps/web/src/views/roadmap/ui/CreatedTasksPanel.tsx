@@ -51,7 +51,7 @@ export function CreatedTasksPanel({ items }: { items: CreatedTaskItem[] }) {
           </div>
           <Button type="button" variant="ghost" size="icon" className="-mr-2 -mt-1 size-8 shrink-0 text-muted-foreground hover:text-foreground" aria-label="Закрыть список задач" onClick={closePanel}><X aria-hidden="true" className="size-4" /></Button>
         </header>
-        {open ? <ul className="min-h-0 flex-1 divide-y divide-border overflow-y-auto border-t border-border">
+        {open ? <ul className="min-h-0 flex-1 divide-y divide-border roadmap-scrollbar overflow-y-auto border-t border-border">
           {items.map((item) => {
             const content = <>
               <AzureWorkItemIcon type={item.type} className="mt-0.5 shrink-0" />

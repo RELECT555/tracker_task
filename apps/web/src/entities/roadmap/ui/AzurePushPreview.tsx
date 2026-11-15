@@ -64,7 +64,7 @@ export function AzurePushPreview({ projectId, onDone }: { projectId: string; onD
         {!preview.projectAllowed ? <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />Проект не включён в запись плана в настройках интеграции.</p> : null}
       </div>
 
-      {preview.items.length ? <div className="min-h-0 flex-1 overflow-auto">
+      {preview.items.length ? <div className="min-h-0 flex-1 roadmap-scrollbar overflow-auto">
         <label className="flex items-center gap-2 border-b border-border/60 bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground">
           <input type="checkbox" className="h-3.5 w-3.5 accent-primary" checked={allSelected} disabled={!sendable.length} onChange={() => setSelected(allSelected ? new Set() : new Set(sendable.map((item) => item.allocationId)))} />
           Выбрать все ({sendable.length})

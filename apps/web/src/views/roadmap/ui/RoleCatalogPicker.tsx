@@ -38,7 +38,7 @@ export function RoleCatalogPicker({ templates, catalogSize, loading, pendingId, 
       <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
       <input autoFocus type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Найти роль" aria-label="Найти роль" className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40" />
     </label> : null}
-    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-border px-1.5 py-1.5">
+    <div className="min-h-0 flex-1 roadmap-scrollbar overflow-y-auto overscroll-contain border-t border-border px-1.5 py-1.5">
       {loading ? <p role="status" className="flex items-center justify-center gap-2 px-2 py-6 text-sm text-muted-foreground"><LoaderCircle aria-hidden="true" className="size-4 motion-safe:animate-spin" />Загружаем каталог…</p>
         : !templates.length ? <p className="px-2 py-6 text-center text-sm text-muted-foreground">{catalogSize ? 'Все роли из каталога уже добавлены в проект.' : 'Каталог ролей пуст.'}</p>
           : !filtered.length ? <p className="px-2 py-6 text-center text-sm text-muted-foreground">Ничего не найдено</p>

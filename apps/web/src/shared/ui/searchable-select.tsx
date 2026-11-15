@@ -171,7 +171,7 @@ export function SearchableSelect({
         aria-activedescendant={!searchable ? activeOptionId : undefined}
         tabIndex={!searchable ? -1 : undefined}
         onKeyDown={!searchable ? handleOptionKeys : undefined}
-        className="min-h-0 max-h-64 overflow-y-auto overscroll-contain p-1.5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40"
+        className="min-h-0 max-h-64 roadmap-scrollbar overflow-y-auto overscroll-contain p-1.5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40"
       >
         {filtered.length ? filtered.map((option, index) => <Fragment key={option.value}>
           {option.group && option.group !== filtered[index - 1]?.group ? <p className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{option.group}</p> : null}

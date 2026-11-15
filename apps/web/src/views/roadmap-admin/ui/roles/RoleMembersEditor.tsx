@@ -59,7 +59,7 @@ export function RoleMembersEditor({ id, people, members, role, disabled, pickerD
             align="end"
             sideOffset={6}
             collisionPadding={12}
-            className="flex max-h-[var(--radix-popover-content-available-height)] w-[min(25rem,calc(100vw-1.5rem))] flex-col overflow-y-auto rounded-xl p-0"
+            className="flex max-h-[var(--radix-popover-content-available-height)] w-[min(25rem,calc(100vw-1.5rem))] flex-col roadmap-scrollbar overflow-y-auto rounded-xl p-0"
             onOpenAutoFocus={(event) => { event.preventDefault(); searchInput.current?.focus(); }}
           >
             <div className="shrink-0 border-b border-border p-3">

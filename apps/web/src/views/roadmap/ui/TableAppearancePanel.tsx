@@ -57,7 +57,7 @@ export function TableAppearancePanel({ id, preferences, onChange, onReset, statu
     <div className="flex shrink-0 gap-6 border-b border-border px-6" role="group" aria-label="Раздел настроек">
       {([['appearance', 'Оформление'], ['columns', 'Столбцы']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={section === value} aria-controls={`${id}-${value}`} onClick={() => { setSection(value); content.current?.scrollTo(0, 0); }} className={cn('-mb-px border-b-2 pb-3 pt-1 text-sm transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring', section === value ? 'border-foreground font-semibold text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>{label}</button>)}
     </div>
-    <div ref={content} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6">
+    <div ref={content} className="min-h-0 flex-1 roadmap-scrollbar overflow-y-auto overscroll-contain px-6">
       <fieldset disabled={disabled || status === 'loading'} className="min-w-0 disabled:opacity-60">
         <div id={`${id}-appearance`} hidden={section !== 'appearance'} className="roadmap-fade-in">
           <section className="py-5" aria-labelledby={`${id}-colors`}>
