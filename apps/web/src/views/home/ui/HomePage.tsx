@@ -6,7 +6,6 @@ import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
-import { RouteBoard } from './RouteBoard';
 import styles from './home.module.css';
 
 export function HomePage() {
@@ -40,7 +39,7 @@ export function HomePage() {
           <h1 id="roadmap-heading">У проекта есть <span>маршрут.</span></h1>
           <p>Планируйте работу команды на квартал, распределяйте нагрузку и сверяйте план с фактом.</p>
           <div className={styles.actions}>
-            <Link href={routes.roadmap} className={styles.primary}>
+            <Link href={routes.roadmap} className={styles.primary} aria-label="Открыть план">
               Открыть план <ArrowRight aria-hidden="true" className="size-4" />
             </Link>
             <a href="#roadmap-features" className={styles.secondary}>
@@ -48,7 +47,6 @@ export function HomePage() {
             </a>
           </div>
         </div>
-        <RouteBoard />
       </section>
       <section id="roadmap-features" className={styles.features} aria-labelledby="roadmap-features-title">
         <h2 id="roadmap-features-title">Возможности Roadmap</h2>
