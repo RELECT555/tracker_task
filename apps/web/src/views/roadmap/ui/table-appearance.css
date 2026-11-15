@@ -14,7 +14,7 @@
   --roadmap-palette-epic: color-mix(in srgb, var(--color-muted) 30%, var(--color-card));
   --roadmap-palette-epic-hover: color-mix(in srgb, var(--color-muted) 45%, var(--color-card));
   --roadmap-palette-stripe: color-mix(in srgb, var(--color-muted) 23%, var(--color-card));
-  --roadmap-palette-row-hover: color-mix(in srgb, var(--color-muted) 15%, var(--color-card));
+  --roadmap-palette-row-hover: color-mix(in srgb, var(--color-muted) 28%, var(--color-card));
   --roadmap-palette-footer: color-mix(in srgb, var(--color-muted) 40%, var(--color-card));
   --roadmap-palette-border: var(--color-border);
 }
@@ -31,7 +31,7 @@
   --roadmap-palette-epic-hover: color-mix(in srgb, var(--roadmap-epic-color) calc(var(--roadmap-k) * 14%), var(--color-card));
   --roadmap-palette-stripe: color-mix(in srgb, var(--roadmap-accent) calc(var(--roadmap-k) * 4%), var(--color-card));
   --roadmap-palette-row-hover: color-mix(in srgb, var(--roadmap-accent) calc(var(--roadmap-k) * 7%), var(--color-card));
-  --roadmap-palette-footer: color-mix(in srgb, var(--roadmap-header-color) calc(var(--roadmap-k) * 12%), var(--color-card));
+  --roadmap-palette-footer: color-mix(in srgb, var(--roadmap-header-color) calc(var(--roadmap-k) * 18%), var(--color-card));
   --roadmap-palette-border: color-mix(in srgb, var(--roadmap-accent) calc(var(--roadmap-k) * 12%), var(--color-border));
 }
 
@@ -43,7 +43,7 @@
   --roadmap-palette-epic-hover: color-mix(in srgb, var(--roadmap-epic-color) calc(var(--roadmap-k) * 22%), var(--color-card));
   --roadmap-palette-stripe: color-mix(in srgb, var(--roadmap-accent) calc(var(--roadmap-k) * 7%), var(--color-card));
   --roadmap-palette-row-hover: color-mix(in srgb, var(--roadmap-accent) calc(var(--roadmap-k) * 12%), var(--color-card));
-  --roadmap-palette-footer: color-mix(in srgb, var(--roadmap-header-color) calc(var(--roadmap-k) * 20%), var(--color-card));
+  --roadmap-palette-footer: color-mix(in srgb, var(--roadmap-header-color) calc(var(--roadmap-k) * 28%), var(--color-card));
   --roadmap-palette-border: color-mix(in srgb, var(--roadmap-accent) calc(var(--roadmap-k) * 16%), var(--color-border));
 }
 
@@ -191,4 +191,12 @@
 /* Plan and fact keep the table's own look. Only the unattributed fact column is set apart, since it is not a role. */
 .roadmap-plan-table [data-tone='unattributed'] {
   border-left-style: dashed;
+}
+
+/* Keyboard focus inside a row highlights it like hover does, so the active row is clear when tabbing through cells. */
+.roadmap-plan-table > tbody > tr[data-row-kind='feature']:is(:hover, :focus-within) {
+  background-color: var(--roadmap-palette-row-hover);
+}
+.roadmap-plan-table > tbody > tr:is([data-row-kind='epic'], [data-row-kind='project']):is(:hover, :focus-within) {
+  background-color: var(--roadmap-palette-epic-hover);
 }

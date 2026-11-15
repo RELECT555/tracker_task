@@ -129,6 +129,9 @@ function displayHours(hours: number | string | null) {
   return hours === null ? '—' : `${hoursFormat.format(Number(hours))} ч`;
 }
 
+/** One quiet style for every empty "—" value in the plan table. */
+const EMPTY_VALUE_CLASS = 'text-muted-foreground/40';
+
 /** Thin fact-vs-plan bar under the fact hours: fills up to the plan, turns amber once the fact exceeds it. */
 function FactProgress({ planned, actual }: { planned: number; actual: number }) {
   if (!(planned > 0) || !(actual > 0)) return null;
@@ -985,7 +988,7 @@ export function RoadmapPage() {
   const renderFactCell = (hours: number | null, key: string) => (
     <td key={key} data-tone={key === 'unattributed' ? 'unattributed' : undefined} className={cn(
       'whitespace-nowrap border-l border-border/40 px-3 py-2.5 text-right text-sm tabular-nums',
-      hours ? 'text-foreground' : 'text-muted-foreground/40',
+      hours ? 'text-foreground' : EMPTY_VALUE_CLASS,
     )}>{cellHours(hours)}</td>
   );
 
@@ -1012,7 +1015,7 @@ export function RoadmapPage() {
       {preferences.showFact ? renderFactCell(actual, `fact:${roleId}`) : null}
       {preferences.showDelta ? <td key={`delta:${roleId}`} title="Дельта = факт − план" className={cn(
         'whitespace-nowrap border-l border-border/40 px-3 py-2.5 text-right text-sm tabular-nums',
-        delta !== null && delta > 0 ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
+        delta !== null && delta > 0 ? 'font-medium text-amber-700 dark:text-amber-300' : delta !== null && delta < 0 ? 'text-foreground' : EMPTY_VALUE_CLASS,
       )}>{delta === null || delta === 0 ? '—' : `${delta > 0 ? '+' : '−'}${cellHours(Math.abs(delta))}`}</td> : null}
     </>;
   };
@@ -1081,10 +1084,10 @@ export function RoadmapPage() {
             </div>
           )}
         </th>
-        <td data-tone="plan" style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:plan'), itemHours ? 'font-medium text-foreground' : 'text-muted-foreground/40')}>
+        <td data-tone="plan" style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:plan'), itemHours ? 'font-medium text-foreground' : EMPTY_VALUE_CLASS)}>
           {cellHours(itemHours)}
         </td>
-        {preferences.showFact ? <td data-tone="fact" style={pinnedCellStyle('summary:fact')} className={cn('relative whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:fact'), Number(actualHours) ? 'font-medium text-foreground' : 'text-muted-foreground/40')}>
+        {preferences.showFact ? <td data-tone="fact" style={pinnedCellStyle('summary:fact')} className={cn('relative whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:fact'), Number(actualHours) ? 'font-medium text-foreground' : EMPTY_VALUE_CLASS)}>
           {cellHours(actualHours)}
           {preferences.showFactProgress ? <FactProgress planned={itemHours} actual={Number(actualHours ?? 0)} /> : null}
         </td> : null}
@@ -1096,7 +1099,7 @@ export function RoadmapPage() {
           if (isEpic) {
             return (
               <Fragment key={role.id}>
-                <td className={cn(cellClassName, 'px-3 py-2.5 text-right text-sm tabular-nums', planned ? 'font-medium text-foreground' : 'text-muted-foreground')}>{cellHours(planned)}</td>
+                <td className={cn(cellClassName, 'px-3 py-2.5 text-right text-sm tabular-nums', planned ? 'font-medium text-foreground' : EMPTY_VALUE_CLASS)}>{cellHours(planned)}</td>
                 {renderRoleMetrics(role.id, planned, actual)}
               </Fragment>
             );
@@ -1580,7 +1583,7 @@ export function RoadmapPage() {
                             План без эпика / фичи<span className="mt-0.5 block text-xs text-muted-foreground">Назначения на карточках без связи с эпиком или фичей</span>
                           </th>
                           <td style={pinnedCellStyle('summary:plan')} className={cn('px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:plan'))}>{cellHours(unattachedPlanHours)}</td>
-                          {preferences.showFact ? <td style={pinnedCellStyle('summary:fact')} className={cn('px-3 py-3 text-right text-muted-foreground', pinnedCellClass('summary:fact'))}>—</td> : null}
+                          {preferences.showFact ? <td style={pinnedCellStyle('summary:fact')} className={cn('px-3 py-3 text-right', EMPTY_VALUE_CLASS, pinnedCellClass('summary:fact'))}>—</td> : null}
                           {detailRoles.map((role) => <Fragment key={role.id}>
                             <td className="border-l border-border/60 px-3 py-3 text-right tabular-nums">{cellHours(rolePlan.byUnattached.get(role.id) ?? 0)}</td>
                             {renderRoleMetrics(role.id, rolePlan.byUnattached.get(role.id) ?? 0, null)}
@@ -1589,15 +1592,15 @@ export function RoadmapPage() {
                         </tr> : null}
                       </tbody>
                       {/* Without the role breakdown the totals row would only repeat the summary cards above the table. */}
-                      {headerRowSpan === 2 ? <tfoot className="sticky bottom-0 z-20 bg-card">
-                        <tr className="border-t-2 border-border bg-[color-mix(in_srgb,var(--color-muted)_40%,var(--color-card))] text-sm font-semibold text-foreground">
+                      {headerRowSpan === 2 ? <tfoot className="sticky bottom-0 z-20 bg-card shadow-[0_-8px_10px_-8px_rgb(0_0_0/0.3)]">
+                        <tr className="border-t-2 border-border bg-[color-mix(in_srgb,var(--color-muted)_65%,var(--color-card))] text-sm font-semibold text-foreground">
                           <th scope="row" style={pinnedCellStyle('name')} className={cn('px-3 py-3 @lg:px-4', pinnedCellClass('name'))}>Итого по проекту</th>
                           <td data-tone="plan" style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:plan'))}>{cellHours(totalHours)}</td>
-                          {preferences.showFact ? <td data-tone="fact" style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:fact'), !totalActualHours && 'text-muted-foreground')}>{cellHours(totalActualHours)}</td> : null}
+                          {preferences.showFact ? <td data-tone="fact" style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:fact'), !totalActualHours && EMPTY_VALUE_CLASS)}>{cellHours(totalActualHours)}</td> : null}
                           {detailRoles.map((role) => {
                             const hours = rolePlan.byProject.get(role.id) ?? 0;
                             return <Fragment key={role.id}>
-                              <td className={cn('border-l border-border/60 px-3 py-3 text-right tabular-nums', !hours && 'text-muted-foreground')}>{cellHours(hours)}</td>
+                              <td className={cn('border-l border-border/60 px-3 py-3 text-right tabular-nums', !hours && EMPTY_VALUE_CLASS)}>{cellHours(hours)}</td>
                               {renderRoleMetrics(role.id, hours, totalActualHours === null ? null : projectRoleFact.get(role.id) ?? 0)}
                             </Fragment>;
                           })}

@@ -72,7 +72,7 @@ export function RoleHoursCell({ workItemId, roleId, roleName, quarterKey, hours,
       aria-label={`Часы роли «${roleName}»: ${shown ? hoursFormat.format(shown) : 'не заданы'}. Изменить`}
       className={cn(
         'inline-flex h-7 min-w-12 items-center justify-end gap-1 rounded-md px-2 text-sm tabular-nums transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-60',
-        shown ? 'font-medium text-foreground' : 'text-muted-foreground',
+        shown ? 'font-medium text-foreground' : 'text-muted-foreground/40',
         estimateFromAzure && shown ? 'underline decoration-muted-foreground/50 decoration-dotted underline-offset-4' : null,
       )}
     >
