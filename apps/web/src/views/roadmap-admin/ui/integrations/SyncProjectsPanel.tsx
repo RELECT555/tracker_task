@@ -83,6 +83,7 @@ function ProjectRow({ project, writeBackOff }: { project: OverviewProject; write
       setNotice(`Обновлено задач из Azure DevOps: ${result.importedWorkItems}.`);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['roadmap', 'azure-projects'] }),
+        queryClient.invalidateQueries({ queryKey: ['roadmap', 'local-projects'] }),
         queryClient.invalidateQueries({ queryKey: ['roadmap', 'admin', 'roles'] }),
         queryClient.invalidateQueries({ queryKey: ['roadmap', 'roles', project.id] }),
         queryClient.invalidateQueries({ queryKey: ['roadmap', 'write-back-overview'] }),

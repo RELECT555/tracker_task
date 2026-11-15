@@ -19,22 +19,23 @@ import type {
   RoadmapAzureState,
   RoadmapWorkItemType,
 } from './roadmapApi';
-import type { SyncSettingsV2 } from '@tracker/shared';
+import type { RoadmapPortfolio, RoadmapPortfolioInput, SyncSettingsV2 } from '@tracker/shared';
 import { apiFetch } from '@/shared/api/client';
 
 type DemoMethod =
   | 'connection' | 'integrationSettings' | 'saveIntegrationSettings' | 'testIntegrationConnection'
-  | 'projects' | 'syncProject' | 'plan' | 'people' | 'roles' | 'adminPeople' | 'syncAdminPeople'
+  | 'projects' | 'projectSummaries' | 'syncProject' | 'plan' | 'people' | 'roles' | 'adminPeople' | 'syncAdminPeople'
   | 'adminRoles' | 'roleCatalog' | 'createRoleTemplate' | 'addRoleFromCatalog' | 'createRole'
   | 'updateRole' | 'setRoleMembers' | 'setRoleDefaultPerson' | 'deleteRole' | 'saveAllocation'
   | 'saveAllocationQuarter' | 'rebalanceAllocations' | 'saveWriteBackSettings' | 'writeBackOverview' | 'checkWriteBack'
   | 'syncSettingsV2' | 'saveSyncSettingsV2' | 'workItemTypes' | 'azureFields' | 'azureStates'
   | 'webhookSecret' | 'rotateWebhookSecret' | 'previewAzurePush' | 'pushProjectToAzure' | 'pushAllocationToAzure';
 
-async function call<T>(method: DemoMethod, args: unknown[] = []): Promise<T> {
+async function call<T>(method: DemoMethod, args: unknown[] = [], signal?: AbortSignal): Promise<T> {
   const response = await apiFetch<{ data: T }>('/api/roadmap-demo', {
     method: 'POST',
     body: JSON.stringify({ method, args }),
+    signal,
   }, '');
   return response.data;
 }
@@ -59,6 +60,9 @@ export const roadmapDemoApi = {
   webhookSecret: () => call<{ secret: string }>('webhookSecret'),
   rotateWebhookSecret: () => call<{ secret: string }>('rotateWebhookSecret'),
   projects: () => call<RoadmapProjectsResult>('projects'),
+  localProjects: () => call<RoadmapProjectsResult>('projects'),
+  projectSummaries: (input: RoadmapPortfolioInput, signal?: AbortSignal) =>
+    call<RoadmapPortfolio>('projectSummaries', [input], signal),
   syncProject: (project: AzureProject) => call<RoadmapProjectSyncResult>('syncProject', [project]),
   plan: (projectId: string) => call<RoadmapProjectPlan>('plan', [projectId]),
   createWorkItem: (): Promise<CreatedAzureWorkItem> =>

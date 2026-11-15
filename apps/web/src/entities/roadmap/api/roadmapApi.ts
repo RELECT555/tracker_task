@@ -1,5 +1,5 @@
 import { apiFetch } from '@/shared/api/client';
-import type { SyncSettingsV2 } from '@tracker/shared';
+import type { RoadmapPortfolio, RoadmapPortfolioInput, SyncSettingsV2 } from '@tracker/shared';
 import { isRoadmapDemoMode, roadmapDemoApi } from './roadmapDemo';
 
 export interface AzureProject {
@@ -279,6 +279,9 @@ const liveRoadmapApi = {
   rotateWebhookSecret: () =>
     apiFetch<{ secret: string }>('/roadmap/settings/azure-devops/webhook-secret/rotate', { method: 'POST', body: '{}' }),
   projects: () => apiFetch<RoadmapProjectsResult>('/roadmap/projects'),
+  localProjects: () => apiFetch<RoadmapProjectsResult>('/roadmap/projects/local'),
+  projectSummaries: (input: RoadmapPortfolioInput, signal?: AbortSignal) =>
+    apiFetch<RoadmapPortfolio>('/roadmap/projects/summary', { method: 'POST', body: JSON.stringify(input), signal }),
   syncProject: (project: AzureProject) =>
     apiFetch<RoadmapProjectSyncResult>(
       `/roadmap/projects/${encodeURIComponent(project.id)}/sync`,

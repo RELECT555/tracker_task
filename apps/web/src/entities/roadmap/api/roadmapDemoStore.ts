@@ -4,7 +4,7 @@ import type {
   RoadmapRoleAssignment, RoadmapRoleTemplate,
   RoadmapAzureField, RoadmapAzureState, RoadmapWorkItemType,
 } from './roadmapApi';
-import { rebalanceAllocations, type SyncSettingsV2 } from '@tracker/shared';
+import { buildRoadmapPortfolio, getRoadmapSummary, rebalanceAllocations, type RoadmapPortfolioInput, type SyncSettingsV2 } from '@tracker/shared';
 
 export const DEMO_BLOB_PATH = 'roadmap/demo-state-v1.json';
 const PROJECT_ID = 'demo-roadmap-project';
@@ -259,6 +259,13 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
     case 'previewAzurePush': case 'pushProjectToAzure': case 'pushAllocationToAzure':
       throw new Error('Запись плана в Azure DevOps недоступна в демо.');
     case 'projects': return { data: clone(state.projects), source: 'cache' };
+    case 'projectSummaries': {
+      const input: RoadmapPortfolioInput = arg0;
+      const entries = input.projectIds.includes(PROJECT_ID)
+        ? [{ id: PROJECT_ID, summary: getRoadmapSummary(planOf(state), input) }]
+        : [];
+      return buildRoadmapPortfolio(entries, input);
+    }
     case 'syncProject': return { projectId: PROJECT_ID, importedWorkItems: state.plan.workItems.length };
     case 'plan': return planOf(state);
     case 'people': return { data: peopleWithRoles(state) };

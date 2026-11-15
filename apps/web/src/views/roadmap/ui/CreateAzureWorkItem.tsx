@@ -108,6 +108,7 @@ export function CreateAzureWorkItem({ externalProjectId, projectName, items, peo
       }));
       void client.invalidateQueries({ queryKey: ['roadmap', 'plan', created.projectId] });
       void client.invalidateQueries({ queryKey: ['roadmap', 'azure-projects'] });
+      void client.invalidateQueries({ queryKey: ['roadmap', 'local-projects'] });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось создать карточку.');
     } finally {
