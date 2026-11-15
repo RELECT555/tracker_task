@@ -103,9 +103,12 @@ function rollUpActualHours<T extends RoadmapHierarchyItem>(
     let ancestor: T | undefined = item;
     const visited = new Set<string>();
     let contributesToPlan = false;
+    // Эпик считает факт только по своим фичам: таски, привязанные прямо к эпику, не входят.
+    let underFeature = false;
     while (ancestor && !visited.has(ancestor.externalId)) {
       visited.add(ancestor.externalId);
-      if (isPlanItem(ancestor)) {
+      if (ancestor.type.toLowerCase() === 'feature') underFeature = true;
+      if (isPlanItem(ancestor) && (underFeature || ancestor.type.toLowerCase() !== 'epic')) {
         workItems.set(ancestor.id, (workItems.get(ancestor.id) ?? 0) + hours);
         contributesToPlan = true;
       }
@@ -1300,7 +1303,8 @@ export class RoadmapService {
     return { deleted: true };
   }
 
-  async saveAllocation(dto: {
+  async saveAllocation(
+    dto: {
     allocationId?: string;
     workItemId: string;
     roleId: string;
@@ -1316,7 +1320,10 @@ export class RoadmapService {
       endsAt: string;
       hours: number;
     }[];
-  }) {
+    },
+    /** The caller sends the allocation to Azure DevOps itself (creating its Task). */
+    options: { skipSync?: boolean } = {},
+  ) {
     const monthKeys = dto.periods.flatMap((period) =>
       period.monthKey ? [period.monthKey] : [],
     );
@@ -1458,7 +1465,8 @@ export class RoadmapService {
         }
         throw error;
       });
-    await this.azureSync.onAllocationSaved(allocation.id);
+    if (!options.skipSync)
+      await this.azureSync.onAllocationSaved(allocation.id);
     return { ...allocation, periods: dto.periods };
   }
 

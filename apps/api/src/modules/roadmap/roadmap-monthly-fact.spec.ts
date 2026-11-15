@@ -102,9 +102,9 @@ describe('Roadmap monthly fact', () => {
 
     await expect(service.getProjectFact('project', '2026-10')).resolves.toEqual(
       {
-        workItems: { epic: 11, feature: 4 },
+        workItems: { epic: 4, feature: 4 },
         allocations: { linked: 6 },
-        totalHours: 11,
+        totalHours: 4,
         sourceHours: { '1': 3, '2': -2, '4': 6, '5': 7, '6': 4, '7': 0 },
       },
     );

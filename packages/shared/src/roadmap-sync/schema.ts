@@ -49,7 +49,7 @@ export const syncSettingsV2Schema = z.object({
   roleFields: z.array(roleFieldLinkSchema).default([]),
   writeFeatureAggregates: z.boolean().default(false),
   conflictPolicy: z.enum(['overwrite', 'skip-field', 'stop']).default('overwrite'),
-  removalPolicy: z.object({ action: z.enum(['keep', 'set-state', 'delete']).default('keep'), state: z.string().optional() }).default({ action: 'keep' }),
+  removalPolicy: z.object({ action: z.enum(['keep', 'set-state', 'delete']).default('delete'), state: z.string().optional() }).default({ action: 'delete' }),
   pushPermission: z.enum(['admins', 'planners']).default('planners'),
 });
 

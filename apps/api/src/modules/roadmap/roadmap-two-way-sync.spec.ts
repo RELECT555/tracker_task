@@ -346,7 +346,12 @@ describe('removing an allocation', () => {
     expect(url).not.toContain('destroy');
     expect(init.method).toBe('DELETE');
     expect(prisma.roadmapAllocation.delete).toHaveBeenCalled();
-    expect(result).toEqual({ deleted: true, task: 'deleted' });
+    expect(result).toEqual({
+      deleted: true,
+      task: 'deleted',
+      workItemId: 'feature',
+      roleId: 'role',
+    });
   });
 
   it('keeps the Task by default', async () => {
@@ -453,7 +458,7 @@ function syncSetup(
     row,
     request,
     applyRemoval,
-    run: () => service['syncAllocation']('allocation'),
+    run: () => service['syncAllocation']('allocation', true),
   };
 }
 

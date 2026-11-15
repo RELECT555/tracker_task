@@ -65,6 +65,11 @@ class QuarterMonthDto {
   @IsNumber() @Min(0) hours!: number;
 }
 
+class RoleHoursDto {
+  @IsNumber() @Min(0) @Max(100000) hours!: number;
+  @IsOptional() @Matches(/^d{4}-Q[1-4]$/) quarterKey?: string;
+}
+
 class SaveQuarterAllocationDto {
   @IsArray()
   @ArrayMinSize(3)
@@ -76,6 +81,8 @@ class SaveQuarterAllocationDto {
 
 class SaveAllocationDto {
   @IsOptional() @IsUUID() allocationId?: string;
+  /** "Назначить": also creates the Azure DevOps Task of the new allocation. */
+  @IsOptional() @IsBoolean() createTask?: boolean;
   @IsUUID() workItemId!: string;
   @IsUUID() roleId!: string;
   @IsString() personExternalId!: string;
@@ -337,7 +344,32 @@ export class RoadmapController {
     @Body() dto: SaveAllocationDto,
   ) {
     await this.access.require(actor, { workItemId: dto.workItemId }, 'edit');
-    return this.roadmap.saveAllocation(dto);
+    const saved = await this.roadmap.saveAllocation(dto, {
+      skipSync: dto.createTask,
+    });
+    if (!dto.createTask) return saved;
+    // An allocation that already has a Task is simply updated; otherwise its Task is created now.
+    if (saved.azureTaskId) await this.azureSync.onAllocationSaved(saved.id);
+    else await this.azureSync.createAllocationTask(actor.id, saved.id);
+    return saved;
+  }
+
+  /** Hours typed into a role cell of a feature go straight to that role's field in Azure DevOps. */
+  @Put('work-items/:workItemId/roles/:roleId/hours')
+  async setRoleHours(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('workItemId', ParseUUIDPipe) workItemId: string,
+    @Param('roleId', ParseUUIDPipe) roleId: string,
+    @Body() dto: RoleHoursDto,
+  ) {
+    await this.access.require(actor, { workItemId }, 'edit');
+    return this.azureSync.setRoleHours(
+      actor.id,
+      workItemId,
+      roleId,
+      dto.hours,
+      dto.quarterKey,
+    );
   }
 
   @Put('allocations/rebalance')
@@ -399,7 +431,21 @@ export class RoadmapController {
     @Param('allocationId', ParseUUIDPipe) allocationId: string,
   ) {
     await this.access.require(actor, { allocationIds: [allocationId] }, 'edit');
-    return this.allocationAzure.deleteAllocation(actor, allocationId);
+    const { workItemId, roleId, ...result } =
+      await this.allocationAzure.deleteAllocation(actor, allocationId);
+    // The deleted hours leave the role field of the feature too, as the Task leaves Azure DevOps.
+    await this.azureSync.refreshFeatureField(workItemId, roleId);
+    return result;
+  }
+
+  /** "Создать задачу": creates the Azure DevOps Task of an allocation; plan edits alone never do. */
+  @Post('allocations/:allocationId/azure-task')
+  async createAllocationTask(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('allocationId', ParseUUIDPipe) allocationId: string,
+  ) {
+    await this.access.require(actor, { allocationIds: [allocationId] }, 'edit');
+    return this.azureSync.createAllocationTask(actor.id, allocationId);
   }
 
   @Put('allocations/:allocationId/quarters/:quarterKey')

@@ -235,7 +235,12 @@ export class RoadmapAllocationAzureService implements OnModuleInit {
       );
     }
     await this.prisma.roadmapAllocation.delete({ where: { id: allocationId } });
-    return { deleted: true, task };
+    return {
+      deleted: true,
+      task,
+      workItemId: allocation.workItemId,
+      roleId: allocation.roleId,
+    };
   }
 
   /** Applies the removal policy to a Task whose allocation was deleted or set to zero hours. */
