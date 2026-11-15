@@ -8,14 +8,27 @@ import {
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import type { Prisma } from '@prisma/client';
-import { buildRoadmapPortfolio, getRoadmapSummary, rebalanceAllocations, type RoadmapPortfolioInput } from '@tracker/shared';
+import {
+  buildRoadmapPortfolio,
+  getRoadmapSummary,
+  rebalanceAllocations,
+  type RoadmapPortfolioInput,
+} from '@tracker/shared';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
 import { roadmapProjectReadFilter } from './roadmap-project-access.service';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
-import { AzureDevOpsHttpError, RoadmapIntegrationService, type AzureDevOpsCredentials } from './roadmap-integration.service';
+import {
+  AzureDevOpsHttpError,
+  RoadmapIntegrationService,
+  type AzureDevOpsCredentials,
+} from './roadmap-integration.service';
 import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
-import { azureOrganizationName, canCreateRoadmapWorkItems, roadmapCreatedWorkItemUrl } from './roadmap-work-item-create.service';
+import {
+  azureOrganizationName,
+  canCreateRoadmapWorkItems,
+  roadmapCreatedWorkItemUrl,
+} from './roadmap-work-item-create.service';
 
 type AzureProject = { id: string; name: string; url?: string; state?: string };
 type AzureWorkItemRef = { id: number; url: string };
@@ -41,7 +54,13 @@ type RoleAssignment = {
   memberAllocations?: { personExternalId: string; allocationPercent: number }[];
 };
 
-const roleCatalogSelect = { id: true, name: true, color: true, isMock: true, azureEstimateField: true } as const;
+const roleCatalogSelect = {
+  id: true,
+  name: true,
+  color: true,
+  isMock: true,
+  azureEstimateField: true,
+} as const;
 
 type RoadmapHierarchyItem = {
   id: string;
@@ -89,7 +108,9 @@ function rollUpActualHours<T extends RoadmapHierarchyItem>(
         workItems.set(ancestor.id, (workItems.get(ancestor.id) ?? 0) + hours);
         contributesToPlan = true;
       }
-      ancestor = ancestor.parentExternalId ? itemByExternalId.get(ancestor.parentExternalId) : undefined;
+      ancestor = ancestor.parentExternalId
+        ? itemByExternalId.get(ancestor.parentExternalId)
+        : undefined;
     }
     if (contributesToPlan) totalHours += hours;
   }
@@ -118,11 +139,17 @@ export class RoadmapService {
     const saved = await this.prisma.roadmapProject.findMany({
       select: { id: true, externalId: true, syncedAt: true },
     });
-    const savedByExternalId = new Map(saved.map((project) => [project.externalId, project]));
+    const savedByExternalId = new Map(
+      saved.map((project) => [project.externalId, project]),
+    );
     try {
       const credentials = await this.integration.getCredentials();
       const projects: AzureProject[] = [];
-      const query = new URLSearchParams({ stateFilter: 'wellFormed', '$top': '1000', 'api-version': this.apiVersion });
+      const query = new URLSearchParams({
+        stateFilter: 'wellFormed',
+        $top: '1000',
+        'api-version': this.apiVersion,
+      });
       const seenTokens = new Set<string>();
       let continuationToken: string | null;
       do {
@@ -135,7 +162,10 @@ export class RoadmapService {
         projects.push(...page.value);
         continuationToken = response.headers.get('x-ms-continuationtoken');
         if (continuationToken) {
-          if (seenTokens.has(continuationToken)) throw new BadGatewayException('Azure DevOps repeated the projects page');
+          if (seenTokens.has(continuationToken))
+            throw new BadGatewayException(
+              'Azure DevOps repeated the projects page',
+            );
           seenTokens.add(continuationToken);
           query.set('continuationToken', continuationToken);
         }
@@ -150,15 +180,20 @@ export class RoadmapService {
         })),
       };
     } catch (error) {
-      const accessDenied = error instanceof AzureDevOpsHttpError
-        && (error.httpStatus === 401 || error.httpStatus === 403);
+      const accessDenied =
+        error instanceof AzureDevOpsHttpError &&
+        (error.httpStatus === 401 || error.httpStatus === 403);
       if (!saved.length && !accessDenied) throw error;
       const localProjects = saved.length
-        ? await this.prisma.roadmapProject.findMany({ orderBy: { name: 'asc' } })
+        ? await this.prisma.roadmapProject.findMany({
+            orderBy: { name: 'asc' },
+          })
         : [];
       return {
         source: 'cache' as const,
-        azureError: accessDenied ? 'access-denied' as const : 'unavailable' as const,
+        azureError: accessDenied
+          ? ('access-denied' as const)
+          : ('unavailable' as const),
         data: localProjects.map((project) => ({
           id: project.externalId,
           name: project.name,
@@ -176,7 +211,10 @@ export class RoadmapService {
       const credentials = await this.integration.getCredentials();
       const catalog = await this.catalog.syncProject(externalId, credentials);
       this.importer.invalidateFieldCatalog();
-      const importedWorkItems = await this.importProjectWorkItems({ id: catalog.projectId, externalId }, credentials);
+      const importedWorkItems = await this.importProjectWorkItems(
+        { id: catalog.projectId, externalId },
+        credentials,
+      );
       return { ...catalog, importedWorkItems };
     });
   }
@@ -187,26 +225,47 @@ export class RoadmapService {
       where: { syncedAt: { not: null } },
       select: { id: true, externalId: true, syncedAt: true, url: true },
     });
-    if (!projects.length || !(await this.integration.getPublicSettings()).configured) return;
+    if (
+      !projects.length ||
+      !(await this.integration.getPublicSettings()).configured
+    )
+      return;
 
     const credentials = await this.integration.getCredentials();
     const organization = azureOrganizationName(credentials.organizationUrl);
     for (const project of projects) {
       const projectOrganization = azureOrganizationName(project.url);
-      if (this.projectImports.has(project.externalId) || (projectOrganization && projectOrganization !== organization)) continue;
+      if (
+        this.projectImports.has(project.externalId) ||
+        (projectOrganization && projectOrganization !== organization)
+      )
+        continue;
       try {
-        await this.runProjectImport(project.externalId, () => this.importProjectWorkItems(project, credentials));
+        await this.runProjectImport(project.externalId, () =>
+          this.importProjectWorkItems(project, credentials),
+        );
       } catch (error) {
-        const status = error instanceof AzureDevOpsHttpError ? ` (HTTP ${error.httpStatus})` : '';
-        this.logger.warn(`Scheduled Azure DevOps import failed for project ${project.id}${status}`);
+        const status =
+          error instanceof AzureDevOpsHttpError
+            ? ` (HTTP ${error.httpStatus})`
+            : '';
+        this.logger.warn(
+          `Scheduled Azure DevOps import failed for project ${project.id}${status}`,
+        );
       }
     }
   }
 
-  private runProjectImport<T>(externalId: string, run: () => Promise<T>): Promise<T> {
+  private runProjectImport<T>(
+    externalId: string,
+    run: () => Promise<T>,
+  ): Promise<T> {
     const previous = this.projectImports.get(externalId);
-    const pending = (previous ? previous.catch(() => undefined).then(run) : run()).finally(() => {
-      if (this.projectImports.get(externalId) === pending) this.projectImports.delete(externalId);
+    const pending = (
+      previous ? previous.catch(() => undefined).then(run) : run()
+    ).finally(() => {
+      if (this.projectImports.get(externalId) === pending)
+        this.projectImports.delete(externalId);
     });
     this.projectImports.set(externalId, pending);
     return pending;
@@ -217,7 +276,9 @@ export class RoadmapService {
     credentials: AzureDevOpsCredentials,
   ) {
     const startedAt = new Date();
-    const changedSince = project.syncedAt && new Date(project.syncedAt.getTime() - WORK_ITEM_QUERY_OVERLAP_MS);
+    const changedSince =
+      project.syncedAt &&
+      new Date(project.syncedAt.getTime() - WORK_ITEM_QUERY_OVERLAP_MS);
     const changedFilter = changedSince
       ? ` AND [System.ChangedDate] >= '${changedSince.toISOString()}' AND [System.ChangedDate] < '${startedAt.toISOString()}'`
       : '';
@@ -229,39 +290,74 @@ export class RoadmapService {
       // Older imports did not request AssignedTo. Enrich them once even when the
       // Azure card has not changed since the last incremental synchronization.
       const existing = await this.prisma.roadmapWorkItem.findMany({
-        where: { projectId: project.id, type: { in: ['Epic', 'Feature', 'Task'] } },
+        where: {
+          projectId: project.id,
+          type: { in: ['Epic', 'Feature', 'Task'] },
+        },
         select: { externalId: true, azureCustomFields: true },
       });
       const missingAssigneeIds = existing
-        .filter((item) => !item.azureCustomFields || typeof item.azureCustomFields !== 'object'
-          || !Object.prototype.hasOwnProperty.call(item.azureCustomFields, 'System.AssignedTo'))
+        .filter(
+          (item) =>
+            !item.azureCustomFields ||
+            typeof item.azureCustomFields !== 'object' ||
+            !Object.prototype.hasOwnProperty.call(
+              item.azureCustomFields,
+              'System.AssignedTo',
+            ),
+        )
         .map((item) => Number(item.externalId))
         .filter((id) => Number.isSafeInteger(id) && id > 0 && id <= 2147483647);
       if (missingAssigneeIds.length) {
-        const enriched = await this.importer.importWorkItems(project, missingAssigneeIds, credentials, {
-          requestTimeoutMs: AZURE_IMPORT_REQUEST_TIMEOUT_MS,
-        });
+        const enriched = await this.importer.importWorkItems(
+          project,
+          missingAssigneeIds,
+          credentials,
+          {
+            requestTimeoutMs: AZURE_IMPORT_REQUEST_TIMEOUT_MS,
+          },
+        );
         for (const item of enriched) enrichedIds.add(item.id);
         importedCount += enriched.length;
       }
     }
 
     while (true) {
-      const query = 'SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project'
-        + changedFilter + ` AND [System.Id] > ${lastId} ORDER BY [System.Id]`;
-      const { workItems } = await this.integration.requestJson<{ workItems: AzureWorkItemRef[] }>(
+      const query =
+        'SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project' +
+        changedFilter +
+        ` AND [System.Id] > ${lastId} ORDER BY [System.Id]`;
+      const { workItems } = await this.integration.requestJson<{
+        workItems: AzureWorkItemRef[];
+      }>(
         `${endpoint}?timePrecision=true&$top=${WORK_ITEM_QUERY_PAGE_SIZE}&api-version=${this.apiVersion}`,
-        { method: 'POST', body: JSON.stringify({ query }), signal: AbortSignal.timeout(AZURE_IMPORT_REQUEST_TIMEOUT_MS) },
+        {
+          method: 'POST',
+          body: JSON.stringify({ query }),
+          signal: AbortSignal.timeout(AZURE_IMPORT_REQUEST_TIMEOUT_MS),
+        },
         credentials,
       );
       const ids = workItems.map((item) => item.id);
-      if (ids.some((id, index) => !Number.isSafeInteger(id) || id <= (ids[index - 1] ?? lastId))) {
-        throw new BadGatewayException('Azure DevOps returned out-of-order work item IDs');
+      if (
+        ids.some(
+          (id, index) =>
+            !Number.isSafeInteger(id) || id <= (ids[index - 1] ?? lastId),
+        )
+      ) {
+        throw new BadGatewayException(
+          'Azure DevOps returned out-of-order work item IDs',
+        );
       }
-      const imported = await this.importer.importWorkItems(project, ids.filter((id) => !enrichedIds.has(id)), credentials, {
-        requestTimeoutMs: AZURE_IMPORT_REQUEST_TIMEOUT_MS,
-        requireAll: Boolean(changedSince),
-      });
+      const imported = await this.importer.importWorkItems(
+        project,
+        ids.filter((id) => !enrichedIds.has(id)),
+        credentials,
+        {
+          requestTimeoutMs: AZURE_IMPORT_REQUEST_TIMEOUT_MS,
+          requireAll: Boolean(changedSince),
+        },
+      );
       importedCount += imported.length;
       if (ids.length < WORK_ITEM_QUERY_PAGE_SIZE) break;
       lastId = ids[ids.length - 1];
@@ -270,7 +366,10 @@ export class RoadmapService {
     // Advance only after all pages are saved. Use the start of the run so changes
     // arriving during the import are picked up by the next scheduled run.
     await this.prisma.roadmapProject.updateMany({
-      where: { id: project.id, OR: [{ syncedAt: null }, { syncedAt: { lt: startedAt } }] },
+      where: {
+        id: project.id,
+        OR: [{ syncedAt: null }, { syncedAt: { lt: startedAt } }],
+      },
       data: { syncedAt: startedAt },
     });
     return importedCount;
@@ -285,58 +384,104 @@ export class RoadmapService {
         roles: {
           orderBy: { name: 'asc' },
           select: {
-            id: true, name: true, azureEstimateField: true, defaultPersonExternalId: true,
-            members: { select: { person: { select: { externalId: true, isActive: true } } } },
+            id: true,
+            name: true,
+            azureEstimateField: true,
+            defaultPersonExternalId: true,
+            members: {
+              select: {
+                person: { select: { externalId: true, isActive: true } },
+              },
+            },
           },
         },
         workItems: {
           orderBy: [{ type: 'asc' }, { externalId: 'asc' }],
           select: {
-            id: true, externalId: true, type: true, parentExternalId: true,
-            actualHours: true, azureCustomFields: true,
+            id: true,
+            externalId: true,
+            type: true,
+            parentExternalId: true,
+            actualHours: true,
+            azureCustomFields: true,
             allocations: {
               where: monthKey ? undefined : { quarterKey },
               select: {
-                id: true, roleId: true, personExternalId: true, quarterKey: true, estimatedHours: true, azureTaskId: true,
-                periods: monthKey ? { where: { monthKey }, select: { monthKey: true, hours: true } } : false,
+                id: true,
+                roleId: true,
+                personExternalId: true,
+                quarterKey: true,
+                estimatedHours: true,
+                azureTaskId: true,
+                periods: monthKey
+                  ? {
+                      where: { monthKey },
+                      select: { monthKey: true, hours: true },
+                    }
+                  : false,
               },
             },
           },
         },
       },
     });
-    const entries = await Promise.all(projects.map(async ({ id, workItems, roles }) => {
-      const byExternalId = new Map(workItems.map((item) => [item.externalId, item]));
-      const cumulativeFact = monthKey
-        ? undefined
-        : rollUpActualHours(workItems, byExternalId, (item) => Number(item.actualHours ?? 0)).workItems;
-      const monthlyFact = monthKey && input.includeMonthlyFact !== false
-        ? await this.calculateProjectFact(workItems, monthKey).catch(() => undefined)
-        : undefined;
-      const summary = getRoadmapSummary({
-        workItems: workItems.map((item) => ({
-          ...item,
-          actualHours: cumulativeFact?.get(item.id) ?? 0,
-          azureCustomFields: item.azureCustomFields && typeof item.azureCustomFields === 'object' && !Array.isArray(item.azureCustomFields)
-            ? item.azureCustomFields
-            : null,
-          allocations: item.allocations.map((allocation) => ({
-            ...allocation,
-            estimatedHours: Number(allocation.estimatedHours),
-            periods: (allocation.periods ?? []).map((period) => ({ monthKey: period.monthKey, hours: Number(period.hours) })),
-          })),
-        })),
-        roles: roles.map(({ members, ...role }) => ({
-          ...role,
-          members: members.map(({ person }) => ({ personExternalId: person.externalId, personIsActive: person.isActive })),
-        })),
-      }, { ...input, monthlyFact });
-      return { id, summary };
-    }));
+    const entries = await Promise.all(
+      projects.map(async ({ id, workItems, roles }) => {
+        const byExternalId = new Map(
+          workItems.map((item) => [item.externalId, item]),
+        );
+        const cumulativeFact = monthKey
+          ? undefined
+          : rollUpActualHours(workItems, byExternalId, (item) =>
+              Number(item.actualHours ?? 0),
+            ).workItems;
+        const monthlyFact =
+          monthKey && input.includeMonthlyFact !== false
+            ? await this.calculateProjectFact(workItems, monthKey).catch(
+                () => undefined,
+              )
+            : undefined;
+        const summary = getRoadmapSummary(
+          {
+            workItems: workItems.map((item) => ({
+              ...item,
+              actualHours: cumulativeFact?.get(item.id) ?? 0,
+              azureCustomFields:
+                item.azureCustomFields &&
+                typeof item.azureCustomFields === 'object' &&
+                !Array.isArray(item.azureCustomFields)
+                  ? item.azureCustomFields
+                  : null,
+              allocations: item.allocations.map((allocation) => ({
+                ...allocation,
+                estimatedHours: Number(allocation.estimatedHours),
+                periods: (allocation.periods ?? []).map((period) => ({
+                  monthKey: period.monthKey,
+                  hours: Number(period.hours),
+                })),
+              })),
+            })),
+            roles: roles.map(({ members, ...role }) => ({
+              ...role,
+              members: members.map(({ person }) => ({
+                personExternalId: person.externalId,
+                personIsActive: person.isActive,
+              })),
+            })),
+          },
+          { ...input, monthlyFact },
+        );
+        return { id, summary };
+      }),
+    );
     return buildRoadmapPortfolio(entries, input);
   }
 
-  async getProjectPlan(projectId: string, actorId: string, canEditPlan: boolean) {
+  async getProjectPlan(
+    projectId: string,
+    actorId: string,
+    canEditPlan: boolean,
+  ) {
     const project = await this.prisma.roadmapProject.findUnique({
       where: { id: projectId },
       include: {
@@ -344,7 +489,10 @@ export class RoadmapService {
           orderBy: [{ type: 'asc' }, { externalId: 'asc' }],
           include: {
             allocations: {
-              include: { role: true, periods: { orderBy: { startsAt: 'asc' } } },
+              include: {
+                role: true,
+                periods: { orderBy: { startsAt: 'asc' } },
+              },
             },
           },
         },
@@ -359,35 +507,70 @@ export class RoadmapService {
         select: { azureId: true, azureOrganization: true, type: true },
       }),
     ]);
-    const createdTaskIds = [...new Set(createdItems.flatMap(({ azureId, type }) => azureId && type === 'Task' ? [azureId] : []))];
-    const createdItemOrganizations = new Map(createdItems.map(({ azureId, azureOrganization }) => [azureId, azureOrganization]));
+    const createdTaskIds = [
+      ...new Set(
+        createdItems.flatMap(({ azureId, type }) =>
+          azureId && type === 'Task' ? [azureId] : [],
+        ),
+      ),
+    ];
+    const createdItemOrganizations = new Map(
+      createdItems.map(({ azureId, azureOrganization }) => [
+        azureId,
+        azureOrganization,
+      ]),
+    );
     const projectOrganization = azureOrganizationName(project.url);
-    const connectedOrganization = azureOrganizationName(settings.organizationUrl);
-    const itemByExternalId = new Map(project.workItems.map((item) => [item.externalId, item]));
-    const { workItems: rolledUpActualHours } = rollUpActualHours(project.workItems, itemByExternalId, (item) => Number(item.actualHours ?? 0));
-    const taskUrl = (taskId: string) => settings.organizationUrl
-      ? `${settings.organizationUrl}/${encodeURIComponent(project.name)}/_workitems/edit/${taskId}`
-      : null;
+    const connectedOrganization = azureOrganizationName(
+      settings.organizationUrl,
+    );
+    const itemByExternalId = new Map(
+      project.workItems.map((item) => [item.externalId, item]),
+    );
+    const { workItems: rolledUpActualHours } = rollUpActualHours(
+      project.workItems,
+      itemByExternalId,
+      (item) => Number(item.actualHours ?? 0),
+    );
+    const taskUrl = (taskId: string) =>
+      settings.organizationUrl
+        ? `${settings.organizationUrl}/${encodeURIComponent(project.name)}/_workitems/edit/${taskId}`
+        : null;
     const workItems = project.workItems.map((item) => {
       // Each allocation's fact is the Completed Work logged on the Azure DevOps Task that mirrors it.
-      const allocations = item.type.toLowerCase() === 'epic' ? [] : item.allocations.map((allocation) => {
-        const task = allocation.azureTaskId ? itemByExternalId.get(allocation.azureTaskId) : undefined;
-        return {
-          ...allocation,
-          actualHours: task?.actualHours ?? null,
-          azureTaskUrl: allocation.azureTaskId ? taskUrl(allocation.azureTaskId) : null,
-          azureTaskState: task?.state ?? null,
-        };
-      });
+      const allocations =
+        item.type.toLowerCase() === 'epic'
+          ? []
+          : item.allocations.map((allocation) => {
+              const task = allocation.azureTaskId
+                ? itemByExternalId.get(allocation.azureTaskId)
+                : undefined;
+              return {
+                ...allocation,
+                actualHours: task?.actualHours ?? null,
+                azureTaskUrl: allocation.azureTaskId
+                  ? taskUrl(allocation.azureTaskId)
+                  : null,
+                azureTaskState: task?.state ?? null,
+              };
+            });
       const createdOrganization = createdItemOrganizations.has(item.externalId)
-        ? createdItemOrganizations.get(item.externalId) ?? projectOrganization
+        ? (createdItemOrganizations.get(item.externalId) ?? projectOrganization)
         : null;
       return {
         ...item,
         allocations,
         ownActualHours: item.actualHours,
-        actualHours: isPlanItem(item) ? rolledUpActualHours.get(item.id) ?? 0 : item.actualHours,
-        url: createdOrganization ? roadmapCreatedWorkItemUrl(createdOrganization, project.name, item.externalId) : item.url,
+        actualHours: isPlanItem(item)
+          ? (rolledUpActualHours.get(item.id) ?? 0)
+          : item.actualHours,
+        url: createdOrganization
+          ? roadmapCreatedWorkItemUrl(
+              createdOrganization,
+              project.name,
+              item.externalId,
+            )
+          : item.url,
       };
     });
     return {
@@ -403,16 +586,26 @@ export class RoadmapService {
           (!settings.writeBack.projectIds ||
             settings.writeBack.projectIds.includes(projectId)) &&
           (await this.azureSync.canManuallyPush(actorId, settings.writeBack)),
-        canCreateWorkItems: settings.configured
-          && (!projectOrganization || connectedOrganization === projectOrganization)
-          && canCreateRoadmapWorkItems(project.externalId, settings.organizationUrl),
+        canCreateWorkItems:
+          settings.configured &&
+          (!projectOrganization ||
+            connectedOrganization === projectOrganization) &&
+          canCreateRoadmapWorkItems(
+            project.externalId,
+            settings.organizationUrl,
+          ),
         createdTaskIds,
       },
     };
   }
 
   async getProjectFact(projectId: string, monthKey?: string) {
-    if (typeof monthKey !== 'string' || monthKey.length !== 7 || !/^\d{4}-(0[1-9]|1[0-2])$/.test(monthKey) || monthKey.startsWith('0000-')) {
+    if (
+      typeof monthKey !== 'string' ||
+      monthKey.length !== 7 ||
+      !/^\d{4}-(0[1-9]|1[0-2])$/.test(monthKey) ||
+      monthKey.startsWith('0000-')
+    ) {
       throw new BadRequestException('Month must use YYYY-MM format');
     }
     const project = await this.prisma.roadmapProject.findUnique({
@@ -433,34 +626,57 @@ export class RoadmapService {
     return this.calculateProjectFact(project.workItems, monthKey);
   }
 
-  private async calculateProjectFact(items: RoadmapFactItem[], monthKey: string) {
+  private async calculateProjectFact(
+    items: RoadmapFactItem[],
+    monthKey: string,
+  ) {
     const monthStart = new Date(`${monthKey}-01T00:00:00.000Z`);
     const now = Date.now();
-    if (monthStart.getTime() > now) return { workItems: {}, allocations: {}, totalHours: 0, sourceHours: {} };
+    if (monthStart.getTime() > now)
+      return { workItems: {}, allocations: {}, totalHours: 0, sourceHours: {} };
     const nextMonth = new Date(monthStart);
     nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
     const before = new Date(monthStart.getTime() - 1);
     const through = new Date(Math.min(nextMonth.getTime() - 1, now));
 
-    const itemByExternalId = new Map(items.map((item) => [item.externalId, item]));
+    const itemByExternalId = new Map(
+      items.map((item) => [item.externalId, item]),
+    );
     const linkedAllocations = items
       .filter((item) => item.type.toLowerCase() !== 'epic')
       .flatMap((item) => item.allocations)
       .flatMap(({ id, azureTaskId }) =>
-        azureTaskId && itemByExternalId.has(azureTaskId) ? [{ id, azureTaskId }] : [],
+        azureTaskId && itemByExternalId.has(azureTaskId)
+          ? [{ id, azureTaskId }]
+          : [],
       );
     const sourceIds = new Set([
       ...items.filter(isFactSource).map((item) => item.externalId),
       ...linkedAllocations.map((allocation) => allocation.azureTaskId),
     ]);
-    const azureIds = [...sourceIds].map(Number).filter((id) => Number.isInteger(id) && id > 0 && id <= 2147483647);
-    const changes = await this.importer.getCompletedWorkChanges(azureIds, before, through);
-    const { workItems, totalHours } = rollUpActualHours(items, itemByExternalId, (item) => changes.get(item.externalId) ?? 0);
+    const azureIds = [...sourceIds]
+      .map(Number)
+      .filter((id) => Number.isInteger(id) && id > 0 && id <= 2147483647);
+    const changes = await this.importer.getCompletedWorkChanges(
+      azureIds,
+      before,
+      through,
+    );
+    const { workItems, totalHours } = rollUpActualHours(
+      items,
+      itemByExternalId,
+      (item) => changes.get(item.externalId) ?? 0,
+    );
     const allocations = linkedAllocations.flatMap(({ id, azureTaskId }) => {
       const hours = changes.get(azureTaskId);
       return hours === undefined ? [] : [[id, hours] as const];
     });
-    return { workItems: Object.fromEntries(workItems), allocations: Object.fromEntries(allocations), totalHours, sourceHours: Object.fromEntries(changes) };
+    return {
+      workItems: Object.fromEntries(workItems),
+      allocations: Object.fromEntries(allocations),
+      totalHours,
+      sourceHours: Object.fromEntries(changes),
+    };
   }
 
   async listAzurePeople() {
@@ -469,7 +685,14 @@ export class RoadmapService {
       orderBy: { name: 'asc' },
       select: { externalId: true, name: true, email: true, isMock: true },
     });
-    return { data: people.map((person) => ({ id: person.externalId, name: person.name, email: person.email, isMock: person.isMock })) };
+    return {
+      data: people.map((person) => ({
+        id: person.externalId,
+        name: person.name,
+        email: person.email,
+        isMock: person.isMock,
+      })),
+    };
   }
 
   async syncAzurePeople() {
@@ -488,52 +711,75 @@ export class RoadmapService {
       people.push(...(data.value ?? []));
       continuationToken = response.headers.get('x-ms-continuationtoken');
     } while (continuationToken);
-    const serviceAccountPattern = /\b(?:agent pool service|build service|(?:project )?collection service accounts?|azure devops service|visual studio team services|team foundation service|release management service|adminpbi)\b/i;
+    const serviceAccountPattern =
+      /\b(?:agent pool service|build service|(?:project )?collection service accounts?|azure devops service|visual studio team services|team foundation service|release management service|adminpbi)\b/i;
     const validPeople = people.filter((person) => {
       const name = person.displayName?.trim();
       const identity = `${name ?? ''} ${person.principalName ?? ''}`;
-      return person.subjectKind === 'user'
-        && !person.isDeletedInOrigin
-        && Boolean(name)
-        && Boolean(person.mailAddress || person.principalName)
-        && !serviceAccountPattern.test(identity);
+      return (
+        person.subjectKind === 'user' &&
+        !person.isDeletedInOrigin &&
+        Boolean(name) &&
+        Boolean(person.mailAddress || person.principalName) &&
+        !serviceAccountPattern.test(identity)
+      );
     });
     if (people.length && !validPeople.length) {
-      throw new BadGatewayException('Azure DevOps did not return any eligible human user profiles; the existing user list was left unchanged');
+      throw new BadGatewayException(
+        'Azure DevOps did not return any eligible human user profiles; the existing user list was left unchanged',
+      );
     }
     const externalIds = validPeople.map((person) => person.descriptor);
     await this.prisma.$transaction([
-      ...validPeople.map((person) => this.prisma.roadmapPerson.upsert({
-        where: { externalId: person.descriptor },
-        create: {
-          externalId: person.descriptor,
-          name: person.displayName!,
-          email: person.mailAddress ?? person.principalName ?? null,
-          isMock: false,
-          syncedAt: new Date(),
-        },
-        update: {
-          name: person.displayName!,
-          email: person.mailAddress ?? person.principalName ?? null,
-          isActive: true,
-          isMock: false,
-          syncedAt: new Date(),
-        },
-      })),
+      ...validPeople.map((person) =>
+        this.prisma.roadmapPerson.upsert({
+          where: { externalId: person.descriptor },
+          create: {
+            externalId: person.descriptor,
+            name: person.displayName!,
+            email: person.mailAddress ?? person.principalName ?? null,
+            isMock: false,
+            syncedAt: new Date(),
+          },
+          update: {
+            name: person.displayName!,
+            email: person.mailAddress ?? person.principalName ?? null,
+            isActive: true,
+            isMock: false,
+            syncedAt: new Date(),
+          },
+        }),
+      ),
       this.prisma.roadmapPerson.updateMany({
-        where: { isMock: false, externalId: { notIn: externalIds.length ? externalIds : ['__none__'] } },
+        where: {
+          isMock: false,
+          externalId: {
+            notIn: externalIds.length ? externalIds : ['__none__'],
+          },
+        },
         data: { isActive: false },
       }),
       this.prisma.roadmapRole.updateMany({
-        where: { defaultPerson: { isMock: false }, defaultPersonExternalId: { notIn: externalIds.length ? externalIds : ['__none__'] } },
+        where: {
+          defaultPerson: { isMock: false },
+          defaultPersonExternalId: {
+            notIn: externalIds.length ? externalIds : ['__none__'],
+          },
+        },
         data: { defaultPersonExternalId: null },
       }),
     ]);
-    return { synced: validPeople.length, ignored: people.length - validPeople.length };
+    return {
+      synced: validPeople.length,
+      ignored: people.length - validPeople.length,
+    };
   }
 
   async listRoles(projectId: string) {
-    if (!projectId) throw new BadRequestException('A project must be selected before loading its roles');
+    if (!projectId)
+      throw new BadRequestException(
+        'A project must be selected before loading its roles',
+      );
     return this.listAdminRoles(projectId);
   }
 
@@ -542,7 +788,10 @@ export class RoadmapService {
       where: { projectId: projectId ?? { not: null } },
       orderBy: { name: 'asc' },
       include: {
-        members: { include: { person: true }, orderBy: { person: { name: 'asc' } } },
+        members: {
+          include: { person: true },
+          orderBy: { person: { name: 'asc' } },
+        },
         defaultPerson: true,
         project: { select: { name: true } },
       },
@@ -573,9 +822,17 @@ export class RoadmapService {
   async createRole(dto: { projectId: string; name: string; color?: string }) {
     const name = dto.name.trim();
     if (!name) throw new BadRequestException('Введите название роли.');
-    const project = await this.prisma.roadmapProject.findUnique({ where: { id: dto.projectId }, select: { id: true } });
-    if (!project) throw new NotFoundException('Import the Azure DevOps project before creating its roles');
-    return this.prisma.roadmapRole.create({ data: { projectId: project.id, name, color: dto.color ?? '#6366f1' } });
+    const project = await this.prisma.roadmapProject.findUnique({
+      where: { id: dto.projectId },
+      select: { id: true },
+    });
+    if (!project)
+      throw new NotFoundException(
+        'Import the Azure DevOps project before creating its roles',
+      );
+    return this.prisma.roadmapRole.create({
+      data: { projectId: project.id, name, color: dto.color ?? '#6366f1' },
+    });
   }
 
   async listRoleCatalog() {
@@ -586,54 +843,108 @@ export class RoadmapService {
     });
   }
 
-  async createRoleTemplate(dto: { name: string; color?: string; projectId?: string } & RoleAssignment) {
+  async createRoleTemplate(
+    dto: { name: string; color?: string; projectId?: string } & RoleAssignment,
+  ) {
     const name = dto.name.trim();
     if (!name) throw new BadRequestException('Введите название роли.');
-    if (await this.prisma.roadmapRole.findFirst({ where: { projectId: null, name }, select: { id: true } })) {
-      throw new ConflictException('A role with this name already exists in the role catalog');
+    if (
+      await this.prisma.roadmapRole.findFirst({
+        where: { projectId: null, name },
+        select: { id: true },
+      })
+    ) {
+      throw new ConflictException(
+        'A role with this name already exists in the role catalog',
+      );
     }
     const color = dto.color ?? '#6366f1';
     if (!dto.projectId) {
-      return this.prisma.roadmapRole.create({ data: { projectId: null, name, color }, select: roleCatalogSelect });
+      return this.prisma.roadmapRole.create({
+        data: { projectId: null, name, color },
+        select: roleCatalogSelect,
+      });
     }
 
-    const project = await this.prisma.roadmapProject.findUnique({ where: { id: dto.projectId }, select: { id: true } });
-    if (!project) throw new NotFoundException('Загрузите проект перед добавлением роли.');
+    const project = await this.prisma.roadmapProject.findUnique({
+      where: { id: dto.projectId },
+      select: { id: true },
+    });
+    if (!project)
+      throw new NotFoundException('Загрузите проект перед добавлением роли.');
 
     return this.prisma.$transaction(async (tx) => {
       const members = await this.resolveRolePeople(tx, dto);
-      const template = await tx.roadmapRole.create({ data: { projectId: null, name, color }, select: roleCatalogSelect });
+      const template = await tx.roadmapRole.create({
+        data: { projectId: null, name, color },
+        select: roleCatalogSelect,
+      });
       await tx.roadmapRole.create({
-        data: { projectId: project.id, name, color, ...this.assignedRoleData(dto, members) },
+        data: {
+          projectId: project.id,
+          name,
+          color,
+          ...this.assignedRoleData(dto, members),
+        },
       });
       return template;
     });
   }
 
-  async addRoleFromCatalog(projectId: string, templateId: string, assignment: RoleAssignment = {}) {
+  async addRoleFromCatalog(
+    projectId: string,
+    templateId: string,
+    assignment: RoleAssignment = {},
+  ) {
     const [project, template] = await Promise.all([
-      this.prisma.roadmapProject.findUnique({ where: { id: projectId }, select: { id: true } }),
-      this.prisma.roadmapRole.findFirst({ where: { id: templateId, projectId: null } }),
+      this.prisma.roadmapProject.findUnique({
+        where: { id: projectId },
+        select: { id: true },
+      }),
+      this.prisma.roadmapRole.findFirst({
+        where: { id: templateId, projectId: null },
+      }),
     ]);
-    if (!project) throw new NotFoundException('Import the Azure DevOps project before adding roles');
-    if (!template) throw new NotFoundException('The selected role is not in the role catalog');
-    if (await this.prisma.roadmapRole.findFirst({ where: { projectId, name: template.name }, select: { id: true } })) {
-      throw new ConflictException('This project already has a role with this name');
+    if (!project)
+      throw new NotFoundException(
+        'Import the Azure DevOps project before adding roles',
+      );
+    if (!template)
+      throw new NotFoundException(
+        'The selected role is not in the role catalog',
+      );
+    if (
+      await this.prisma.roadmapRole.findFirst({
+        where: { projectId, name: template.name },
+        select: { id: true },
+      })
+    ) {
+      throw new ConflictException(
+        'This project already has a role with this name',
+      );
     }
     return this.prisma.$transaction(async (tx) => {
       const members = await this.resolveRolePeople(tx, assignment);
       return tx.roadmapRole.create({
         data: {
-          projectId, name: template.name, color: template.color, isMock: template.isMock,
+          projectId,
+          name: template.name,
+          color: template.color,
+          isMock: template.isMock,
           ...this.assignedRoleData(assignment, members),
         },
       });
     });
   }
 
-  private assignedRoleData(dto: RoleAssignment, members: { personId: string; allocationPercent: number }[] | undefined) {
+  private assignedRoleData(
+    dto: RoleAssignment,
+    members: { personId: string; allocationPercent: number }[] | undefined,
+  ) {
     return {
-      defaultPersonExternalId: dto.memberAllocations ? null : dto.personExternalId ?? null,
+      defaultPersonExternalId: dto.memberAllocations
+        ? null
+        : (dto.personExternalId ?? null),
       members: members?.length ? { createMany: { data: members } } : undefined,
     };
   }
@@ -641,7 +952,20 @@ export class RoadmapService {
   async adminPeople() {
     const people = await this.prisma.roadmapPerson.findMany({
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
-      include: { roleMemberships: { include: { role: { select: { id: true, name: true, color: true, project: { select: { name: true } } } } } } },
+      include: {
+        roleMemberships: {
+          include: {
+            role: {
+              select: {
+                id: true,
+                name: true,
+                color: true,
+                project: { select: { name: true } },
+              },
+            },
+          },
+        },
+      },
     });
     return people.map((person) => ({
       id: person.externalId,
@@ -669,27 +993,46 @@ export class RoadmapService {
     const organization = encodeURIComponent(credentials.organization);
     const descriptor = encodeURIComponent(externalId);
     const url = `https://vssps.dev.azure.com/${organization}/_apis/graph/Subjects/${descriptor}/avatars?size=medium&api-version=${this.apiVersion}`;
-    const result = await this.integration.requestJson<AzureAvatar | null>(
-      url,
-      { signal: AbortSignal.timeout(5_000), redirect: 'error' },
-      credentials,
-    ).catch((error: unknown) => {
-      if (error instanceof AzureDevOpsHttpError && error.httpStatus === 404) return null;
-      throw error;
-    });
+    const result = await this.integration
+      .requestJson<AzureAvatar | null>(
+        url,
+        { signal: AbortSignal.timeout(5_000), redirect: 'error' },
+        credentials,
+      )
+      .catch((error: unknown) => {
+        if (error instanceof AzureDevOpsHttpError && error.httpStatus === 404)
+          return null;
+        throw error;
+      });
     const value = result?.value;
-    if (result?.isAutoGenerated || typeof value !== 'string' || value.length > Math.ceil(MAX_AVATAR_BYTES / 3) * 4) {
+    if (
+      result?.isAutoGenerated ||
+      typeof value !== 'string' ||
+      value.length > Math.ceil(MAX_AVATAR_BYTES / 3) * 4
+    ) {
       return { avatar: null };
     }
 
     const image = Buffer.from(value, 'base64');
     if (image.length > MAX_AVATAR_BYTES) return { avatar: null };
-    const mimeType = image.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE) ? 'image/png'
-      : image.subarray(0, JPEG_SIGNATURE.length).equals(JPEG_SIGNATURE) ? 'image/jpeg' : null;
-    return { avatar: mimeType ? `data:${mimeType};base64,${image.toString('base64')}` : null };
+    const mimeType = image
+      .subarray(0, PNG_SIGNATURE.length)
+      .equals(PNG_SIGNATURE)
+      ? 'image/png'
+      : image.subarray(0, JPEG_SIGNATURE.length).equals(JPEG_SIGNATURE)
+        ? 'image/jpeg'
+        : null;
+    return {
+      avatar: mimeType
+        ? `data:${mimeType};base64,${image.toString('base64')}`
+        : null,
+    };
   }
 
-  async updateRole(id: string, dto: { name?: string; color?: string } & RoleAssignment) {
+  async updateRole(
+    id: string,
+    dto: { name?: string; color?: string } & RoleAssignment,
+  ) {
     const name = dto.name?.trim();
     if (name === '') throw new BadRequestException('Введите название роли.');
 
@@ -698,21 +1041,27 @@ export class RoadmapService {
         where: { id },
         select: { projectId: true, defaultPersonExternalId: true },
       });
-      if (!role?.projectId) throw new NotFoundException('Роль в проекте не найдена.');
+      if (!role?.projectId)
+        throw new NotFoundException('Роль в проекте не найдена.');
 
       const members = await this.resolveRolePeople(tx, dto, id);
-      const defaultPersonExternalId = dto.memberAllocations !== undefined
-        ? null
-        : dto.personExternalId !== undefined
-          ? dto.personExternalId
-          : dto.personExternalIds && role.defaultPersonExternalId && !dto.personExternalIds.includes(role.defaultPersonExternalId)
-            ? null
-            : undefined;
+      const defaultPersonExternalId =
+        dto.memberAllocations !== undefined
+          ? null
+          : dto.personExternalId !== undefined
+            ? dto.personExternalId
+            : dto.personExternalIds &&
+                role.defaultPersonExternalId &&
+                !dto.personExternalIds.includes(role.defaultPersonExternalId)
+              ? null
+              : undefined;
 
       return tx.roadmapRole.update({
         where: { id },
         data: {
-          name, color: dto.color, defaultPersonExternalId,
+          name,
+          color: dto.color,
+          defaultPersonExternalId,
           members: members && {
             deleteMany: {},
             createMany: members.length ? { data: members } : undefined,
@@ -722,51 +1071,121 @@ export class RoadmapService {
     });
   }
 
-  private async resolveRolePeople(tx: Prisma.TransactionClient, dto: RoleAssignment, roleId?: string) {
+  private async resolveRolePeople(
+    tx: Prisma.TransactionClient,
+    dto: RoleAssignment,
+    roleId?: string,
+  ) {
     if (dto.memberAllocations !== undefined) {
       const allocations = dto.memberAllocations;
-      if (!Array.isArray(allocations) || dto.personExternalIds !== undefined || dto.personExternalId) {
-        throw new BadRequestException('Укажите сотрудников и проценты участия единым списком.');
+      if (
+        !Array.isArray(allocations) ||
+        dto.personExternalIds !== undefined ||
+        dto.personExternalId
+      ) {
+        throw new BadRequestException(
+          'Укажите сотрудников и проценты участия единым списком.',
+        );
       }
-      const invalid = allocations.some((member) => !member || typeof member.personExternalId !== 'string'
-        || !member.personExternalId.trim() || !Number.isFinite(member.allocationPercent)
-        || member.allocationPercent < 0 || member.allocationPercent > 100
-        || Math.abs(member.allocationPercent * 100 - Math.round(member.allocationPercent * 100)) > 1e-8);
-      if (invalid || new Set(allocations.map((member) => member.personExternalId)).size !== allocations.length) {
-        throw new BadRequestException('Каждый сотрудник должен быть указан один раз с процентом от 0 до 100 и не более чем двумя знаками после запятой.');
+      const invalid = allocations.some(
+        (member) =>
+          !member ||
+          typeof member.personExternalId !== 'string' ||
+          !member.personExternalId.trim() ||
+          !Number.isFinite(member.allocationPercent) ||
+          member.allocationPercent < 0 ||
+          member.allocationPercent > 100 ||
+          Math.abs(
+            member.allocationPercent * 100 -
+              Math.round(member.allocationPercent * 100),
+          ) > 1e-8,
+      );
+      if (
+        invalid ||
+        new Set(allocations.map((member) => member.personExternalId)).size !==
+          allocations.length
+      ) {
+        throw new BadRequestException(
+          'Каждый сотрудник должен быть указан один раз с процентом от 0 до 100 и не более чем двумя знаками после запятой.',
+        );
       }
-      if (allocations.length && allocations.reduce((sum, member) => sum + Math.round(member.allocationPercent * 100), 0) !== 10000) {
-        throw new BadRequestException('Сумма участия сотрудников должна быть равна 100%.');
+      if (
+        allocations.length &&
+        allocations.reduce(
+          (sum, member) => sum + Math.round(member.allocationPercent * 100),
+          0,
+        ) !== 10000
+      ) {
+        throw new BadRequestException(
+          'Сумма участия сотрудников должна быть равна 100%.',
+        );
       }
     }
-    if (!dto.personExternalId && dto.personExternalIds === undefined && dto.memberAllocations === undefined) return undefined;
+    if (
+      !dto.personExternalId &&
+      dto.personExternalIds === undefined &&
+      dto.memberAllocations === undefined
+    )
+      return undefined;
 
-    const externalIds = new Set(dto.memberAllocations?.map((member) => member.personExternalId) ?? dto.personExternalIds ?? []);
-    if (roleId && dto.personExternalId && dto.personExternalIds === undefined && dto.memberAllocations === undefined) {
-      const existing = await tx.roadmapRoleMember.findMany({ where: { roleId }, select: { person: { select: { externalId: true } } } });
+    const externalIds = new Set(
+      dto.memberAllocations?.map((member) => member.personExternalId) ??
+        dto.personExternalIds ??
+        [],
+    );
+    if (
+      roleId &&
+      dto.personExternalId &&
+      dto.personExternalIds === undefined &&
+      dto.memberAllocations === undefined
+    ) {
+      const existing = await tx.roadmapRoleMember.findMany({
+        where: { roleId },
+        select: { person: { select: { externalId: true } } },
+      });
       existing.forEach(({ person }) => externalIds.add(person.externalId));
     }
     if (dto.personExternalId) externalIds.add(dto.personExternalId);
     const people = await tx.roadmapPerson.findMany({
       where: { externalId: { in: [...externalIds] } },
       select: {
-        id: true, externalId: true, isActive: true,
-        roleMemberships: roleId ? { where: { roleId }, select: { id: true } } : false,
+        id: true,
+        externalId: true,
+        isActive: true,
+        roleMemberships: roleId
+          ? { where: { roleId }, select: { id: true } }
+          : false,
       },
     });
-    const invalid = people.some((person) => !person.isActive && (
-      person.externalId === dto.personExternalId || !person.roleMemberships?.length
-    ));
+    const invalid = people.some(
+      (person) =>
+        !person.isActive &&
+        (person.externalId === dto.personExternalId ||
+          !person.roleMemberships?.length),
+    );
     if (invalid || people.length !== externalIds.size) {
-      throw new BadRequestException('Проверьте, что выбранные сотрудники активны и есть в справочнике.');
+      throw new BadRequestException(
+        'Проверьте, что выбранные сотрудники активны и есть в справочнике.',
+      );
     }
-    const specified = new Map(dto.memberAllocations?.map((member) => [member.personExternalId, member.allocationPercent]));
-    const peopleByExternalId = new Map(people.map((person) => [person.externalId, person]));
-    const equalCents = externalIds.size ? Math.floor(10000 / externalIds.size) : 0;
+    const specified = new Map(
+      dto.memberAllocations?.map((member) => [
+        member.personExternalId,
+        member.allocationPercent,
+      ]),
+    );
+    const peopleByExternalId = new Map(
+      people.map((person) => [person.externalId, person]),
+    );
+    const equalCents = externalIds.size
+      ? Math.floor(10000 / externalIds.size)
+      : 0;
     const remainder = externalIds.size ? 10000 % externalIds.size : 0;
     return [...externalIds].map((externalId, index) => ({
       personId: peopleByExternalId.get(externalId)!.id,
-      allocationPercent: specified.get(externalId) ?? (equalCents + (index < remainder ? 1 : 0)) / 100,
+      allocationPercent:
+        specified.get(externalId) ??
+        (equalCents + (index < remainder ? 1 : 0)) / 100,
     }));
   }
 
@@ -774,34 +1193,51 @@ export class RoadmapService {
     await this.updateRole(roleId, { personExternalIds });
     const role = await this.prisma.roadmapRole.findUnique({
       where: { id: roleId },
-      include: { members: { include: { person: true }, orderBy: { person: { name: 'asc' } } } },
+      include: {
+        members: {
+          include: { person: true },
+          orderBy: { person: { name: 'asc' } },
+        },
+      },
     });
-    return role ? {
-      id: role.id,
-      projectId: role.projectId,
-      name: role.name,
-      color: role.color,
-      isMock: role.isMock,
-      members: role.members.map(({ person, allocationPercent }) => ({
-        personExternalId: person.externalId,
-        personName: person.name,
-        personEmail: person.email,
-        personIsActive: person.isActive,
-        personIsMock: person.isMock,
-        allocationPercent: Number(allocationPercent),
-      })),
-    } : null;
+    return role
+      ? {
+          id: role.id,
+          projectId: role.projectId,
+          name: role.name,
+          color: role.color,
+          isMock: role.isMock,
+          members: role.members.map(({ person, allocationPercent }) => ({
+            personExternalId: person.externalId,
+            personName: person.name,
+            personEmail: person.email,
+            personIsActive: person.isActive,
+            personIsMock: person.isMock,
+            allocationPercent: Number(allocationPercent),
+          })),
+        }
+      : null;
   }
 
   async setRoleDefaultPerson(roleId: string, personExternalId: string | null) {
-    const role = await this.prisma.roadmapRole.findUnique({ where: { id: roleId }, select: { id: true, projectId: true } });
-    if (!role || !role.projectId) throw new NotFoundException('Project role was not found');
+    const role = await this.prisma.roadmapRole.findUnique({
+      where: { id: roleId },
+      select: { id: true, projectId: true },
+    });
+    if (!role || !role.projectId)
+      throw new NotFoundException('Project role was not found');
     if (personExternalId) {
       const member = await this.prisma.roadmapRoleMember.findFirst({
-        where: { roleId, person: { externalId: personExternalId, isActive: true } },
+        where: {
+          roleId,
+          person: { externalId: personExternalId, isActive: true },
+        },
         select: { id: true },
       });
-      if (!member) throw new BadRequestException('The default person must be active and assigned to this role');
+      if (!member)
+        throw new BadRequestException(
+          'The default person must be active and assigned to this role',
+        );
     }
     const updated = await this.prisma.roadmapRole.update({
       where: { id: roleId },
@@ -822,7 +1258,9 @@ export class RoadmapService {
 
   async deleteRole(id: string) {
     if (await this.prisma.roadmapAllocation.count({ where: { roleId: id } })) {
-      throw new ConflictException('Роль уже используется в плане проекта. Сначала снимите её назначения с фич.');
+      throw new ConflictException(
+        'Роль уже используется в плане проекта. Сначала снимите её назначения с фич.',
+      );
     }
     await this.prisma.roadmapRole.delete({ where: { id } });
     return { deleted: true };
@@ -837,172 +1275,299 @@ export class RoadmapService {
     personEmail?: string;
     quarterKey: string;
     estimatedHours: number;
-    periods: { monthKey?: string; label: string; startsAt: string; endsAt: string; hours: number }[];
+    periods: {
+      monthKey?: string;
+      label: string;
+      startsAt: string;
+      endsAt: string;
+      hours: number;
+    }[];
   }) {
-    const monthKeys = dto.periods.flatMap((period) => period.monthKey ? [period.monthKey] : []);
-    if (new Set(monthKeys).size !== monthKeys.length) throw new BadRequestException('Only one plan value is allowed per allocation and month');
+    const monthKeys = dto.periods.flatMap((period) =>
+      period.monthKey ? [period.monthKey] : [],
+    );
+    if (new Set(monthKeys).size !== monthKeys.length)
+      throw new BadRequestException(
+        'Only one plan value is allowed per allocation and month',
+      );
     for (const period of dto.periods) {
       if (period.monthKey) {
         const [year, month] = period.monthKey.split('-').map(Number);
         const monthStart = `${period.monthKey}-01`;
-        const monthEnd = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
-        if (period.startsAt.slice(0, 10) !== monthStart || period.endsAt.slice(0, 10) !== monthEnd) {
-          throw new BadRequestException('A monthly plan must cover exactly one calendar month');
+        const monthEnd = new Date(Date.UTC(year, month, 0))
+          .toISOString()
+          .slice(0, 10);
+        if (
+          period.startsAt.slice(0, 10) !== monthStart ||
+          period.endsAt.slice(0, 10) !== monthEnd
+        ) {
+          throw new BadRequestException(
+            'A monthly plan must cover exactly one calendar month',
+          );
         }
         if (Math.abs(period.hours * 2 - Math.round(period.hours * 2)) > 1e-8) {
-          throw new BadRequestException('Monthly plan values must use half-hour increments');
+          throw new BadRequestException(
+            'Monthly plan values must use half-hour increments',
+          );
         }
       }
     }
-    if (dto.periods.reduce((sum, period) => sum + period.hours, 0) > dto.estimatedHours + 1e-8) {
-      throw new BadRequestException('Planned hours cannot exceed the allocation estimate');
+    if (
+      dto.periods.reduce((sum, period) => sum + period.hours, 0) >
+      dto.estimatedHours + 1e-8
+    ) {
+      throw new BadRequestException(
+        'Planned hours cannot exceed the allocation estimate',
+      );
     }
-    const allocation = await this.prisma.$transaction(async (tx) => {
-      const workItem = await tx.roadmapWorkItem.findUnique({
-        where: { id: dto.workItemId },
-        select: { projectId: true, type: true },
-      });
-      if (!workItem) throw new NotFoundException('Roadmap work item was not found');
-      assertAssignableWorkItem(workItem.type);
-      const membership = await tx.roadmapRoleMember.findFirst({
-        where: { roleId: dto.roleId, role: { projectId: workItem.projectId }, person: { externalId: dto.personExternalId, isActive: true } },
-        include: { person: true },
-      });
-      if (!membership) throw new BadRequestException('The person must be active and assigned to this role');
+    const allocation = await this.prisma
+      .$transaction(
+        async (tx) => {
+          const workItem = await tx.roadmapWorkItem.findUnique({
+            where: { id: dto.workItemId },
+            select: { projectId: true, type: true },
+          });
+          if (!workItem)
+            throw new NotFoundException('Roadmap work item was not found');
+          assertAssignableWorkItem(workItem.type);
+          const membership = await tx.roadmapRoleMember.findFirst({
+            where: {
+              roleId: dto.roleId,
+              role: { projectId: workItem.projectId },
+              person: { externalId: dto.personExternalId, isActive: true },
+            },
+            include: { person: true },
+          });
+          if (!membership)
+            throw new BadRequestException(
+              'The person must be active and assigned to this role',
+            );
 
-      const key = {
-        workItemId: dto.workItemId,
-        roleId: dto.roleId,
-        personExternalId: dto.personExternalId,
-        quarterKey: dto.quarterKey,
-      };
-      const values = {
-        personName: membership.person.name,
-        personEmail: membership.person.email,
-        estimatedHours: dto.estimatedHours,
-        ...this.azureSync.pendingUpdate,
-      };
+          const key = {
+            workItemId: dto.workItemId,
+            roleId: dto.roleId,
+            personExternalId: dto.personExternalId,
+            quarterKey: dto.quarterKey,
+          };
+          const values = {
+            personName: membership.person.name,
+            personEmail: membership.person.email,
+            estimatedHours: dto.estimatedHours,
+            ...this.azureSync.pendingUpdate,
+          };
 
-      let saved;
-      if (dto.allocationId) {
-        const current = await tx.roadmapAllocation.findUnique({
-          where: { id: dto.allocationId },
-          select: { workItemId: true, roleId: true },
-        });
-        if (!current || current.workItemId !== dto.workItemId || current.roleId !== dto.roleId) {
-          throw new NotFoundException('Roadmap allocation was not found');
+          let saved;
+          if (dto.allocationId) {
+            const current = await tx.roadmapAllocation.findUnique({
+              where: { id: dto.allocationId },
+              select: { workItemId: true, roleId: true },
+            });
+            if (
+              !current ||
+              current.workItemId !== dto.workItemId ||
+              current.roleId !== dto.roleId
+            ) {
+              throw new NotFoundException('Roadmap allocation was not found');
+            }
+            const duplicate = await tx.roadmapAllocation.findFirst({
+              where: { ...key, id: { not: dto.allocationId } },
+              select: { id: true },
+            });
+            if (duplicate)
+              throw new ConflictException(
+                'This person already has an estimate for this work item, role and quarter',
+              );
+            saved = await tx.roadmapAllocation.update({
+              where: { id: dto.allocationId },
+              data: {
+                ...values,
+                personExternalId: dto.personExternalId,
+                quarterKey: dto.quarterKey,
+              },
+            });
+          } else {
+            saved = await tx.roadmapAllocation.upsert({
+              where: { workItemId_roleId_personExternalId_quarterKey: key },
+              create: { ...key, ...values },
+              update: values,
+            });
+          }
+
+          await tx.roadmapPeriodAllocation.deleteMany({
+            where: { allocationId: saved.id },
+          });
+          if (dto.periods.length) {
+            await tx.roadmapPeriodAllocation.createMany({
+              data: dto.periods.map((period) => ({
+                allocationId: saved.id,
+                monthKey: period.monthKey ?? null,
+                label: period.label,
+                startsAt: new Date(period.startsAt),
+                endsAt: new Date(period.endsAt),
+                hours: period.hours,
+              })),
+            });
+          }
+          return saved;
+        },
+        { isolationLevel: 'Serializable' },
+      )
+      .catch((error: unknown) => {
+        if (
+          error instanceof Error &&
+          'code' in error &&
+          error.code === 'P2034'
+        ) {
+          throw new ConflictException(
+            'План изменился одновременно. Обновите страницу и повторите ввод.',
+          );
         }
-        const duplicate = await tx.roadmapAllocation.findFirst({
-          where: { ...key, id: { not: dto.allocationId } },
-          select: { id: true },
-        });
-        if (duplicate) throw new ConflictException('This person already has an estimate for this work item, role and quarter');
-        saved = await tx.roadmapAllocation.update({
-          where: { id: dto.allocationId },
-          data: { ...values, personExternalId: dto.personExternalId, quarterKey: dto.quarterKey },
-        });
-      } else {
-        saved = await tx.roadmapAllocation.upsert({
-          where: { workItemId_roleId_personExternalId_quarterKey: key },
-          create: { ...key, ...values },
-          update: values,
-        });
-      }
-
-      await tx.roadmapPeriodAllocation.deleteMany({ where: { allocationId: saved.id } });
-      if (dto.periods.length) {
-        await tx.roadmapPeriodAllocation.createMany({
-          data: dto.periods.map((period) => ({
-            allocationId: saved.id,
-            monthKey: period.monthKey ?? null,
-            label: period.label,
-            startsAt: new Date(period.startsAt),
-            endsAt: new Date(period.endsAt),
-            hours: period.hours,
-          })),
-        });
-      }
-      return saved;
-    }, { isolationLevel: 'Serializable' }).catch((error: unknown) => {
-      if (error instanceof Error && 'code' in error && error.code === 'P2034') {
-        throw new ConflictException('План изменился одновременно. Обновите страницу и повторите ввод.');
-      }
-      throw error;
-    });
+        throw error;
+      });
     await this.azureSync.onAllocationSaved(allocation.id);
     return { ...allocation, periods: dto.periods };
   }
 
   async rebalanceAllocations(ids: string[]) {
-    const changed = await this.prisma.$transaction(async (tx) => {
-      const rows = await tx.roadmapAllocation.findMany({
-        where: { id: { in: ids } },
-        include: { workItem: { select: { type: true } }, periods: { orderBy: [{ startsAt: 'asc' }, { id: 'asc' }] } },
-        orderBy: { id: 'asc' },
-      });
-      const first = rows[0];
-      if (!first || rows.length < 2 || rows.length !== ids.length || rows.some((row) =>
-        row.workItemId !== first.workItemId || row.roleId !== first.roleId || row.quarterKey !== first.quarterKey
-      )) {
-        throw new ConflictException('Состав назначений изменился. Обновите план и повторите действие.');
-      }
-      assertAssignableWorkItem(first.workItem.type);
-      const group = { workItemId: first.workItemId, roleId: first.roleId, quarterKey: first.quarterKey };
-      if (await tx.roadmapAllocation.count({ where: group }) !== ids.length) {
-        throw new ConflictException('Состав назначений изменился. Обновите план и повторите действие.');
-      }
-      const balanced = rebalanceAllocations(rows.map((row) => ({
-        id: row.id,
-        estimatedHours: row.estimatedHours.toString(),
-        periods: row.periods.map((period) => ({
-          monthKey: period.monthKey,
-          label: period.label,
-          startsAt: period.startsAt.toISOString(),
-          endsAt: period.endsAt.toISOString(),
-          hours: period.hours.toString(),
-        })),
-      })));
-      if (!balanced) throw new BadRequestException('Часы нельзя распределить с сохранением текущей оценки и шага 0,5 ч.');
-
-      for (const row of balanced) {
-        await tx.roadmapAllocation.update({
-          where: { id: row.id },
-          data: { estimatedHours: row.estimatedHours, ...this.azureSync.pendingUpdate },
-        });
-        await tx.roadmapPeriodAllocation.deleteMany({ where: { allocationId: row.id } });
-        if (row.periods.length) {
-          await tx.roadmapPeriodAllocation.createMany({
-            data: row.periods.map((period) => ({
-              ...period,
-              allocationId: row.id,
-              startsAt: new Date(period.startsAt),
-              endsAt: new Date(period.endsAt),
-            })),
+    const changed = await this.prisma
+      .$transaction(
+        async (tx) => {
+          const rows = await tx.roadmapAllocation.findMany({
+            where: { id: { in: ids } },
+            include: {
+              workItem: { select: { type: true } },
+              periods: { orderBy: [{ startsAt: 'asc' }, { id: 'asc' }] },
+            },
+            orderBy: { id: 'asc' },
           });
+          const first = rows[0];
+          if (
+            !first ||
+            rows.length < 2 ||
+            rows.length !== ids.length ||
+            rows.some(
+              (row) =>
+                row.workItemId !== first.workItemId ||
+                row.roleId !== first.roleId ||
+                row.quarterKey !== first.quarterKey,
+            )
+          ) {
+            throw new ConflictException(
+              'Состав назначений изменился. Обновите план и повторите действие.',
+            );
+          }
+          assertAssignableWorkItem(first.workItem.type);
+          const group = {
+            workItemId: first.workItemId,
+            roleId: first.roleId,
+            quarterKey: first.quarterKey,
+          };
+          if (
+            (await tx.roadmapAllocation.count({ where: group })) !== ids.length
+          ) {
+            throw new ConflictException(
+              'Состав назначений изменился. Обновите план и повторите действие.',
+            );
+          }
+          const balanced = rebalanceAllocations(
+            rows.map((row) => ({
+              id: row.id,
+              estimatedHours: row.estimatedHours.toString(),
+              periods: row.periods.map((period) => ({
+                monthKey: period.monthKey,
+                label: period.label,
+                startsAt: period.startsAt.toISOString(),
+                endsAt: period.endsAt.toISOString(),
+                hours: period.hours.toString(),
+              })),
+            })),
+          );
+          if (!balanced)
+            throw new BadRequestException(
+              'Часы нельзя распределить с сохранением текущей оценки и шага 0,5 ч.',
+            );
+
+          for (const row of balanced) {
+            await tx.roadmapAllocation.update({
+              where: { id: row.id },
+              data: {
+                estimatedHours: row.estimatedHours,
+                ...this.azureSync.pendingUpdate,
+              },
+            });
+            await tx.roadmapPeriodAllocation.deleteMany({
+              where: { allocationId: row.id },
+            });
+            if (row.periods.length) {
+              await tx.roadmapPeriodAllocation.createMany({
+                data: row.periods.map((period) => ({
+                  ...period,
+                  allocationId: row.id,
+                  startsAt: new Date(period.startsAt),
+                  endsAt: new Date(period.endsAt),
+                })),
+              });
+            }
+          }
+          return balanced.map(({ id }) => id);
+        },
+        { isolationLevel: 'Serializable' },
+      )
+      .catch((error: unknown) => {
+        if (
+          error instanceof Error &&
+          'code' in error &&
+          error.code === 'P2034'
+        ) {
+          throw new ConflictException(
+            'План изменился одновременно. Обновите страницу и повторите ввод.',
+          );
         }
-      }
-      return balanced.map(({ id }) => id);
-    }, { isolationLevel: 'Serializable' }).catch((error: unknown) => {
-      if (error instanceof Error && 'code' in error && error.code === 'P2034') {
-        throw new ConflictException('План изменился одновременно. Обновите страницу и повторите ввод.');
-      }
-      throw error;
-    });
-    await Promise.all(changed.map((id) => this.azureSync.onAllocationSaved(id)));
+        throw error;
+      });
+    await Promise.all(
+      changed.map((id) => this.azureSync.onAllocationSaved(id)),
+    );
     return { updated: changed.length };
   }
 
-  async saveAllocationQuarter(allocationId: string, quarterKey: string, months: { monthKey: string; hours: number }[]) {
+  async saveAllocationQuarter(
+    allocationId: string,
+    quarterKey: string,
+    months: { monthKey: string; hours: number }[],
+  ) {
     const match = /^(\d{4})-Q([1-4])$/.exec(quarterKey);
-    if (!match) throw new BadRequestException('Quarter must use YYYY-Qn format');
+    if (!match)
+      throw new BadRequestException('Quarter must use YYYY-Qn format');
     const year = Number(match[1]);
     const quarter = Number(match[2]);
-    const expectedMonths = Array.from({ length: 3 }, (_, index) => `${year}-${String((quarter - 1) * 3 + index + 1).padStart(2, '0')}`);
-    if (months.length !== 3 || new Set(months.map((month) => month.monthKey)).size !== 3 || expectedMonths.some((key) => !months.some((month) => month.monthKey === key))) {
-      throw new BadRequestException('A quarterly plan must include each of its three calendar months exactly once');
+    const expectedMonths = Array.from(
+      { length: 3 },
+      (_, index) =>
+        `${year}-${String((quarter - 1) * 3 + index + 1).padStart(2, '0')}`,
+    );
+    if (
+      months.length !== 3 ||
+      new Set(months.map((month) => month.monthKey)).size !== 3 ||
+      expectedMonths.some(
+        (key) => !months.some((month) => month.monthKey === key),
+      )
+    ) {
+      throw new BadRequestException(
+        'A quarterly plan must include each of its three calendar months exactly once',
+      );
     }
-    if (months.some((month) => !Number.isFinite(month.hours) || month.hours < 0 || Math.abs(month.hours * 2 - Math.round(month.hours * 2)) > 1e-8)) {
-      throw new BadRequestException('Monthly plan values must be non-negative half-hour increments');
+    if (
+      months.some(
+        (month) =>
+          !Number.isFinite(month.hours) ||
+          month.hours < 0 ||
+          Math.abs(month.hours * 2 - Math.round(month.hours * 2)) > 1e-8,
+      )
+    ) {
+      throw new BadRequestException(
+        'Monthly plan values must be non-negative half-hour increments',
+      );
     }
 
     const normalized = months.map(({ monthKey, hours }) => {
@@ -1014,41 +1579,69 @@ export class RoadmapService {
         hours,
         startsAt,
         endsAt,
-        label: new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(startsAt),
+        label: new Intl.DateTimeFormat('ru-RU', {
+          month: 'long',
+          year: 'numeric',
+          timeZone: 'UTC',
+        }).format(startsAt),
       };
     });
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        const allocation = await tx.roadmapAllocation.findUnique({
-          where: { id: allocationId },
-          select: { id: true, estimatedHours: true, workItem: { select: { type: true } }, periods: { select: { monthKey: true, hours: true } } },
-        });
-        if (!allocation) throw new NotFoundException('Roadmap allocation was not found');
-        assertAssignableWorkItem(allocation.workItem.type);
-
-        const monthKeys = normalized.map((month) => month.monthKey);
-        const alreadyPlannedThisQuarter = allocation.periods
-          .filter((period) => period.monthKey && monthKeys.includes(period.monthKey))
-          .reduce((sum, period) => sum + Number(period.hours), 0);
-        const totalPlanned = allocation.periods.reduce((sum, period) => sum + Number(period.hours), 0);
-        const nextTotal = totalPlanned - alreadyPlannedThisQuarter + normalized.reduce((sum, month) => sum + month.hours, 0);
-        if (nextTotal > Number(allocation.estimatedHours) + 1e-8) {
-          throw new BadRequestException(`План превышает оценку на ${Math.ceil((nextTotal - Number(allocation.estimatedHours)) * 2) / 2} ч`);
-        }
-
-        await tx.roadmapPeriodAllocation.deleteMany({ where: { allocationId, monthKey: { in: monthKeys } } });
-        const plannedMonths = normalized.filter((month) => month.hours > 0);
-        if (plannedMonths.length) {
-          await tx.roadmapPeriodAllocation.createMany({
-            data: plannedMonths.map((month) => ({ allocationId, ...month })),
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const allocation = await tx.roadmapAllocation.findUnique({
+            where: { id: allocationId },
+            select: {
+              id: true,
+              estimatedHours: true,
+              workItem: { select: { type: true } },
+              periods: { select: { monthKey: true, hours: true } },
+            },
           });
-        }
-        return plannedMonths;
-      }, { isolationLevel: 'Serializable' });
+          if (!allocation)
+            throw new NotFoundException('Roadmap allocation was not found');
+          assertAssignableWorkItem(allocation.workItem.type);
+
+          const monthKeys = normalized.map((month) => month.monthKey);
+          const alreadyPlannedThisQuarter = allocation.periods
+            .filter(
+              (period) =>
+                period.monthKey && monthKeys.includes(period.monthKey),
+            )
+            .reduce((sum, period) => sum + Number(period.hours), 0);
+          const totalPlanned = allocation.periods.reduce(
+            (sum, period) => sum + Number(period.hours),
+            0,
+          );
+          const nextTotal =
+            totalPlanned -
+            alreadyPlannedThisQuarter +
+            normalized.reduce((sum, month) => sum + month.hours, 0);
+          if (nextTotal > Number(allocation.estimatedHours) + 1e-8) {
+            throw new BadRequestException(
+              `План превышает оценку на ${Math.ceil((nextTotal - Number(allocation.estimatedHours)) * 2) / 2} ч`,
+            );
+          }
+
+          await tx.roadmapPeriodAllocation.deleteMany({
+            where: { allocationId, monthKey: { in: monthKeys } },
+          });
+          const plannedMonths = normalized.filter((month) => month.hours > 0);
+          if (plannedMonths.length) {
+            await tx.roadmapPeriodAllocation.createMany({
+              data: plannedMonths.map((month) => ({ allocationId, ...month })),
+            });
+          }
+          return plannedMonths;
+        },
+        { isolationLevel: 'Serializable' },
+      );
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'P2034') {
-        throw new ConflictException('План изменился одновременно. Обновите страницу и повторите ввод.');
+        throw new ConflictException(
+          'План изменился одновременно. Обновите страницу и повторите ввод.',
+        );
       }
       throw error;
     }

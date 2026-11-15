@@ -15,12 +15,10 @@ function setup() {
   }));
   const tx = {
     roadmapRole: {
-      findUnique: jest
-        .fn()
-        .mockResolvedValue({
-          projectId: 'project',
-          defaultPersonExternalId: 'a',
-        }),
+      findUnique: jest.fn().mockResolvedValue({
+        projectId: 'project',
+        defaultPersonExternalId: 'a',
+      }),
       update: jest.fn().mockResolvedValue({ id: 'role' }),
     },
     roadmapRoleMember: {

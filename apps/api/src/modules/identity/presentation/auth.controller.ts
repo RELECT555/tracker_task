@@ -25,6 +25,8 @@ export class AuthController {
 
   @Get('me')
   me(@CurrentUser() user: { id: string }) {
-    return this.getMeHandler.execute(user.id).then((profile) => ({ user: profile }));
+    return this.getMeHandler
+      .execute(user.id)
+      .then((profile) => ({ user: profile }));
   }
 }

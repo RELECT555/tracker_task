@@ -13,7 +13,11 @@ const project = {
   syncedAt: new Date('2026-11-13T14:55:00.000Z'),
   url: 'https://dev.azure.com/example/_apis/projects/azure-project',
 };
-const credentials = { organizationUrl: 'https://dev.azure.com/example', organization: 'example', pat: 'test-pat' };
+const credentials = {
+  organizationUrl: 'https://dev.azure.com/example',
+  organization: 'example',
+  pat: 'test-pat',
+};
 
 function setup(projects = [project]) {
   const prisma = {
@@ -28,22 +32,36 @@ function setup(projects = [project]) {
   const integration = {
     getPublicSettings: jest.fn().mockResolvedValue({ configured: true }),
     getCredentials: jest.fn().mockResolvedValue(credentials),
-    getSyncSettings: jest.fn().mockResolvedValue(normalizeSyncSettings(undefined)),
+    getSyncSettings: jest
+      .fn()
+      .mockResolvedValue(normalizeSyncSettings(undefined)),
     requestJson: jest.fn().mockResolvedValue({ workItems: [] }),
   };
   const importer = {
     importWorkItems: jest.fn().mockResolvedValue([]),
     invalidateFieldCatalog: jest.fn(),
   };
-  const catalog = { syncProject: jest.fn().mockResolvedValue({ projectId: project.id, importedRoles: 1 }) };
-  const createService = (workItemImporter: RoadmapWorkItemImportService) => new RoadmapService(
-    prisma as unknown as PrismaService,
-    integration as unknown as RoadmapIntegrationService,
-    workItemImporter,
-    {} as RoadmapAzureSyncService,
-    catalog as unknown as RoadmapAzureCatalogService,
-  );
-  return { service: createService(importer as unknown as RoadmapWorkItemImportService), createService, prisma, integration, importer, catalog };
+  const catalog = {
+    syncProject: jest
+      .fn()
+      .mockResolvedValue({ projectId: project.id, importedRoles: 1 }),
+  };
+  const createService = (workItemImporter: RoadmapWorkItemImportService) =>
+    new RoadmapService(
+      prisma as unknown as PrismaService,
+      integration as unknown as RoadmapIntegrationService,
+      workItemImporter,
+      {} as RoadmapAzureSyncService,
+      catalog as unknown as RoadmapAzureCatalogService,
+    );
+  return {
+    service: createService(importer as unknown as RoadmapWorkItemImportService),
+    createService,
+    prisma,
+    integration,
+    importer,
+    catalog,
+  };
 }
 
 describe('Scheduled Roadmap project refresh', () => {
@@ -51,47 +69,94 @@ describe('Scheduled Roadmap project refresh', () => {
   afterEach(() => jest.useRealTimers());
 
   it('imports changes in pages for projects already loaded from the connected organization', async () => {
-    const unrelatedProject = { ...project, id: 'other-org', url: 'https://dev.azure.com/other' };
-    const { service, prisma, integration, importer, catalog } = setup([project, unrelatedProject]);
-    const firstPage = Array.from({ length: 1000 }, (_, index) => ({ id: index + 1 }));
-    integration.requestJson.mockResolvedValueOnce({ workItems: firstPage }).mockResolvedValueOnce({ workItems: [{ id: 1005 }] });
+    const unrelatedProject = {
+      ...project,
+      id: 'other-org',
+      url: 'https://dev.azure.com/other',
+    };
+    const { service, prisma, integration, importer, catalog } = setup([
+      project,
+      unrelatedProject,
+    ]);
+    const firstPage = Array.from({ length: 1000 }, (_, index) => ({
+      id: index + 1,
+    }));
+    integration.requestJson
+      .mockResolvedValueOnce({ workItems: firstPage })
+      .mockResolvedValueOnce({ workItems: [{ id: 1005 }] });
 
     await service.refreshImportedProjects();
 
-    expect(prisma.roadmapProject.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { syncedAt: { not: null } } }));
+    expect(prisma.roadmapProject.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { syncedAt: { not: null } } }),
+    );
     const [first, second] = integration.requestJson.mock.calls;
-    expect(first[0]).toContain('/azure-project/_apis/wit/wiql?timePrecision=true');
-    expect(JSON.parse(first[1].body).query).toContain("[System.ChangedDate] >= '2026-11-13T14:54:00.000Z' AND [System.ChangedDate] < '2026-11-13T15:00:00.000Z'");
+    expect(first[0]).toContain(
+      '/azure-project/_apis/wit/wiql?timePrecision=true',
+    );
+    expect(JSON.parse(first[1].body).query).toContain(
+      "[System.ChangedDate] >= '2026-11-13T14:54:00.000Z' AND [System.ChangedDate] < '2026-11-13T15:00:00.000Z'",
+    );
     expect(JSON.parse(second[1].body).query).toContain('[System.Id] > 1000');
-    const importOptions = { requestTimeoutMs: expect.any(Number), requireAll: true };
-    expect(importer.importWorkItems).toHaveBeenNthCalledWith(1, project, firstPage.map(({ id }) => id), credentials, importOptions);
-    expect(importer.importWorkItems).toHaveBeenNthCalledWith(2, project, [1005], credentials, importOptions);
+    const importOptions = {
+      requestTimeoutMs: expect.any(Number),
+      requireAll: true,
+    };
+    expect(importer.importWorkItems).toHaveBeenNthCalledWith(
+      1,
+      project,
+      firstPage.map(({ id }) => id),
+      credentials,
+      importOptions,
+    );
+    expect(importer.importWorkItems).toHaveBeenNthCalledWith(
+      2,
+      project,
+      [1005],
+      credentials,
+      importOptions,
+    );
     expect(catalog.syncProject).not.toHaveBeenCalled();
     expect(prisma.roadmapProject.updateMany).toHaveBeenCalledTimes(1);
     expect(prisma.roadmapProject.updateMany).toHaveBeenCalledWith({
-      where: { id: project.id, OR: [{ syncedAt: null }, { syncedAt: { lt: now } }] },
+      where: {
+        id: project.id,
+        OR: [{ syncedAt: null }, { syncedAt: { lt: now } }],
+      },
       data: { syncedAt: now },
     });
   });
 
   it('keeps the previous timestamp for a failed import and refreshes the next project', async () => {
-    const nextProject = { ...project, id: 'next', externalId: 'next-azure-project' };
-    const { service, prisma, integration, importer } = setup([project, nextProject]);
+    const nextProject = {
+      ...project,
+      id: 'next',
+      externalId: 'next-azure-project',
+    };
+    const { service, prisma, integration, importer } = setup([
+      project,
+      nextProject,
+    ]);
     integration.requestJson.mockResolvedValueOnce({ workItems: [{ id: 7 }] });
-    importer.importWorkItems.mockRejectedValueOnce(new Error('failed to save work item'));
+    importer.importWorkItems.mockRejectedValueOnce(
+      new Error('failed to save work item'),
+    );
 
     await service.refreshImportedProjects();
 
     expect(prisma.roadmapProject.updateMany).toHaveBeenCalledTimes(1);
-    expect(prisma.roadmapProject.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ id: nextProject.id }),
-    }));
+    expect(prisma.roadmapProject.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: nextProject.id }),
+      }),
+    );
   });
 
   it('does not advance past a change that Azure omits from the work item batch', async () => {
     const { createService, prisma, integration } = setup();
     const importer = new RoadmapWorkItemImportService(
-      prisma as unknown as PrismaService, integration as unknown as RoadmapIntegrationService,
+      prisma as unknown as PrismaService,
+      integration as unknown as RoadmapIntegrationService,
     );
     integration.requestJson
       .mockResolvedValueOnce({ workItems: [{ id: 7 }] })
@@ -100,7 +165,9 @@ describe('Scheduled Roadmap project refresh', () => {
 
     await createService(importer).refreshImportedProjects();
 
-    expect(JSON.parse(integration.requestJson.mock.calls[2][1].body)).toMatchObject({ ids: [7], errorPolicy: 'fail' });
+    expect(
+      JSON.parse(integration.requestJson.mock.calls[2][1].body),
+    ).toMatchObject({ ids: [7], errorPolicy: 'fail' });
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(prisma.roadmapProject.updateMany).not.toHaveBeenCalled();
   });
@@ -111,12 +178,19 @@ describe('Scheduled Roadmap project refresh', () => {
     importer.importWorkItems.mockResolvedValueOnce([{ id: 7 }]);
 
     await expect(service.syncProject(project.externalId)).resolves.toEqual({
-      projectId: project.id, importedRoles: 1, importedWorkItems: 1,
+      projectId: project.id,
+      importedRoles: 1,
+      importedWorkItems: 1,
     });
 
-    expect(catalog.syncProject).toHaveBeenCalledWith(project.externalId, credentials);
+    expect(catalog.syncProject).toHaveBeenCalledWith(
+      project.externalId,
+      credentials,
+    );
     expect(importer.invalidateFieldCatalog).toHaveBeenCalled();
-    expect(JSON.parse(integration.requestJson.mock.calls[0][1].body).query).not.toContain('[System.ChangedDate]');
+    expect(
+      JSON.parse(integration.requestJson.mock.calls[0][1].body).query,
+    ).not.toContain('[System.ChangedDate]');
   });
 
   it('enriches unchanged cards from old imports once, including clearing an unassigned identity', async () => {
@@ -127,7 +201,13 @@ describe('Scheduled Roadmap project refresh', () => {
     ]);
     importer.importWorkItems.mockResolvedValueOnce([{ id: 7 }]);
     await service.refreshImportedProjects();
-    expect(importer.importWorkItems).toHaveBeenNthCalledWith(1, project, [7], credentials, { requestTimeoutMs: expect.any(Number) });
+    expect(importer.importWorkItems).toHaveBeenNthCalledWith(
+      1,
+      project,
+      [7],
+      credentials,
+      { requestTimeoutMs: expect.any(Number) },
+    );
     expect(prisma.roadmapProject.updateMany).toHaveBeenCalledTimes(1);
   });
 });

@@ -10,8 +10,12 @@ import type { AuthenticatedUser } from '../../shared/presentation/decorators/cur
 type ProjectTarget =
   { projectId: string } | { workItemId: string } | { allocationIds: string[] };
 
-export function roadmapProjectReadFilter(email?: string): Prisma.RoadmapProjectWhereInput {
-  return email === undefined ? {} : { access: { some: { email: email.trim().toLowerCase() } } };
+export function roadmapProjectReadFilter(
+  email?: string,
+): Prisma.RoadmapProjectWhereInput {
+  return email === undefined
+    ? {}
+    : { access: { some: { email: email.trim().toLowerCase() } } };
 }
 
 @Injectable()

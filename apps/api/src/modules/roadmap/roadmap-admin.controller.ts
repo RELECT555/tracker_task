@@ -1,18 +1,52 @@
-import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { ArrayUnique, IsArray, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Header,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ArrayUnique,
+  IsArray,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { AdminRoleGuard } from '../admin/presentation/guards/admin-role.guard';
 import { RoadmapService } from './roadmap.service';
 
 class RoleMemberAllocationDto {
   @IsString() @MinLength(1) personExternalId!: string;
-  @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(100) allocationPercent!: number;
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  allocationPercent!: number;
 }
 
 class AssignRoadmapRoleDto {
   @IsOptional() @IsString() @MinLength(1) personExternalId?: string | null;
-  @IsOptional() @IsArray() @ArrayUnique() @IsString({ each: true }) personExternalIds?: string[];
-  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => RoleMemberAllocationDto)
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  personExternalIds?: string[];
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RoleMemberAllocationDto)
   memberAllocations?: RoleMemberAllocationDto[];
 }
 
@@ -47,7 +81,10 @@ class RoadmapPersonAvatarParams {
 }
 
 class SetRoleMembersDto {
-  @IsArray() @ArrayUnique() @IsString({ each: true }) personExternalIds!: string[];
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  personExternalIds!: string[];
 }
 
 class SetRoleDefaultPersonDto {
@@ -111,7 +148,10 @@ export class RoadmapAdminController {
   }
 
   @Put('roles/:id/default-person')
-  setRoleDefaultPerson(@Param('id') id: string, @Body() dto: SetRoleDefaultPersonDto) {
+  setRoleDefaultPerson(
+    @Param('id') id: string,
+    @Body() dto: SetRoleDefaultPersonDto,
+  ) {
     return this.roadmap.setRoleDefaultPerson(id, dto.personExternalId ?? null);
   }
 

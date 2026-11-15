@@ -74,7 +74,10 @@ export function quarterLabel(quarterKey: string) {
   return quarterKey.replace(/^(\d{4})-(Q\d)$/, '$2 $1');
 }
 
-export function renderWriteBackTemplate(template: string, values: WriteBackTemplateValues) {
+export function renderWriteBackTemplate(
+  template: string,
+  values: WriteBackTemplateValues,
+) {
   const tokens: Record<string, string> = {
     role: values.role,
     title: values.title,
@@ -83,12 +86,22 @@ export function renderWriteBackTemplate(template: string, values: WriteBackTempl
     person: values.person,
     id: values.id,
   };
-  return template.replace(/\{(\w+)\}/g, (match, token: string) => tokens[token] ?? match).trim();
+  return template
+    .replace(/\{(\w+)\}/g, (match, token: string) => tokens[token] ?? match)
+    .trim();
 }
 
-export function renderWriteBackTags(template: string, values: WriteBackTemplateValues) {
+export function renderWriteBackTags(
+  template: string,
+  values: WriteBackTemplateValues,
+) {
   // Azure DevOps separates tags with ";", so a semicolon inside a value would split it.
-  const safe = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value.replace(/;/g, ',')])) as WriteBackTemplateValues;
+  const safe = Object.fromEntries(
+    Object.entries(values).map(([key, value]) => [
+      key,
+      value.replace(/;/g, ','),
+    ]),
+  ) as WriteBackTemplateValues;
   return renderWriteBackTemplate(template, safe)
     .split(';')
     .map((tag) => tag.trim())
@@ -97,10 +110,19 @@ export function renderWriteBackTags(template: string, values: WriteBackTemplateV
 }
 
 /** Merges stored settings with defaults; `writeBackEnabled: true` from the first version means automatic mode. */
-export function normalizeWriteBackSettings(stored: Partial<WriteBackSettings> | undefined, legacyEnabled?: boolean): WriteBackSettings {
+export function normalizeWriteBackSettings(
+  stored: Partial<WriteBackSettings> | undefined,
+  legacyEnabled?: boolean,
+): WriteBackSettings {
   const v2 = normalizeSyncSettings(stored, legacyEnabled);
-  const enabled = new Set(v2.writeRules.filter((rule) => rule.enabled).map((rule) => rule.targetField));
-  const remainingRule = v2.writeRules.find((rule) => rule.targetField === 'Microsoft.VSTS.Scheduling.RemainingWork');
+  const enabled = new Set(
+    v2.writeRules
+      .filter((rule) => rule.enabled)
+      .map((rule) => rule.targetField),
+  );
+  const remainingRule = v2.writeRules.find(
+    (rule) => rule.targetField === 'Microsoft.VSTS.Scheduling.RemainingWork',
+  );
   return {
     ...DEFAULT_WRITE_BACK_SETTINGS,
     mode: v2.mode,
@@ -110,13 +132,16 @@ export function normalizeWriteBackSettings(stored: Partial<WriteBackSettings> | 
     projectIds: v2.projectIds,
     fields: {
       assignedTo: enabled.has('System.AssignedTo'),
-      originalEstimate: enabled.has('Microsoft.VSTS.Scheduling.OriginalEstimate'),
+      originalEstimate: enabled.has(
+        'Microsoft.VSTS.Scheduling.OriginalEstimate',
+      ),
       remainingWork: enabled.has('Microsoft.VSTS.Scheduling.RemainingWork'),
       iteration: enabled.has('System.IterationPath'),
       areaPath: enabled.has('System.AreaPath'),
       description: enabled.has('System.Description'),
     },
-    remainingWorkPolicy: remainingRule?.apply === 'create' ? 'create-only' : 'recalculate',
+    remainingWorkPolicy:
+      remainingRule?.apply === 'create' ? 'create-only' : 'recalculate',
     version: 2,
     writeRules: v2.writeRules,
     readRules: v2.readRules,
@@ -129,27 +154,43 @@ export function normalizeWriteBackSettings(stored: Partial<WriteBackSettings> | 
   };
 }
 
-export function normalizeSyncWriteBackSettings(stored: unknown, legacyEnabled?: boolean) {
+export function normalizeSyncWriteBackSettings(
+  stored: unknown,
+  legacyEnabled?: boolean,
+) {
   return normalizeSyncSettings(stored, legacyEnabled);
 }
 
 /** Applies the basic settings form without rebuilding the advanced mapping. */
-export function mergeBasicWriteBackSettings(current: SyncSettingsV2, input: WriteBackSettings): SyncSettingsV2 {
+export function mergeBasicWriteBackSettings(
+  current: SyncSettingsV2,
+  input: WriteBackSettings,
+): SyncSettingsV2 {
   const previous = normalizeWriteBackSettings(current);
   const defaults = migrateWriteBackSettingsV1(undefined);
-  const enabledTargets = new Set(migrateWriteBackSettingsV1(input).writeRules.map((rule) => rule.targetField));
-  const previousTargets = new Set(migrateWriteBackSettingsV1(previous).writeRules.map((rule) => rule.targetField));
+  const enabledTargets = new Set(
+    migrateWriteBackSettingsV1(input).writeRules.map(
+      (rule) => rule.targetField,
+    ),
+  );
+  const previousTargets = new Set(
+    migrateWriteBackSettingsV1(previous).writeRules.map(
+      (rule) => rule.targetField,
+    ),
+  );
   const writeRules = [...current.writeRules];
 
   for (const defaultRule of defaults.writeRules) {
     const { targetField } = defaultRule;
     const enabled = enabledTargets.has(targetField);
     const enableChanged = enabled !== previousTargets.has(targetField);
-    const policyChanged = targetField === 'Microsoft.VSTS.Scheduling.RemainingWork'
-      && input.remainingWorkPolicy !== previous.remainingWorkPolicy;
+    const policyChanged =
+      targetField === 'Microsoft.VSTS.Scheduling.RemainingWork' &&
+      input.remainingWorkPolicy !== previous.remainingWorkPolicy;
     if (!enableChanged && !policyChanged) continue;
 
-    const apply = input.remainingWorkPolicy === 'create-only' ? 'create' : 'always';
+    const apply =
+      input.remainingWorkPolicy === 'create-only' ? 'create' : 'always';
     let found = false;
     for (const [index, rule] of writeRules.entries()) {
       if (rule.targetField !== targetField) continue;
@@ -161,12 +202,23 @@ export function mergeBasicWriteBackSettings(current: SyncSettingsV2, input: Writ
       };
     }
     if (!found && enabled) {
-      writeRules.push({ ...defaultRule, apply: policyChanged ? apply : defaultRule.apply });
+      writeRules.push({
+        ...defaultRule,
+        apply: policyChanged ? apply : defaultRule.apply,
+      });
     }
   }
 
   const { mode, workItemType, titleTemplate, tagsTemplate, projectIds } = input;
-  return { ...current, mode, workItemType, titleTemplate, tagsTemplate, projectIds, writeRules };
+  return {
+    ...current,
+    mode,
+    workItemType,
+    titleTemplate,
+    tagsTemplate,
+    projectIds,
+    writeRules,
+  };
 }
 
 export { migrateWriteBackSettingsV1 };
