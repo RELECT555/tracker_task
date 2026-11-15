@@ -101,7 +101,6 @@ export function FieldMappingPanel({ overview, queries = [] }: {
     <Panel
       title="Сопоставление полей"
       description="Укажите, какие поля Roadmap читает из Azure DevOps и какие значения записывает в задачи."
-      actions={<HelpHint text="Выберите поле Azure и укажите источник значения." example="Custom.Activity ← константа или роль" faqId="custom-fields" />}
     >
       {settingsQuery.isLoading ? <p role="status" className="flex items-center gap-2 p-5 text-sm text-muted-foreground">
         <LoaderCircle aria-hidden="true" className="size-4 motion-safe:animate-spin" />Загружаем настройки…
@@ -165,12 +164,9 @@ export function FieldMappingPanel({ overview, queries = [] }: {
         </section>
 
         <section className="space-y-3 px-4 py-4 sm:px-5">
-          <div className="flex items-center gap-1.5">
-            <h3 className="text-sm font-semibold text-foreground">Пример заполнения задачи</h3>
-            <HelpHint text="Показывает значения для примера назначения." example="Backend, Иван Петров, 40 ч" />
-          </div>
-          {Object.keys(value.values).length ? <dl className="grid gap-2 sm:grid-cols-2">
-            {Object.entries(value.values).map(([field, fieldValue]) => <div key={field} className="min-w-0 rounded-md border border-border px-3 py-2 text-xs [overflow-wrap:anywhere]">
+          <h3 className="text-sm font-semibold text-foreground">Пример заполнения задачи</h3>
+          {Object.keys(value.values).length ? <dl className="grid gap-x-6 gap-y-2 rounded-lg bg-muted/40 px-3 py-2.5 sm:grid-cols-2">
+            {Object.entries(value.values).map(([field, fieldValue]) => <div key={field} className="min-w-0 text-xs [overflow-wrap:anywhere]">
               <dt className="font-mono text-foreground">{field}</dt>
               <dd className="mt-1 text-muted-foreground">{String(fieldValue)}</dd>
             </div>)}
@@ -184,7 +180,7 @@ export function FieldMappingPanel({ overview, queries = [] }: {
           <section className="min-w-0">
             <h3 className="text-sm font-semibold text-foreground">Правила чтения</h3>
             <p className="mt-1 text-xs text-muted-foreground">На плане поле можно показать значком или отдельной колонкой.</p>
-            {draft.readRules.map((rule) => <div key={rule.id} className="mt-2 grid gap-2 rounded-md border border-border p-2 sm:grid-cols-2">
+            {draft.readRules.map((rule) => <div key={rule.id} className="mt-3 grid gap-2 sm:grid-cols-2">
               <label className={FIELD_LABEL_CLASS}>
                 Поле Azure
                 <Input value={rule.field} className="h-9" onChange={(event) => update({ readRules: draft.readRules.map((item) => item.id === rule.id ? { ...item, field: event.target.value } : item) })} />

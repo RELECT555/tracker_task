@@ -94,7 +94,7 @@ function ProjectRow({ project, writeBackOff }: { project: OverviewProject; write
   const actionsBusy = checkMutation.isPending || pullMutation.isPending;
 
   return (
-    <li id={`azure-sync-project-${project.id}`} className="scroll-mt-4 space-y-3 px-4 py-4 sm:px-5">
+    <li id={`azure-sync-project-${project.id}`} className="scroll-mt-4 space-y-1.5 px-4 py-3 sm:px-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 max-w-full space-y-1">
           <h3 tabIndex={-1} className="w-fit wrap-break-word rounded text-sm font-semibold text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{project.name}</h3>
@@ -112,7 +112,7 @@ function ProjectRow({ project, writeBackOff }: { project: OverviewProject; write
           </div> : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" size="sm" disabled={actionsBusy} onClick={() => { setNotice(null); checkMutation.reset(); pullMutation.mutate(); }}>
+          <Button type="button" variant={project.syncedAt ? 'ghost' : 'outline'} size="sm" disabled={actionsBusy} onClick={() => { setNotice(null); checkMutation.reset(); pullMutation.mutate(); }}>
             {pullMutation.isPending ? <LoaderCircle aria-hidden="true" className="size-4 motion-safe:animate-spin" /> : <ArrowDownToLine aria-hidden="true" className="size-4" />}
             {pullMutation.isPending ? 'Загружаем…' : project.syncedAt ? 'Обновить из Azure' : 'Загрузить из Azure'}
           </Button>
@@ -132,7 +132,7 @@ function ProjectRow({ project, writeBackOff }: { project: OverviewProject; write
       {pullMutation.data?.roleSyncWarning ? <p role="status" className="text-sm text-amber-800 dark:text-amber-200">{pullMutation.data.roleSyncWarning}</p> : null}
       {pullMutation.error ? <p role="alert" className="text-sm text-destructive">{errorText(pullMutation.error)}</p> : null}
       <details className="group">
-        <summary className="inline-flex min-h-7 cursor-pointer list-none items-center gap-1.5 rounded text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+        <summary className="inline-flex min-h-6 cursor-pointer list-none items-center gap-1.5 rounded text-xs text-muted-foreground/80 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
           <ChevronDown aria-hidden="true" className="size-3.5 group-open:rotate-180" /> Подробности синхронизации
         </summary>
         <div className="mt-2 space-y-3 rounded-lg border border-border bg-muted/20 p-3">

@@ -150,17 +150,11 @@ export function WriteBackSettingsPanel({ settings, overview }: { settings: Roadm
             </label>
             <div className="min-w-0 space-y-3">
               <div className="space-y-1.5">
-                <div className="flex items-center gap-1">
-                  <label htmlFor={formId + '-title'} className="text-xs font-medium text-muted-foreground">Шаблон названия</label>
-                  <HelpHint text="Подставляет значения в заголовок задачи." example="{role}: {title} ({quarter})" faqId="what-appears-in-azure" />
-                </div>
+                <label htmlFor={formId + '-title'} className="text-xs font-medium text-muted-foreground">Шаблон названия</label>
                 <Input id={formId + '-title'} ref={titleRef} value={draft.titleTemplate} maxLength={200} onFocus={() => setLastFocused('title')} onChange={(event) => update({ titleTemplate: event.target.value })} className="h-9 font-mono text-[13px]" />
               </div>
               <div className="space-y-1.5">
-                <div className="flex items-center gap-1">
-                  <label htmlFor={formId + '-tags'} className="text-xs font-medium text-muted-foreground">Теги (через «;»)</label>
-                  <HelpHint text="Теги помогают отличать задачи Roadmap и строить запросы в Azure." example="Roadmap; Roadmap {quarterKey}; {role}" faqId="what-appears-in-azure" />
-                </div>
+                <label htmlFor={formId + '-tags'} className="text-xs font-medium text-muted-foreground">Теги (через «;»)</label>
                 <Input id={formId + '-tags'} ref={tagsRef} value={draft.tagsTemplate} maxLength={200} onFocus={() => setLastFocused('tags')} onChange={(event) => update({ tagsTemplate: event.target.value })} className="h-9 font-mono text-[13px]" placeholder="Roadmap" />
               </div>
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
@@ -171,15 +165,14 @@ export function WriteBackSettingsPanel({ settings, overview }: { settings: Roadm
                 <p className="text-muted-foreground">Пример задачи</p>
                 <p className="mt-1 font-medium text-foreground">{draft.workItemType || 'Task'}: {titlePreview || <span className="text-destructive">пустое название</span>}</p>
                 {tagsPreview.length ? <div className="mt-1.5 flex flex-wrap gap-1">{tagsPreview.map((tag) => <span key={tag} className="rounded bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground">{tag}</span>)}</div> : null}
-                <p className="mt-1.5 text-[11px] text-muted-foreground">Тег Roadmap помогает отличать такие задачи и строить по ним запросы в Azure. Рекомендуем его оставить.</p>
               </div>
             </div>
           </div>
         </Section>
 
         <Section title="Поля для заполнения" help="Выберите поля, которые Roadmap будет заполнять при отправке задачи." faqId="custom-fields">
-          <div className="grid gap-2 md:grid-cols-2">
-            {FIELDS.map((field) => <label key={field.key} className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border/70 p-3">
+          <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
+            {FIELDS.map((field) => <label key={field.key} className="flex cursor-pointer items-start gap-2.5">
               <input type="checkbox" className="mt-0.5 accent-primary" checked={draft.fields[field.key]} onChange={(event) => update({ fields: { ...draft.fields, [field.key]: event.target.checked } })} />
               <span><span className="block text-sm font-medium text-foreground">{field.title}</span><span className="mt-0.5 block text-xs text-muted-foreground">{field.detail}</span></span>
             </label>)}
@@ -205,10 +198,11 @@ export function WriteBackSettingsPanel({ settings, overview }: { settings: Roadm
 
 function Section({ title, hint, help, faqId, children }: { title: string; hint?: string; help?: string; faqId?: string; children: React.ReactNode }) {
   const headingId = useId();
+  // The visible hint already explains the section; the "?" popover is only kept for sections without one.
   return <section aria-labelledby={headingId} className="px-4 py-4 sm:px-5">
     <div className="flex items-center gap-1.5">
       <h3 id={headingId} className="text-sm font-semibold text-foreground">{title}</h3>
-      {help ? <HelpHint text={help} faqId={faqId} /> : null}
+      {help && !hint ? <HelpHint text={help} faqId={faqId} /> : null}
     </div>
     {hint ? <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p> : null}
     <div className="mt-3">{children}</div>

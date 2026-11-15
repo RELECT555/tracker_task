@@ -7,7 +7,6 @@ import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { baseURL } from '@/shared/api/client';
 import { Button } from '@/shared/ui/button';
 import { AdminAlert, StatusPill } from '../AdminLayout';
-import { HelpHint } from './HelpHint';
 import { errorText, Panel } from './parts';
 
 function webhookUrl() {
@@ -33,7 +32,7 @@ export function WebhookPanel({ webhookConfigured }: { webhookConfigured: boolean
     <Panel
       title="Webhook для Azure DevOps"
       description="Обновляет фактические часы и статусы задач автоматически после изменений в Azure DevOps."
-      actions={<><StatusPill active={webhookConfigured} label={webhookConfigured ? 'Секрет создан' : 'Секрет не создан'} /><HelpHint text="Webhook сообщает Roadmap об изменениях в Azure, чтобы факт и конфликты обновлялись автоматически." example="API должен быть доступен Azure DevOps из интернета." faqId="webhook-needed" /></>}
+      actions={<><StatusPill active={webhookConfigured} label={webhookConfigured ? 'Секрет создан' : 'Секрет не создан'} /></>}
     >
       <div className="space-y-5 p-4 sm:p-5">
         {secretMutation.error ? <AdminAlert tone="error">{errorText(secretMutation.error)}</AdminAlert> : null}
@@ -55,19 +54,16 @@ export function WebhookPanel({ webhookConfigured }: { webhookConfigured: boolean
               </Button> : null}
             </div>
           </Step>
-          <Step n={2} title="Откройте настройки подписок в каждом проекте">
-            <span className="text-foreground">Project settings → Service hooks → Create subscription → Web Hooks</span>
+          <Step n={2} title="Создайте подписки в каждом проекте">
+            <span className="text-foreground">Project settings → Service hooks → Create subscription → Web Hooks.</span> События: work item created, updated, deleted, restored — по одной подписке на событие, без фильтров.
           </Step>
-          <Step n={3} title="Создайте подписки на события">
-            Work item created, updated, deleted, restored — по одной на событие. Фильтры по типу и области не нужны.
-          </Step>
-          <Step n={4} title="Укажите URL">
+          <Step n={3} title="Укажите URL">
             <CopyField label="Скопировать URL webhook" value={webhookUrl()} />
           </Step>
-          <Step n={5} title="Добавьте заголовок в HTTP headers">
+          <Step n={4} title="Добавьте заголовок в HTTP headers">
             {secret ? <CopyField key={secret} label="Скопировать заголовок с секретом" value={`X-Roadmap-Webhook-Secret:${secret}`} /> : <p>Получите секрет на первом шаге, чтобы увидеть заголовок.</p>}
           </Step>
-          <Step n={6} title="Проверьте">
+          <Step n={5} title="Проверьте">
             Нажмите <span className="text-foreground">Test</span> в подписке: ответ 202 — всё верно, 401 — неверный секрет.
           </Step>
         </ol>
