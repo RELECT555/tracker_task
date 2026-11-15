@@ -21,6 +21,12 @@ import {
   RoadmapWorkItemImportService,
 } from './roadmap-work-item-import.service';
 import { azureOrganizationName } from './roadmap-work-item-create.service';
+import { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
+import {
+  decideEstimate,
+  hoursField,
+  scalePeriods,
+} from './roadmap-allocation-reconcile';
 import {
   quarterLabel,
   renderWriteBackTags,
@@ -131,6 +137,7 @@ export class RoadmapAzureSyncService {
     private readonly integration: RoadmapIntegrationService,
     private readonly importer: RoadmapWorkItemImportService,
     private readonly isActiveAdmin: IsActiveAdminHandler,
+    private readonly allocationAzure: RoadmapAllocationAzureService,
   ) {}
 
   /** Status written by plan edits: the allocation must be sent to Azure DevOps again. */
@@ -929,6 +936,39 @@ export class RoadmapAzureSyncService {
         allocation.azurePushedHours === null ||
         Number(allocation.azurePushedHours) !== estimate;
       let existing: AzureWorkItem | null = null;
+      /** Set when Azure's estimate wins over the plan (conflict policy "skip-field"). */
+      let acceptedHours: number | null = null;
+
+      // Zero hours takes the person off the plan: no new Task, and the old one follows the removal policy.
+      if (estimate === 0 && !allocation.azureCreateAttemptId) {
+        if (!taskId) {
+          await finish({
+            azureSyncStatus: 'skipped',
+            azureSyncError: 'Нет часов — задача в Azure DevOps не создаётся.',
+          });
+          return;
+        }
+        const removal = settings.removalPolicy ?? { action: 'keep' };
+        if (removal.action !== 'keep') {
+          const outcome = await this.allocationAzure.applyRemoval(
+            project.externalId,
+            taskId,
+            removal,
+            credentials,
+          );
+          await finish({
+            azureSyncStatus: 'skipped',
+            azureSyncError:
+              outcome === 'deleted'
+                ? 'Часы обнулены — задача удалена в Azure DevOps (лежит в корзине).'
+                : 'Часы обнулены — задача в Azure DevOps снята.',
+            azurePushedHours: 0,
+            azureSyncedAt: new Date(),
+            ...(outcome === 'deleted' ? { azureTaskId: null } : {}),
+          });
+          return;
+        }
+      }
 
       if (allocation.azureCreateAttemptId) {
         const organization = azureOrganizationName(credentials.organizationUrl);
@@ -959,15 +999,40 @@ export class RoadmapAzureSyncService {
           typeName,
           credentials,
         );
+        // Someone may have changed the estimate in Azure since the last push.
+        let pushEstimate = estimateChanged;
+        if (estimateChanged && !allocation.azureCreateAttemptId) {
+          const decision = decideEstimate({
+            azure: hoursField(existing.fields[ORIGINAL_ESTIMATE]),
+            pushed:
+              allocation.azurePushedHours === null
+                ? null
+                : Number(allocation.azurePushedHours),
+            planned: estimate,
+            policy: settings.conflictPolicy ?? 'overwrite',
+          });
+          if (decision.action === 'conflict') {
+            await finish({
+              azureSyncStatus: 'conflict',
+              azureSyncError: decision.message,
+            });
+            return;
+          }
+          if (decision.action === 'accept' && decision.hours !== estimate) {
+            pushEstimate = false;
+            acceptedHours = decision.hours;
+          }
+        }
         await this.updateTask(
           existing,
           {
             allocation,
             assignee,
             estimate,
-            estimateChanged,
+            estimateChanged: pushEstimate,
             settings,
             typeFields,
+            projectExternalId: project.externalId,
           },
           credentials,
         );
@@ -1065,8 +1130,21 @@ export class RoadmapAzureSyncService {
         azureSyncStatus: 'synced',
         azureSyncError: null,
         azureSyncedAt: new Date(),
-        azurePushedHours: estimate,
+        azurePushedHours: acceptedHours ?? estimate,
+        ...(acceptedHours === null ? {} : { estimatedHours: acceptedHours }),
       });
+      if (acceptedHours !== null)
+        await this.shrinkPeriods(id, acceptedHours).catch(() => undefined);
+      if (settings.writeFeatureAggregates)
+        await this.writeFeatureAggregates(
+          allocation.workItemId,
+          settings,
+          credentials,
+        ).catch((error: unknown) =>
+          this.logger.warn(
+            `Could not write role totals to feature ${allocation.workItem.externalId}: ${this.message(error)}`,
+          ),
+        );
     } catch (error) {
       await finish({
         azureSyncStatus: 'error',
@@ -1225,9 +1303,19 @@ export class RoadmapAzureSyncService {
       estimateChanged: boolean;
       settings: WriteBackSettings;
       typeFields: Set<string>;
+      projectExternalId: string;
     },
     credentials: AzureDevOpsCredentials,
   ) {
+    // An allocation moved to another quarter takes its Task to that quarter's iteration.
+    const iteration = input.settings.fields.iteration
+      ? await this.iterationAfterQuarterMove(
+          input.projectExternalId,
+          input.allocation.quarterKey,
+          initial.fields['System.IterationPath'],
+          credentials,
+        )
+      : null;
     let task: AzureWorkItem | null = initial;
     for (let attempt = 0; attempt < 2 && task; attempt += 1) {
       const operations: PatchOperation[] = [];
@@ -1255,6 +1343,12 @@ export class RoadmapAzureSyncService {
           ),
         );
       }
+      if (iteration)
+        operations.push({
+          op: 'add',
+          path: '/fields/System.IterationPath',
+          value: iteration,
+        });
       if (input.settings.writeRules?.length) {
         const fieldInfo = new Map(
           [...input.typeFields].map((referenceName) => [
@@ -1388,7 +1482,7 @@ export class RoadmapAzureSyncService {
   private async fetchTask(taskId: string, credentials: AzureDevOpsCredentials) {
     try {
       return await this.integration.requestJson<AzureWorkItem>(
-        `${credentials.organizationUrl}/_apis/wit/workitems/${encodeURIComponent(taskId)}?fields=System.AssignedTo,System.WorkItemType,${COMPLETED_WORK}&api-version=${this.apiVersion}`,
+        `${credentials.organizationUrl}/_apis/wit/workitems/${encodeURIComponent(taskId)}?fields=System.AssignedTo,System.WorkItemType,System.IterationPath,${COMPLETED_WORK},${ORIGINAL_ESTIMATE}&api-version=${this.apiVersion}`,
         { signal: AbortSignal.timeout(SYNC_REQUEST_TIMEOUT_MS) },
         credentials,
       );
@@ -1420,6 +1514,149 @@ export class RoadmapAzureSyncService {
     const value = new Set(result.value.map((field) => field.referenceName));
     this.typeFieldCache.set(key, { value, loadedAt: Date.now() });
     return value;
+  }
+
+  /**
+   * Iteration to move a Task to after its allocation changed quarter, or null to leave it.
+   * A Task already in the quarter (its node, a child node, or a sprint whose dates overlap the
+   * quarter) stays where the team put it; only a Task in the project root or in another period moves.
+   */
+  private async iterationAfterQuarterMove(
+    projectExternalId: string,
+    quarterKey: string,
+    currentValue: unknown,
+    credentials: AzureDevOpsCredentials,
+  ) {
+    const target = await this.quarterIterationPath(
+      projectExternalId,
+      quarterKey,
+      credentials,
+    );
+    const current = typeof currentValue === 'string' ? currentValue : '';
+    if (!target) return null;
+    const normalized = (path: string) => path.toLowerCase();
+    if (
+      normalized(current) === normalized(target) ||
+      normalized(current).startsWith(`${normalized(target)}\\`)
+    )
+      return null;
+    if (!current.includes('\\')) return target;
+    const match = /^(\d{4})-Q([1-4])$/.exec(quarterKey);
+    const root = this.iterationCache.get(projectExternalId)?.value;
+    if (!match || !root) return null;
+    const nodes: IterationNode[] = [];
+    const visit = (node: IterationNode) => {
+      nodes.push(node);
+      node.children?.forEach(visit);
+    };
+    root.children?.forEach(visit);
+    const node = nodes.find(
+      (entry) =>
+        entry.path &&
+        normalized(
+          entry.path.replace(/^\\/, '').replace(/\\Iteration(?=\\|$)/, ''),
+        ) === normalized(current),
+    );
+    const start = node?.attributes?.startDate;
+    const finish = node?.attributes?.finishDate;
+    // Without dates we cannot tell whether a sprint belongs to the quarter, so it is left alone.
+    if (!start || !finish) return null;
+    const year = Number(match[1]);
+    const quarter = Number(match[2]);
+    const quarterStart = Date.UTC(year, (quarter - 1) * 3, 1);
+    const quarterEnd = Date.UTC(year, quarter * 3, 0, 23, 59, 59);
+    const overlaps =
+      Date.parse(start) <= quarterEnd && Date.parse(finish) >= quarterStart;
+    return overlaps ? null : target;
+  }
+
+  /**
+   * Writes the plan total of each role to the feature's role field in Azure DevOps
+   * (the role's aggregate field from the field mapping, else its estimate field).
+   */
+  private async writeFeatureAggregates(
+    workItemId: string,
+    settings: WriteBackSettings,
+    credentials: AzureDevOpsCredentials,
+  ) {
+    const item = await this.prisma.roadmapWorkItem.findUnique({
+      where: { id: workItemId },
+      select: {
+        externalId: true,
+        projectId: true,
+        allocations: { select: { roleId: true, estimatedHours: true } },
+      },
+    });
+    if (!item) return;
+    const roles = await this.prisma.roadmapRole.findMany({
+      where: { projectId: item.projectId },
+      select: { id: true, name: true, azureEstimateField: true },
+    });
+    const totals = new Map<string, number>();
+    for (const role of roles) {
+      const field =
+        settings.roleFields?.find((link) => link.roleName === role.name)
+          ?.aggregateField ?? role.azureEstimateField;
+      if (!field) continue;
+      const hours = item.allocations
+        .filter((allocation) => allocation.roleId === role.id)
+        .reduce(
+          (sum, allocation) => sum + Number(allocation.estimatedHours),
+          0,
+        );
+      totals.set(field, (totals.get(field) ?? 0) + hours);
+    }
+    if (!totals.size) return;
+    const feature = await this.integration.requestJson<AzureWorkItem>(
+      `${credentials.organizationUrl}/_apis/wit/workitems/${encodeURIComponent(item.externalId)}?fields=${[...totals.keys()].map(encodeURIComponent).join(',')}&api-version=${this.apiVersion}`,
+      { signal: AbortSignal.timeout(SYNC_REQUEST_TIMEOUT_MS) },
+      credentials,
+    );
+    const operations = [...totals]
+      .map(([field, hours]) => [field, Math.round(hours * 100) / 100] as const)
+      .filter(([field, hours]) => hoursField(feature.fields[field]) !== hours)
+      .map(([field, hours]) => ({
+        op: 'add',
+        path: `/fields/${field}`,
+        value: hours,
+      }));
+    if (!operations.length) return;
+    // No retry on a revision conflict: the next allocation push recomputes the totals anyway.
+    await this.integration.request(
+      `${credentials.organizationUrl}/_apis/wit/workitems/${feature.id}?api-version=${this.apiVersion}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify([
+          { op: 'test', path: '/rev', value: feature.rev },
+          ...operations,
+        ]),
+        headers: { 'Content-Type': 'application/json-patch+json' },
+        signal: AbortSignal.timeout(SYNC_REQUEST_TIMEOUT_MS),
+      },
+      credentials,
+    );
+    await this.importer.importWorkItems(
+      { id: item.projectId },
+      [feature.id],
+      credentials,
+    );
+  }
+
+  /** Keeps the monthly split within an estimate that Azure lowered. */
+  private async shrinkPeriods(allocationId: string, estimate: number) {
+    const periods = await this.prisma.roadmapPeriodAllocation.findMany({
+      where: { allocationId },
+      select: { id: true, hours: true },
+    });
+    const updates = scalePeriods(
+      periods.map((period) => ({ id: period.id, hours: Number(period.hours) })),
+      estimate,
+    );
+    for (const period of updates)
+      await this.prisma.roadmapPeriodAllocation.update({
+        where: { id: period.id },
+        data: { hours: period.hours },
+      });
   }
 
   /** Finds the iteration for a `YYYY-Qn` quarter: by name first, then the narrowest one spanning the quarter. */

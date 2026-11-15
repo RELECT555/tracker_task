@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -25,6 +26,7 @@ import {
   IsString,
   IsUUID,
   Matches,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -46,6 +48,7 @@ import {
 } from './roadmap-work-item-create.service';
 import { RoadmapProjectAccessService } from './roadmap-project-access.service';
 import { RoadmapWorkItemCardService } from './roadmap-work-item-card.service';
+import { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
 
 const AZURE_ID = /^[1-9]\d{0,9}$/;
 
@@ -145,6 +148,11 @@ class WorkItemCommentDto {
   @IsString() @MinLength(1) @MaxLength(10000) text!: string;
 }
 
+class LogTimeDto {
+  @IsNumber({ maxDecimalPlaces: 2 }) @Min(0.25) @Max(200) hours!: number;
+  @IsOptional() @IsString() @MaxLength(500) comment?: string;
+}
+
 @Controller('roadmap')
 export class RoadmapController {
   constructor(
@@ -153,6 +161,7 @@ export class RoadmapController {
     private readonly workItemCreate: RoadmapWorkItemCreateService,
     private readonly access: RoadmapProjectAccessService,
     private readonly workItemCard: RoadmapWorkItemCardService,
+    private readonly allocationAzure: RoadmapAllocationAzureService,
   ) {}
 
   @Get('projects/:projectId/work-items/:externalId/azure')
@@ -351,6 +360,46 @@ export class RoadmapController {
   ) {
     await this.access.require(actor, { allocationIds: [allocationId] }, 'edit');
     return this.azureSync.pushAllocation(actor.id, allocationId);
+  }
+
+  /** Logs time on the allocation's Azure DevOps Task: the assignee or a planner may do it. */
+  @Post('allocations/:allocationId/time')
+  async logAllocationTime(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('allocationId', ParseUUIDPipe) allocationId: string,
+    @Body() dto: LogTimeDto,
+  ) {
+    const canEdit = await this.access.require(
+      actor,
+      { allocationIds: [allocationId] },
+      'read',
+    );
+    return this.allocationAzure.logTime(
+      actor,
+      allocationId,
+      dto.hours,
+      dto.comment,
+      canEdit,
+    );
+  }
+
+  /** Takes the Task's estimate and assignee from Azure DevOps into the plan. */
+  @Post('allocations/:allocationId/azure-accept')
+  async acceptAllocationFromAzure(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('allocationId', ParseUUIDPipe) allocationId: string,
+  ) {
+    await this.access.require(actor, { allocationIds: [allocationId] }, 'edit');
+    return this.allocationAzure.acceptFromAzure(allocationId);
+  }
+
+  @Delete('allocations/:allocationId')
+  async deleteAllocation(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('allocationId', ParseUUIDPipe) allocationId: string,
+  ) {
+    await this.access.require(actor, { allocationIds: [allocationId] }, 'edit');
+    return this.allocationAzure.deleteAllocation(actor, allocationId);
   }
 
   @Put('allocations/:allocationId/quarters/:quarterKey')

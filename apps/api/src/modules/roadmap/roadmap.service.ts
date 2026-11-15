@@ -598,6 +598,8 @@ export class RoadmapService {
             settings.organizationUrl,
           ),
         createdTaskIds,
+        /** What happens to a Task when its allocation is removed (shown before deleting). */
+        removal: settings.writeBack.removalPolicy ?? { action: 'keep' },
       },
     };
   }

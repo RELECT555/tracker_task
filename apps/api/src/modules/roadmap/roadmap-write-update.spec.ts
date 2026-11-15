@@ -1,5 +1,6 @@
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import type { IsActiveAdminHandler } from '../identity/application/queries/is-active-admin.handler';
+import type { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
@@ -32,7 +33,10 @@ function setup(pushedHours: number) {
     },
     role: { name: 'Backend' },
   };
-  const requestJson = jest.fn().mockImplementation((url: string) => {
+  const requestJson = jest
+    .fn()
+    .mockImplementation((url: string) => Promise.resolve(azureResponse(url)));
+  function azureResponse(url: string) {
     if (url.includes('/fields?'))
       return {
         value: ['System.AssignedTo', ORIGINAL, REMAINING].map(
@@ -48,7 +52,7 @@ function setup(pushedHours: number) {
         'Microsoft.VSTS.Scheduling.CompletedWork': 3,
       },
     };
-  });
+  }
   const request = jest.fn().mockResolvedValue(undefined);
   const prisma = {
     roadmapAllocation: {
@@ -92,6 +96,7 @@ function setup(pushedHours: number) {
       importWorkItems: jest.fn().mockResolvedValue([]),
     } as unknown as RoadmapWorkItemImportService,
     {} as IsActiveAdminHandler,
+    {} as RoadmapAllocationAzureService,
   );
   const patches = () =>
     request.mock.calls.map(
@@ -108,6 +113,7 @@ describe('Azure write-back task updates', () => {
     await service['syncAllocation']('allocation');
 
     expect(patches()).toHaveLength(0);
+    expect(row.azureSyncError).toBeNull();
     expect(row.azureSyncStatus).toBe('synced');
   });
 

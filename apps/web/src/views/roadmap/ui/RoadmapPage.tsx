@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { aggregateRoadmapSummaries, azureRoleEstimate, getRoadmapFactRoots, getRoadmapRolePlan, getRoadmapSummary } from '@tracker/shared';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Cloud, Equal, ExternalLink, ListChecks, Maximize2, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Cloud, Equal, ListChecks, Maximize2, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
@@ -25,6 +25,7 @@ import {
   type AzureProject,
   type RoadmapAllocation,
   type RoadmapPeriod,
+  type RoadmapProjectPlan,
   type RoadmapProjectsResult,
   type RoadmapRole,
   type RoadmapWorkItem,
@@ -41,6 +42,7 @@ import { getTableAppearanceProps } from '../model/table-appearance';
 import { TableAppearanceSettings } from './TableAppearanceSettings';
 import { RoadmapToolbarSwitch } from './RoadmapToolbarSwitch';
 import { CreatedTasksPanel } from './CreatedTasksPanel';
+import { AllocationAzurePanel, DeleteAllocationButton } from './AllocationAzurePanel';
 import { AgentPanel } from '@/features/roadmap-agent/ui/AgentPanel';
 import './table-appearance.css';
 import { ColumnResizeHandle, planColumnOffset, ResizablePlanTable, type PlanColumn } from './ResizablePlanTable';
@@ -98,27 +100,6 @@ function AzureSyncMark({ allocation }: { allocation: RoadmapAllocation }) {
   return <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/40" aria-label="Ещё не отправлено в Azure DevOps" />;
 }
 
-function AzureTaskPanel({ allocation, onRetry, retrying }: { allocation: RoadmapAllocation; onRetry?: () => void; retrying: boolean }) {
-  const status = allocation.azureSyncStatus;
-  const label = status === 'synced' ? 'Задача синхронизирована'
-    : status === 'pending' ? 'Отправляем в Azure DevOps…'
-      : status === 'sending' ? 'Задача отправляется в Azure DevOps…'
-      : status === 'error' ? 'Не удалось отправить'
-        : status === 'conflict' ? 'Конфликт изменений'
-        : status === 'skipped' ? 'Не отправляется'
-          : 'Ещё не отправлено';
-  return <div className="space-y-2 rounded-lg border border-border px-3 py-2.5 text-xs">
-    <div className="flex items-center justify-between gap-2">
-      <span className="flex min-w-0 items-center gap-1.5 font-medium text-foreground"><AzureSyncMark allocation={allocation} />{label}</span>
-      {allocation.azureTaskUrl ? <a href={allocation.azureTaskUrl} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 text-primary hover:underline">Task #{allocation.azureTaskId}<ExternalLink className="h-3 w-3" /></a> : null}
-    </div>
-    <p className="text-muted-foreground">
-      План {Number(allocation.estimatedHours)} ч · факт {Number(allocation.actualHours ?? 0)} ч{allocation.azureTaskState ? ` · ${allocation.azureTaskState}` : ''}
-    </p>
-    {allocation.azureSyncError ? <p className="break-words text-destructive">{allocation.azureSyncError}</p> : null}
-    {onRetry && status !== 'synced' && status !== 'pending' && status !== 'sending' ? <Button type="button" size="sm" variant="outline" className="h-7 gap-1.5 text-xs" disabled={retrying} onClick={onRetry}><ArrowUpFromLine className="h-3.5 w-3.5" />{retrying ? 'Отправляем…' : 'Отправить снова'}</Button> : null}
-  </div>;
-}
 
 type QuarterMonth = { monthKey: string; label: string; startsAt: string; endsAt: string };
 
@@ -526,7 +507,12 @@ function AllocationEditor({
   people: { id: string; name: string; email: string | null; isMock?: boolean }[];
   initial?: RoadmapAllocation;
   /** Shows the linked Azure DevOps Task when plan write-back is enabled. */
-  azure?: { onRetry?: (allocationId: string) => void; retrying: boolean };
+  azure?: {
+    onRetry?: (allocationId: string) => void;
+    retrying: boolean;
+    onOpenTask?: (taskId: string) => void;
+    removal?: NonNullable<RoadmapProjectPlan['azure']>['removal'];
+  };
   initialPersonExternalId?: string;
   triggerLabel?: string;
   triggerClassName?: string;
@@ -659,9 +645,16 @@ function AllocationEditor({
               <Cloud aria-hidden="true" className="size-3.5" />
               Оценка Azure: <span className="font-medium tabular-nums text-foreground">{sourceEstimate} ч</span>
             </button> : null}
-            {initial && azure ? <AzureTaskPanel allocation={initial} retrying={azure.retrying} onRetry={azure.onRetry ? () => azure.onRetry?.(initial.id) : undefined} /> : null}
+            {initial && azure ? <AllocationAzurePanel
+              allocation={initial}
+              canEditPlan
+              retrying={azure.retrying}
+              onRetry={azure.onRetry ? () => azure.onRetry?.(initial.id) : undefined}
+              onOpenTask={azure.onOpenTask ? (taskId) => { setOpen(false); azure.onOpenTask?.(taskId); } : undefined}
+            /> : null}
           </div>
           <div className="flex items-center justify-end gap-1.5 border-t border-border px-3 py-2">
+            {initial ? <div className="mr-auto flex min-w-0 flex-1"><DeleteAllocationButton allocation={initial} removal={azure?.removal} onDeleted={() => setOpen(false)} /></div> : null}
             <Button type="button" variant="ghost" size="sm" className="h-7 px-2.5 text-xs" onClick={() => setOpen(false)}>Отмена</Button>
             <Button type="submit" size="sm" className="h-7 gap-1 px-2.5 text-xs" disabled={!personId || saving} title={!personId ? 'Выберите участника' : undefined}><Check aria-hidden="true" className="size-3.5" />{saving ? 'Сохраняем…' : 'Сохранить'}</Button>
           </div>
@@ -1078,7 +1071,12 @@ export function RoadmapPage() {
           const canEdit = canEditPlan && !selectedMonth && rolePeople.length > 0;
           const editorProps = {
             item, role, people: rolePeople, quarterLabel: currentQuarterLabel, saving: saveMutation.isPending, onSave: saveAllocation,
-            azure: writeBackEnabled ? { onRetry: canPushToAzure ? (allocationId: string) => pushAllocationMutation.mutate(allocationId) : undefined, retrying: pushAllocationMutation.isPending } : undefined,
+            azure: writeBackEnabled ? {
+              onRetry: canPushToAzure ? (allocationId: string) => pushAllocationMutation.mutate(allocationId) : undefined,
+              retrying: pushAllocationMutation.isPending,
+              onOpenTask: canOpenCard ? (taskId: string) => showCard({ projectId: roadmapProjectId, externalId: taskId }) : undefined,
+              removal: plan?.azure?.removal,
+            } : undefined,
           };
           const personLine = ({ name, email, hours, mock, status }: { name: string; email?: string | null; hours: string; mock?: boolean; status?: React.ReactNode }) => (
             <span className="flex w-full min-w-0 items-center gap-2 px-1.5 py-1 text-left">
@@ -1345,6 +1343,8 @@ export function RoadmapPage() {
                       planItems={cardPlan?.workItems ?? []}
                       onRetryAllocation={cardPlan && canPushToAzure ? (allocationId) => pushAllocationMutation.mutate(allocationId) : undefined}
                       retrying={pushAllocationMutation.isPending}
+                      canEditPlan={Boolean(cardPlan) && canEditPlan}
+                      writeEnabled={Boolean(cardPlan?.azure?.writeBackEnabled)}
                     /> : null}
                     {!demoMode && roadmapProjectId ? <AgentPanel
                       key={roadmapProjectId}

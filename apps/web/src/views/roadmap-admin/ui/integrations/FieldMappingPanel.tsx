@@ -224,6 +224,41 @@ export function FieldMappingPanel({ overview, queries = [] }: {
               <SearchableSelect searchable={false} value={draft.fact.scope} onChange={(value) => update({ fact: { ...draft.fact, scope: value as SyncSettingsV2['fact']['scope'] } })} options={[{ value: 'roadmapTasks', label: 'Только задачи Roadmap' }, { value: 'allChildTasks', label: 'Все дочерние задачи' }]} />
             </label>
           </section>
+          <section className="min-w-0 space-y-3 lg:col-span-2">
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-sm font-semibold text-foreground">Двусторонняя синхронизация</h3>
+              <HelpHint text="Оценку и исполнителя, изменённые в задаче Azure, Roadmap сам принимает в план. Здесь — что делать, если значение поменяли и в Roadmap, и в Azure, и что делать с задачей при снятии назначения." />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className={FIELD_LABEL_CLASS}>
+                Оценку изменили и в Roadmap, и в Azure
+                <SearchableSelect searchable={false} value={draft.conflictPolicy} onChange={(value) => update({ conflictPolicy: value as SyncSettingsV2['conflictPolicy'] })} options={[
+                  { value: 'overwrite', label: 'Оставить значение Roadmap', description: 'Azure перезапишется при отправке' },
+                  { value: 'skip-field', label: 'Взять значение из Azure', description: 'План в Roadmap заменится' },
+                  { value: 'stop', label: 'Остановиться и спросить', description: 'Назначение помечается «Расходится с Azure»' },
+                ]} />
+              </label>
+              <label className={FIELD_LABEL_CLASS}>
+                Назначение удалено или часы обнулены
+                <SearchableSelect searchable={false} value={draft.removalPolicy.action} onChange={(value) => update({ removalPolicy: { ...draft.removalPolicy, action: value as SyncSettingsV2['removalPolicy']['action'] } })} options={[
+                  { value: 'keep', label: 'Оставить задачу в Azure' },
+                  { value: 'set-state', label: 'Перевести задачу в состояние' },
+                  { value: 'delete', label: 'Удалить задачу', description: 'Попадёт в корзину Azure, её можно восстановить' },
+                ]} />
+              </label>
+              {draft.removalPolicy.action === 'set-state' ? <label className={FIELD_LABEL_CLASS}>
+                Состояние снятой задачи
+                <Input className="h-9" value={draft.removalPolicy.state ?? ''} placeholder="Removed" onChange={(event) => update({ removalPolicy: { ...draft.removalPolicy, state: event.target.value } })} />
+              </label> : null}
+              <label className="flex items-start gap-2 text-xs text-foreground sm:col-span-2">
+                <input type="checkbox" className="mt-0.5 accent-primary" checked={draft.writeFeatureAggregates} onChange={(event) => update({ writeFeatureAggregates: event.target.checked })} />
+                <span>
+                  Записывать в фичу сумму плана по каждой роли
+                  <span className="block text-muted-foreground">Пишется в поле оценки роли (или в поле суммы из сопоставления ролей) и перезаписывает значение, введённое в Azure вручную.</span>
+                </span>
+              </label>
+            </div>
+          </section>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5">

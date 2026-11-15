@@ -13,6 +13,7 @@ import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { ErrorNotice } from '@/shared/ui/error-notice';
 import { SearchableSelect, type SearchableSelectOption } from '@/shared/ui/searchable-select';
+import { AllocationAzurePanel } from './AllocationAzurePanel';
 
 type Tab = 'description' | 'plan' | 'children' | 'discussion' | 'history';
 
@@ -27,7 +28,7 @@ const inlineSelect = 'min-h-8 -ml-2 w-auto max-w-full border-transparent bg-tran
 function formatDate(value: string | null, withTime = false) {
   if (!value) return null;
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : (withTime ? dateTimeFormat : dateFormat).format(date);
+  return Number.isNaN(date.getTime()) ? null : (withTime ? dateTimeFormat : dateFormat).format(date).replace(/\s*г\.$/, '');
 }
 
 function hours(value: number | string | null | undefined) {
@@ -63,11 +64,36 @@ function SyncStatus({ allocation }: { allocation: RoadmapAllocation }) {
   return <span className={cn('inline-flex items-center gap-1.5', tone.text)}><span aria-hidden="true" className={cn('size-1.5 rounded-full', tone.dot)} />{tone.label}</span>;
 }
 
-function Property({ label, children }: { label: string; children: ReactNode }) {
-  return <>
-    <dt className="py-1.5 text-sm text-muted-foreground">{label}</dt>
-    <dd className="flex min-h-8 min-w-0 items-center py-0.5 text-sm text-foreground [overflow-wrap:anywhere]">{children}</dd>
-  </>;
+function Property({ label, wide, children }: { label: string; wide?: boolean; children: ReactNode }) {
+  return <div className={cn('min-w-0', wide && 'sm:col-span-2')}>
+    <dt className="text-xs text-muted-foreground">{label}</dt>
+    <dd className="mt-1 flex min-h-8 min-w-0 items-center text-sm text-foreground [overflow-wrap:anywhere]">{children}</dd>
+  </div>;
+}
+
+/** Azure paths read as "Project\Team\Sprint": lead with the leaf, keep the rest as quiet context. */
+function AzurePath({ value }: { value: string }) {
+  const parts = value.split('\\').filter(Boolean);
+  const leaf = parts.pop() ?? value;
+  return <span title={value} className="min-w-0">
+    <span className="font-medium">{leaf}</span>
+    {parts.length ? <span className="block truncate text-xs text-muted-foreground">{parts.join(' / ')}</span> : null}
+  </span>;
+}
+
+const priorities: Record<number, { label: string; dot: string }> = {
+  1: { label: 'критический', dot: 'bg-rose-500' },
+  2: { label: 'высокий', dot: 'bg-amber-500' },
+  3: { label: 'средний', dot: 'bg-sky-500' },
+  4: { label: 'низкий', dot: 'bg-muted-foreground/40' },
+};
+
+function Priority({ value }: { value: number }) {
+  const tone = priorities[value];
+  return <span className="inline-flex items-center gap-2 tabular-nums">
+    <span aria-hidden="true" className={cn('size-2 rounded-full', tone?.dot ?? 'bg-muted-foreground/40')} />
+    <span>{value}{tone ? <span className="text-muted-foreground"> · {tone.label}</span> : null}</span>
+  </span>;
 }
 
 export interface WorkItemCardSheetProps {
@@ -79,9 +105,13 @@ export interface WorkItemCardSheetProps {
   planItems: RoadmapWorkItem[];
   onRetryAllocation?: (allocationId: string) => void;
   retrying?: boolean;
+  /** The viewer plans this project: may resolve conflicts and log time for others. */
+  canEditPlan?: boolean;
+  /** Plan write-back to Azure is on, so time logging and conflict actions are offered. */
+  writeEnabled?: boolean;
 }
 
-export function WorkItemCardSheet({ projectId, externalId, onNavigate, planItems, onRetryAllocation, retrying = false }: WorkItemCardSheetProps) {
+export function WorkItemCardSheet({ projectId, externalId, onNavigate, planItems, onRetryAllocation, retrying = false, canEditPlan = false, writeEnabled = false }: WorkItemCardSheetProps) {
   const id = useId();
   const dialog = useRef<HTMLDialogElement>(null);
   const [portal, setPortal] = useState<HTMLElement | null>(null);
@@ -135,6 +165,7 @@ export function WorkItemCardSheet({ projectId, externalId, onNavigate, planItems
           projectId={projectId}
           externalId={externalId}
           planItem={planItems.find((item) => item.externalId === externalId)}
+          taskAllocations={planItems.flatMap((item) => item.allocations).filter((allocation) => allocation.azureTaskId === externalId)}
           portal={portal}
           canGoBack={trail.length > 0}
           onBack={back}
@@ -142,17 +173,23 @@ export function WorkItemCardSheet({ projectId, externalId, onNavigate, planItems
           onOpen={open}
           onRetryAllocation={onRetryAllocation}
           retrying={retrying}
+          canEditPlan={canEditPlan}
+          writeEnabled={writeEnabled}
         />
       ) : null}
     </dialog>
   );
 }
 
-function CardContent({ titleId, projectId, externalId, planItem, portal, canGoBack, onBack, onClose, onOpen, onRetryAllocation, retrying }: {
+function CardContent({ titleId, projectId, externalId, planItem, taskAllocations, portal, canGoBack, onBack, onClose, onOpen, onRetryAllocation, retrying, canEditPlan, writeEnabled }: {
   titleId: string;
   projectId: string;
   externalId: string;
   planItem?: RoadmapWorkItem;
+  /** Allocations whose Task this card shows (a Task created by Roadmap). */
+  taskAllocations: RoadmapAllocation[];
+  canEditPlan: boolean;
+  writeEnabled: boolean;
   portal: HTMLElement | null;
   canGoBack: boolean;
   onBack: () => void;
@@ -169,7 +206,7 @@ function CardContent({ titleId, projectId, externalId, planItem, portal, canGoBa
     staleTime: 15_000,
     retry: (count, error) => !(error instanceof ApiError && (error.status ?? 500) < 500) && count < 2,
   });
-  const allocations = planItem?.allocations ?? [];
+  const allocations = planItem?.allocations.length ? planItem.allocations : taskAllocations;
   const [tab, setTab] = useState<Tab>(allocations.length ? 'plan' : 'description');
 
   const update = useMutation({
@@ -245,9 +282,9 @@ function CardContent({ titleId, projectId, externalId, planItem, portal, canGoBa
     <div className="min-h-0 flex-1 overflow-y-auto">
       <section className="px-6 pt-5 pb-6">
         <EditableTitle id={titleId} value={item.title} editable={item.canEdit} saving={update.isPending} onSave={(title) => update.mutate({ title })} />
-        <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          {changed ? <span>Изменено {changed}{item.changedBy ? ` · ${item.changedBy.name}` : ''}</span> : null}
-          {!item.canEdit && item.readOnlyReason ? <span title={item.readOnlyReason} className="inline-flex items-center gap-1"><Lock aria-hidden="true" className="size-3" />Только просмотр<span className="sr-only">: {item.readOnlyReason}</span></span> : null}
+        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
+          {!item.canEdit && item.readOnlyReason ? <span title={item.readOnlyReason} className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-foreground/70"><Lock aria-hidden="true" className="size-3" />Только просмотр<span className="sr-only">: {item.readOnlyReason}</span></span> : null}
+          {changed ? <span>Изменено {changed}{item.changedBy ? <> · <span className="text-foreground/80">{item.changedBy.name}</span></> : null}</span> : null}
         </p>
 
         {update.error ? <div role="alert" className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-destructive/8 px-3 py-2 text-sm text-destructive">
@@ -255,7 +292,7 @@ function CardContent({ titleId, projectId, externalId, planItem, portal, canGoBa
           {conflict ? <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={refresh}>Обновить карточку</Button> : null}
         </div> : null}
 
-        <dl className="mt-5 grid grid-cols-[8.5rem_minmax(0,1fr)] gap-x-4">
+        <dl className="mt-5 grid grid-cols-1 gap-x-6 gap-y-4 rounded-xl border border-border/70 bg-muted/25 px-4 py-4 sm:grid-cols-2">
           <Property label="Состояние">
             {item.canEdit && item.states.length ? (
               <SearchableSelect
@@ -283,9 +320,9 @@ function CardContent({ titleId, projectId, externalId, planItem, portal, canGoBa
               />
             ) : <PersonName person={item.assignedTo} />}
           </Property>
-          {item.iterationPath ? <Property label="Итерация">{item.iterationPath}</Property> : null}
-          {item.areaPath ? <Property label="Область">{item.areaPath}</Property> : null}
-          {item.priority !== null ? <Property label="Приоритет">{item.priority}</Property> : null}
+          {item.iterationPath ? <Property label="Итерация"><AzurePath value={item.iterationPath} /></Property> : null}
+          {item.areaPath ? <Property label="Область"><AzurePath value={item.areaPath} /></Property> : null}
+          {item.priority !== null ? <Property label="Приоритет"><Priority value={item.priority} /></Property> : null}
           {hasHours ? <Property label="Часы">
             <span className="flex flex-wrap gap-x-4 gap-y-1 tabular-nums">
               {original !== null ? <span><span className="text-muted-foreground">оценка </span>{hours(original)}</span> : null}
@@ -293,7 +330,7 @@ function CardContent({ titleId, projectId, externalId, planItem, portal, canGoBa
               {completed !== null ? <span><span className="text-muted-foreground">факт </span>{hours(completed)}</span> : null}
             </span>
           </Property> : null}
-          {item.tags.length || item.canEdit ? <Property label="Теги">
+          {item.tags.length || item.canEdit ? <Property label="Теги" wide>
             <EditableTags value={item.tags} editable={item.canEdit} saving={update.isPending} onSave={(tags) => update.mutate({ tags })} />
           </Property> : null}
         </dl>
@@ -314,7 +351,7 @@ function CardContent({ titleId, projectId, externalId, planItem, portal, canGoBa
 
       <div role="tabpanel" className="px-6 py-5">
         {tab === 'description' ? <DescriptionTab item={item} saving={update.isPending} onSave={(description) => update.mutateAsync({ description })} /> : null}
-        {tab === 'plan' ? <PlanTab allocations={allocations} onOpen={onOpen} onRetry={onRetryAllocation} retrying={retrying} /> : null}
+        {tab === 'plan' ? <PlanTab allocations={allocations} currentTaskId={externalId} canEditPlan={canEditPlan} writeEnabled={writeEnabled} onOpen={onOpen} onRetry={onRetryAllocation} retrying={retrying} /> : null}
         {tab === 'children' ? <ChildrenTab item={item} onOpen={onOpen} /> : null}
         {tab === 'discussion' ? <DiscussionTab item={item} projectId={projectId} /> : null}
         {tab === 'history' ? <HistoryTab item={item} /> : null}
@@ -440,29 +477,57 @@ function DescriptionTab({ item, saving, onSave }: { item: WorkItemCard; saving: 
   </div>;
 }
 
-function PlanTab({ allocations, onOpen, onRetry, retrying }: { allocations: RoadmapAllocation[]; onOpen: (externalId: string) => void; onRetry?: (allocationId: string) => void; retrying: boolean }) {
+function PlanTab({ allocations, currentTaskId, canEditPlan, writeEnabled, onOpen, onRetry, retrying }: {
+  allocations: RoadmapAllocation[];
+  currentTaskId: string;
+  canEditPlan: boolean;
+  writeEnabled: boolean;
+  onOpen: (externalId: string) => void;
+  onRetry?: (allocationId: string) => void;
+  retrying: boolean;
+}) {
   const sorted = [...allocations].sort((left, right) => left.quarterKey.localeCompare(right.quarterKey) || left.personName.localeCompare(right.personName, 'ru'));
+  // A divergence with Azure needs a decision, so those rows start open; so does a single row.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(
+    sorted.filter((allocation) => allocation.azureSyncStatus === 'conflict' || sorted.length === 1).map((allocation) => allocation.id),
+  ));
+  const toggle = (id: string) => setExpanded((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
   return <ul className="-mx-2">
     {sorted.map((allocation) => {
-      const canRetry = onRetry && allocation.azureSyncStatus !== 'synced' && allocation.azureSyncStatus !== 'pending' && allocation.azureSyncStatus !== 'sending';
-      return <li key={allocation.id} className="flex gap-3 rounded-lg px-2 py-2.5 hover:bg-muted/40">
-        <Avatar name={allocation.personName} className="mt-0.5 size-7" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="truncate text-sm font-medium">{allocation.personName}</span>
-            <span className="shrink-0 text-sm tabular-nums">{hours(allocation.estimatedHours) ?? '—'}{Number(allocation.actualHours ?? 0) ? <span className="text-muted-foreground"> · факт {hours(allocation.actualHours)}</span> : null}</span>
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-            <span>{allocation.role.name}</span>
-            <span aria-hidden="true">·</span>
-            <span>{allocation.quarterKey.replace(/^(\d{4})-(Q\d)$/, '$2 $1')}</span>
-            <span aria-hidden="true">·</span>
-            <SyncStatus allocation={allocation} />
-            {allocation.azureTaskId ? <><span aria-hidden="true">·</span><button type="button" onClick={() => onOpen(allocation.azureTaskId!)} className="rounded hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring">Task {allocation.azureTaskId}</button></> : null}
-            {canRetry ? <><span aria-hidden="true">·</span><button type="button" disabled={retrying} onClick={() => onRetry(allocation.id)} className="rounded font-medium text-primary hover:underline disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-ring">{retrying ? 'Отправляем…' : 'Отправить снова'}</button></> : null}
-          </div>
-          {allocation.azureSyncError ? <p className="mt-1 text-xs text-destructive [overflow-wrap:anywhere]">{allocation.azureSyncError}</p> : null}
-        </div>
+      const open = expanded.has(allocation.id);
+      return <li key={allocation.id} className="rounded-lg px-2 py-2.5 hover:bg-muted/40">
+        <button type="button" aria-expanded={open} onClick={() => toggle(allocation.id)} className="flex w-full gap-3 rounded text-left focus-visible:outline-2 focus-visible:outline-ring">
+          <Avatar name={allocation.personName} className="mt-0.5 size-7" />
+          <span className="min-w-0 flex-1">
+            <span className="flex items-baseline justify-between gap-3">
+              <span className="truncate text-sm font-medium">{allocation.personName}</span>
+              <span className="shrink-0 text-sm tabular-nums">{hours(allocation.estimatedHours) ?? '—'}{Number(allocation.actualHours ?? 0) ? <span className="text-muted-foreground"> · факт {hours(allocation.actualHours)}</span> : null}</span>
+            </span>
+            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              <span>{allocation.role.name}</span>
+              <span aria-hidden="true">·</span>
+              <span>{allocation.quarterKey.replace(/^(\d{4})-(Q\d)$/, '$2 $1')}</span>
+              <span aria-hidden="true">·</span>
+              <SyncStatus allocation={allocation} />
+            </span>
+          </span>
+          <ChevronRight aria-hidden="true" className={cn('mt-1 size-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none', open && 'rotate-90')} />
+        </button>
+        {open ? <AllocationAzurePanel
+          compact
+          className="mt-2 ml-10"
+          allocation={allocation}
+          canEditPlan={canEditPlan}
+          writeEnabled={writeEnabled}
+          retrying={retrying}
+          onRetry={onRetry ? () => onRetry(allocation.id) : undefined}
+          onOpenTask={allocation.azureTaskId === currentTaskId ? undefined : onOpen}
+        /> : null}
       </li>;
     })}
   </ul>;

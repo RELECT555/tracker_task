@@ -113,7 +113,13 @@ export interface RoadmapProjectPlan {
   workItems: RoadmapWorkItem[];
   roles: RoadmapRole[];
   canEditPlan?: boolean;
-  azure?: { writeBackEnabled: boolean; mode?: RoadmapWriteBackMode; canPush?: boolean; createdTaskIds?: string[] };
+  azure?: {
+    writeBackEnabled: boolean;
+    mode?: RoadmapWriteBackMode;
+    canPush?: boolean;
+    createdTaskIds?: string[];
+    removal?: { action: 'keep' | 'set-state' | 'delete'; state?: string };
+  };
 }
 
 export interface CreateAzureWorkItemInput {

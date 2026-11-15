@@ -1,5 +1,6 @@
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import type { IsActiveAdminHandler } from '../identity/application/queries/is-active-admin.handler';
+import type { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
@@ -78,6 +79,7 @@ function setup(type = 'Feature') {
       integration as unknown as RoadmapIntegrationService,
       importer as unknown as RoadmapWorkItemImportService,
       {} as IsActiveAdminHandler,
+      {} as RoadmapAllocationAzureService,
     );
     return () => service['syncAllocation']('allocation');
   };

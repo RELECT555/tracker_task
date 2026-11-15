@@ -1,6 +1,7 @@
 import { ForbiddenException } from '@nestjs/common';
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import type { IsActiveAdminHandler } from '../identity/application/queries/is-active-admin.handler';
+import type { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
@@ -30,6 +31,7 @@ function setup(
     } as RoadmapIntegrationService,
     {} as RoadmapWorkItemImportService,
     { execute } as unknown as IsActiveAdminHandler,
+    {} as RoadmapAllocationAzureService,
   );
   return { service, execute, allocations };
 }

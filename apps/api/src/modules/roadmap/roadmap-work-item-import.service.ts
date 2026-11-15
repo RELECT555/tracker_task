@@ -1,4 +1,4 @@
-import { BadGatewayException, Injectable } from '@nestjs/common';
+import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { azureWorkItemWebUrl } from './azure-work-item-url';
@@ -33,6 +33,14 @@ const COMPLETED_WORK = 'Microsoft.VSTS.Scheduling.CompletedWork';
 const CREATED_DATE = 'System.CreatedDate';
 const ASSIGNED_TO = 'System.AssignedTo';
 const TEAM_PROJECT = 'System.TeamProject';
+const ORIGINAL_ESTIMATE = 'Microsoft.VSTS.Scheduling.OriginalEstimate';
+const ITERATION_PATH = 'System.IterationPath';
+
+/** Called after every import with the freshly read items (used to pull Task edits back into the plan). */
+export type WorkItemImportListener = (
+  projectId: string,
+  items: AzureWorkItem[],
+) => Promise<void>;
 
 function completedWork(item: AzureWorkItem | undefined) {
   const value = item?.fields[COMPLETED_WORK];
@@ -51,11 +59,17 @@ function wasCreatedAfter(item: AzureWorkItem | undefined, snapshot: Date) {
 export class RoadmapWorkItemImportService {
   private readonly apiVersion = '7.1';
   private fieldCatalog: CustomFieldCatalog | null = null;
+  private readonly logger = new Logger(RoadmapWorkItemImportService.name);
+  private readonly listeners: WorkItemImportListener[] = [];
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly integration: RoadmapIntegrationService,
   ) {}
+
+  onImported(listener: WorkItemImportListener) {
+    this.listeners.push(listener);
+  }
 
   /** Downloads the given work items and upserts them into the Roadmap project. */
   async importWorkItems(
@@ -93,6 +107,8 @@ export class RoadmapWorkItemImportService {
         TEAM_PROJECT,
         COMPLETED_WORK,
         ASSIGNED_TO,
+        ORIGINAL_ESTIMATE,
+        ITERATION_PATH,
         ...customFields,
       ]),
     ];
@@ -140,6 +156,15 @@ export class RoadmapWorkItemImportService {
         imported
           .slice(offset, offset + WORK_ITEM_BATCH_SIZE)
           .map((item) => this.upsert(project.id, item, customFields)),
+      );
+    }
+    for (const listener of this.listeners) {
+      // A failing listener must not fail the import that already succeeded.
+      await listener(project.id, imported).catch((error: unknown) =>
+        this.logger.error(
+          `Work item import listener failed for project ${project.id}`,
+          error instanceof Error ? error.stack : error,
+        ),
       );
     }
     return imported;
