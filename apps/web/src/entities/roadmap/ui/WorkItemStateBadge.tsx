@@ -13,12 +13,12 @@ const stateTones: Record<StateTone, readonly string[]> = {
 };
 
 const toneClasses: Record<StateTone, string> = {
-  new: 'bg-slate-500/10 text-slate-700 dark:bg-slate-400/15 dark:text-slate-300',
-  active: 'bg-sky-500/10 text-sky-700 dark:bg-sky-400/15 dark:text-sky-300',
-  resolved: 'bg-amber-500/12 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300',
-  done: 'bg-emerald-500/12 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300',
-  removed: 'bg-rose-500/10 text-rose-700 line-through decoration-rose-700/40 dark:bg-rose-400/15 dark:text-rose-300',
-  neutral: 'bg-muted text-foreground/70',
+  new: 'bg-slate-500/5 text-slate-600 ring-slate-500/25 dark:bg-slate-400/10 dark:text-slate-300 dark:ring-slate-400/30',
+  active: 'bg-sky-500/5 text-sky-700 ring-sky-500/30 dark:bg-sky-400/10 dark:text-sky-300 dark:ring-sky-400/30',
+  resolved: 'bg-amber-500/5 text-amber-800 ring-amber-500/35 dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/30',
+  done: 'bg-emerald-500/5 text-emerald-700 ring-emerald-500/30 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/30',
+  removed: 'bg-rose-500/5 text-rose-700 ring-rose-500/30 line-through decoration-rose-700/40 dark:bg-rose-400/10 dark:text-rose-300 dark:ring-rose-400/30',
+  neutral: 'bg-muted/50 text-foreground/70 ring-border',
 };
 
 export function workItemStateTone(state: string): StateTone {
@@ -32,7 +32,7 @@ export function workItemStateTone(state: string): StateTone {
 export function WorkItemStateBadge({ state, className }: { state?: string | null; className?: string }) {
   if (!state?.trim()) return null;
   return (
-    <span className={cn('inline-flex items-center rounded-full px-2 py-px text-[11px] leading-4 font-medium whitespace-nowrap', toneClasses[workItemStateTone(state)], className)}>
+    <span className={cn('inline-flex items-center rounded-full px-2 py-px text-[10.5px] leading-4 font-medium whitespace-nowrap ring-1 ring-inset', toneClasses[workItemStateTone(state)], className)}>
       {state}
     </span>
   );

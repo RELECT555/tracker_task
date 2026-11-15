@@ -43,6 +43,7 @@ import { TableAppearanceSettings } from './TableAppearanceSettings';
 import { RoadmapToolbarSwitch } from './RoadmapToolbarSwitch';
 import { CreatedTasksPanel } from './CreatedTasksPanel';
 import { AllocationAzurePanel, DeleteAllocationButton } from './AllocationAzurePanel';
+import { RoleHoursCell } from './RoleHoursCell';
 import { AgentPanel } from '@/features/roadmap-agent/ui/AgentPanel';
 import './table-appearance.css';
 import { ColumnResizeHandle, planColumnOffset, ResizablePlanTable, type PlanColumn } from './ResizablePlanTable';
@@ -510,6 +511,8 @@ function AllocationEditor({
   azure?: {
     onRetry?: (allocationId: string) => void;
     retrying: boolean;
+    /** "Назначить" also creates the Azure DevOps Task of a new assignment. */
+    createsTask?: boolean;
     onOpenTask?: (taskId: string) => void;
     removal?: NonNullable<RoadmapProjectPlan['azure']>['removal'];
   };
@@ -520,6 +523,7 @@ function AllocationEditor({
   trigger?: React.ReactElement;
   onSave: (data: {
     allocationId?: string;
+    createTask?: boolean;
     workItemId: string;
     roleId: string;
     personExternalId: string;
@@ -533,6 +537,7 @@ function AllocationEditor({
   const [open, setOpen] = useState(false);
   const [personId, setPersonId] = useState('');
   const [hours, setHours] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const selectedPerson = people.find((person) => person.id === personId);
   const sourceEstimate = azureRoleEstimate(item, role);
 
@@ -541,6 +546,7 @@ function AllocationEditor({
     if (!selectedPerson) return;
     onSave({
       allocationId: initial?.id,
+      createTask: !initial && Boolean(azure?.createsTask) && Number(hours) > 0,
       workItemId: item.id,
       roleId: role.id,
       personExternalId: selectedPerson.id,
@@ -560,8 +566,10 @@ function AllocationEditor({
   };
 
   const startEditing = () => {
+    setDeleting(false);
     setPersonId(initial?.personExternalId ?? initialPersonExternalId ?? '');
-    setHours(initial ? String(initial.estimatedHours) : '');
+    // A new assignment starts from the role's hours already in Azure DevOps.
+    setHours(initial ? String(initial.estimatedHours) : sourceEstimate ? String(sourceEstimate) : '');
   };
 
   return (
@@ -593,7 +601,7 @@ function AllocationEditor({
           <div className="flex items-center gap-2 px-3 pb-2 pt-2.5">
             <RoleMark name={role.name} color={role.color} size="sm" />
             <div className="min-w-0 flex-1">
-              <h3 className="text-[13px] font-semibold leading-4 text-foreground">{initial ? 'Оценка участника' : 'Назначить участника'}</h3>
+              <h3 className="text-[13px] font-semibold leading-4 text-foreground">{initial ? 'Оценка участника' : azure?.createsTask ? 'Создать task' : 'Назначить участника'}</h3>
               <p className="truncate text-[11px] leading-4 text-muted-foreground" title={`${role.name} · ${item.title}`}>
                 <span className="font-medium text-foreground/80">{role.name}</span> · {item.title}
               </p>
@@ -645,6 +653,7 @@ function AllocationEditor({
               <Cloud aria-hidden="true" className="size-3.5" />
               Оценка Azure: <span className="font-medium tabular-nums text-foreground">{sourceEstimate} ч</span>
             </button> : null}
+            {!initial && azure?.createsTask ? <p className="text-[11px] leading-4 text-muted-foreground">Создаст task в Azure DevOps: участник станет исполнителем, часы — оценкой.</p> : null}
             {initial && azure ? <AllocationAzurePanel
               allocation={initial}
               canEditPlan
@@ -654,9 +663,9 @@ function AllocationEditor({
             /> : null}
           </div>
           <div className="flex items-center justify-end gap-1.5 border-t border-border px-3 py-2">
-            {initial ? <div className="mr-auto flex min-w-0 flex-1"><DeleteAllocationButton allocation={initial} removal={azure?.removal} onDeleted={() => setOpen(false)} /></div> : null}
-            <Button type="button" variant="ghost" size="sm" className="h-7 px-2.5 text-xs" onClick={() => setOpen(false)}>Отмена</Button>
-            <Button type="submit" size="sm" className="h-7 gap-1 px-2.5 text-xs" disabled={!personId || saving} title={!personId ? 'Выберите участника' : undefined}><Check aria-hidden="true" className="size-3.5" />{saving ? 'Сохраняем…' : 'Сохранить'}</Button>
+            {initial ? <div className="mr-auto flex min-w-0 flex-1"><DeleteAllocationButton allocation={initial} removal={azure?.removal} onDeleted={() => setOpen(false)} onConfirmingChange={setDeleting} /></div> : null}
+            {deleting ? null : <Button type="button" variant="ghost" size="sm" className="h-7 px-2.5 text-xs" onClick={() => setOpen(false)}>Отмена</Button>}
+            {deleting ? null : <Button type="submit" size="sm" className="h-7 gap-1 px-2.5 text-xs" disabled={!personId || saving} title={!personId ? 'Выберите участника' : undefined}><Check aria-hidden="true" className="size-3.5" />{saving ? (!initial && azure?.createsTask ? 'Создаём…' : 'Сохраняем…') : !initial && azure?.createsTask ? 'Создать task' : 'Сохранить'}</Button>}
           </div>
         </form>
       </PopoverContent>
@@ -802,7 +811,8 @@ export function RoadmapPage() {
   const syncResult = isSelectedProjectSync ? syncMutation.data : undefined;
   const saveMutation = useMutation({
     mutationFn: roadmapApi.saveAllocation,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
+    // The allocation is saved even when creating its Task fails, so refresh either way.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
   });
   const saveQuarterMutation = useMutation({
     mutationFn: ({ allocationId, quarterKey, months }: { allocationId: string; quarterKey: string; months: { monthKey: string; hours: number }[] }) => roadmapApi.saveAllocationQuarter(allocationId, quarterKey, months),
@@ -986,7 +996,7 @@ export function RoadmapPage() {
     const featureCountForm = isEpic ? FEATURE_COUNT_PLURALS.select(childCount) : null;
     return (
       <tr key={item.id} data-row-kind={isEpic ? 'epic' : 'feature'} className={`group/row align-top transition-colors ${isEpic ? 'border-t border-border bg-[color-mix(in_srgb,var(--color-muted)_30%,var(--color-card))] hover:bg-[color-mix(in_srgb,var(--color-muted)_45%,var(--color-card))]' : 'border-t border-border/50 bg-card hover:bg-[color-mix(in_srgb,var(--color-muted)_15%,var(--color-card))]'}`}>
-        <th scope="row" style={pinnedCellStyle('name')} className={cn('py-2 text-left font-normal', pinnedCellClass('name'), isEpic ? 'px-3 pr-5 inset-shadow-[2px_0_0] inset-shadow-primary/40 sm:px-4 sm:pr-5' : isChild ? 'px-0' : 'px-3 sm:px-4')}>
+        <th scope="row" style={pinnedCellStyle('name')} className={cn('py-2 text-left font-normal', pinnedCellClass('name'), isEpic ? 'px-3 pr-5 inset-shadow-[2px_0_0] inset-shadow-primary/40 sm:px-4 sm:pr-5' : isChild ? cn('relative px-0 before:pointer-events-none before:absolute before:left-2 before:top-0 before:border-l-2 before:border-border/80 after:pointer-events-none after:absolute after:left-2 after:top-[calc(var(--plan-pad-y)+10px)] after:w-5 after:border-t-2 after:border-border/80', isLastChild ? 'before:h-[calc(var(--plan-pad-y)+11px)]' : 'before:bottom-0') : 'px-3 sm:px-4')} data-plan-connector={isChild ? '' : undefined}>
           {isEpic ? (
             <div className={cn('-ml-1 grid items-start gap-x-2', canCreateWorkItem ? 'grid-cols-[1.75rem_1rem_minmax(0,1fr)_2rem]' : 'grid-cols-[1.75rem_1rem_minmax(0,1fr)]')}>
               <Button
@@ -1005,12 +1015,12 @@ export function RoadmapPage() {
               <AzureWorkItemIcon type={item.type} className="mt-0.5" />
               <div data-plan-name className="col-start-3 min-w-0">
                 {canOpenCard
-                  ? <button type="button" data-plan-title title={`${item.title} — открыть карточку`} aria-haspopup="dialog" onClick={() => showCard({ projectId: roadmapProjectId, externalId: item.externalId })} className="block w-full rounded-sm text-left text-sm leading-5 font-semibold text-foreground underline-offset-2 [overflow-wrap:anywhere] hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{item.title}</button>
-                  : <div data-plan-title title={item.title} className="text-sm leading-5 font-semibold text-foreground [overflow-wrap:anywhere]">{item.title}</div>}
-                <div data-plan-meta className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-4 text-muted-foreground">
+                  ? <button type="button" data-plan-title title={`${item.title} — открыть карточку`} aria-haspopup="dialog" onClick={() => showCard({ projectId: roadmapProjectId, externalId: item.externalId })} className="block w-full rounded-sm text-left text-sm leading-5 font-medium text-foreground underline-offset-2 [overflow-wrap:anywhere] hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{item.title}</button>
+                  : <div data-plan-title title={item.title} className="text-sm leading-5 font-medium text-foreground [overflow-wrap:anywhere]">{item.title}</div>}
+                <div data-plan-meta className="mt-1.5 grid grid-cols-[2.75rem_4.25rem_auto] items-center justify-start gap-x-1.5 gap-y-1.5 text-xs leading-4 text-muted-foreground">
                   <span className="min-w-0 tabular-nums [overflow-wrap:anywhere]" title={`Epic #${item.externalId}`}><span className="sr-only">Epic </span>#{item.externalId}</span>
-                  <WorkItemStateBadge state={item.state} />
-                  <span className="rounded-full bg-muted px-2 py-px whitespace-nowrap font-medium tabular-nums text-foreground/70">
+                  <WorkItemStateBadge state={item.state} className="w-full justify-center" />
+                  <span className="justify-self-start rounded-full px-2 py-px text-[10.5px] leading-4 whitespace-nowrap tabular-nums text-muted-foreground ring-1 ring-inset ring-border">
                     {childCount} {featureCountForm === 'one' ? 'фича' : featureCountForm === 'few' ? 'фичи' : 'фич'}
                   </span>
                 </div>
@@ -1029,7 +1039,7 @@ export function RoadmapPage() {
             </div>
           ) : (
             <div data-plan-name className={isChild
-              ? `relative pl-7 before:absolute before:left-2 before:top-[-8px] before:border-l-2 before:border-border/80 after:absolute after:left-2 after:top-3 after:w-5 after:border-t-2 after:border-border/80 ${isLastChild ? 'before:h-5' : 'before:bottom-[-8px]'}`
+              ? 'pl-7'
               : 'pl-3'}>
               <div className="flex min-w-0 items-start gap-2">
                 <AzureWorkItemIcon type={item.type} className="mt-0.5" />
@@ -1037,9 +1047,9 @@ export function RoadmapPage() {
                   ? <button type="button" data-plan-title title={`${item.title} — открыть карточку`} aria-haspopup="dialog" onClick={() => showCard({ projectId: roadmapProjectId, externalId: item.externalId })} className="min-w-0 rounded-sm text-left text-sm leading-snug underline-offset-2 [overflow-wrap:anywhere] hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{item.title}</button>
                   : <span data-plan-title title={item.title} className="min-w-0 text-sm leading-snug [overflow-wrap:anywhere]">{item.title}</span>}
               </div>
-              <div data-plan-meta className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-6 text-[11px] text-muted-foreground">
+              <div data-plan-meta className="mt-1 grid grid-cols-[2.75rem_auto] items-center justify-start gap-x-1.5 gap-y-1 pl-6 text-[11px] text-muted-foreground">
                 <span className="tabular-nums" title={`Feature #${item.externalId}`}><span className="sr-only">Feature </span>#{item.externalId}</span>
-                <WorkItemStateBadge state={item.state} />
+                <WorkItemStateBadge state={item.state} className="justify-self-start" />
               </div>
             </div>
           )}
@@ -1069,11 +1079,14 @@ export function RoadmapPage() {
           }));
           const unassignedPeople = !selectedMonth ? rolePeople.filter((person) => !allocations.some((allocation) => allocation.personExternalId === person.id)) : [];
           const canEdit = canEditPlan && !selectedMonth && rolePeople.length > 0;
+          // Hours typed into the cell go to the role field of the feature in Azure DevOps.
+          const canEditRoleHours = canEditPlan && !selectedMonth && writeBackEnabled && canPushToAzure && item.type.toLowerCase() === 'feature';
           const editorProps = {
             item, role, people: rolePeople, quarterLabel: currentQuarterLabel, saving: saveMutation.isPending, onSave: saveAllocation,
             azure: writeBackEnabled ? {
               onRetry: canPushToAzure ? (allocationId: string) => pushAllocationMutation.mutate(allocationId) : undefined,
               retrying: pushAllocationMutation.isPending,
+              createsTask: canPushToAzure,
               onOpenTask: canOpenCard ? (taskId: string) => showCard({ projectId: roadmapProjectId, externalId: taskId }) : undefined,
               removal: plan?.azure?.removal,
             } : undefined,
@@ -1104,17 +1117,19 @@ export function RoadmapPage() {
           </>;
           // Members without an estimate are not listed in every row; they are one hover-revealed action away.
           const hasContent = allocations.length > 0;
-          const actions = canEdit ? <div className="flex items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
-            {unassignedPeople.length > 0 ? <AllocationEditor {...editorProps} people={unassignedPeople} initialPersonExternalId={unassignedPeople.length === 1 ? unassignedPeople[0].id : undefined} trigger={<button type="button" className="inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground" aria-label={`Назначить участника роли «${role.name}»: ${item.title}`}><Plus aria-hidden="true" className="h-3 w-3" />{hasContent ? 'Участник' : 'Назначить'}</button>} /> : null}
+          const actions = canEdit ? <div className={cn('flex items-center gap-0.5 transition-opacity motion-reduce:transition-none', 'opacity-0 focus-within:opacity-100 group-hover/row:opacity-100 [@media(hover:none)]:opacity-100', !hasContent && 'justify-end')}>
+            {unassignedPeople.length > 0 ? <AllocationEditor {...editorProps} people={unassignedPeople} initialPersonExternalId={unassignedPeople.length === 1 ? unassignedPeople[0].id : undefined} trigger={<button type="button" className="inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground" aria-label={`${writeBackEnabled && canPushToAzure ? 'Создать task' : 'Назначить участника'} для роли «${role.name}»: ${item.title}`}><Plus aria-hidden="true" className="h-3 w-3" />{writeBackEnabled && canPushToAzure ? (hasContent ? 'Task' : 'Создать task') : hasContent ? 'Участник' : 'Назначить'}</button>} /> : null}
             {allocations.length > 1 ? <button type="button" disabled={saveMutation.isPending || splitMutation.isPending} title="Распределить часы поровну между участниками" onClick={() => splitMutation.mutate(allocations.map(({ id }) => id))} className="inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-50"><Equal className="h-3 w-3" />{splitMutation.isPending ? 'Делим…' : 'Поровну'}</button> : null}
           </div> : null;
           return (
             <Fragment key={role.id}>
             <td className={cellClassName}>
               <div className={cn('flex items-center justify-end px-1.5 py-1 text-sm tabular-nums', planned ? 'font-medium text-foreground' : 'text-muted-foreground')}>
-                {!allocations.length && sourceEstimate !== null && planned ? <span title="Оценка Azure DevOps на всю карточку, без назначений" className="underline decoration-muted-foreground/50 decoration-dotted underline-offset-4">
-                  {cellHours(planned)}<span className="sr-only"> (оценка Azure DevOps)</span>
-                </span> : cellHours(planned)}
+                {canEditRoleHours
+                  ? <RoleHoursCell workItemId={item.id} roleId={role.id} roleName={role.name} quarterKey={currentQuarterKey} hours={planned} estimateFromAzure={!allocations.length && sourceEstimate !== null && Boolean(planned)} />
+                  : !allocations.length && sourceEstimate !== null && planned ? <span title="Оценка Azure DevOps на всю карточку, без назначений" className="underline decoration-muted-foreground/50 decoration-dotted underline-offset-4">
+                    {cellHours(planned)}<span className="sr-only"> (оценка Azure DevOps)</span>
+                  </span> : cellHours(planned)}
               </div>
               <div className="space-y-0.5">
                 {assignmentList}
@@ -1191,7 +1206,7 @@ export function RoadmapPage() {
 
   return (
     <main className="roadmap-scrollbar relative min-h-0 flex-1 overflow-auto overscroll-none px-4 py-5 sm:px-6 lg:px-8">
-        <div className="mx-auto flex min-h-full w-full flex-col gap-5">
+        <div className="mx-auto flex min-h-full w-full flex-col gap-4">
           <h1 className="sr-only">План проекта</h1>
           <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-6 gap-y-4">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -1314,7 +1329,7 @@ export function RoadmapPage() {
                   {planSyncInfo}
                 </div> : <h2 className="sr-only">{plan.name}</h2>}
 
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
                   <div className="flex flex-wrap items-center gap-1.5">
                     {PERIOD_PLANNING_ENABLED ? <>
                       <Button type="button" size="sm" variant={view === 'roles' ? 'secondary' : 'ghost'} onClick={() => setView('roles')} className="h-8 gap-1.5"><Users className="h-3.5 w-3.5" />По ролям</Button>
@@ -1361,9 +1376,9 @@ export function RoadmapPage() {
                     {appearanceSettings}
                     {canPushToAzure ? <Popover open={pushPreviewOpen} onOpenChange={setPushPreviewOpen}>
                       <PopoverTrigger asChild>
-                        <Button type="button" variant={plan.azure?.mode === 'manual' && azureUnsyncedCount ? 'default' : 'outline'} size="sm" className="h-8 gap-2" disabled={!azureUnsyncedCount} title="Посмотреть и отправить изменения плана в Azure DevOps">
-                          <ArrowUpFromLine className="h-4 w-4" />
-                          {azureUnsyncedCount ? `Отправить в Azure (${azureUnsyncedCount})` : 'Всё в Azure'}
+                        <Button type="button" variant={plan.azure?.mode === 'manual' && azureUnsyncedCount ? 'default' : 'outline'} size="sm" className="h-8 gap-1.5 px-2.5" disabled={!azureUnsyncedCount} aria-label={azureUnsyncedCount ? `Отправить в Azure (${azureUnsyncedCount})` : 'Всё в Azure'} title={azureUnsyncedCount ? `Отправить в Azure DevOps изменений: ${azureUnsyncedCount}` : 'Всё уже отправлено в Azure DevOps'}>
+                          <ArrowUpFromLine aria-hidden="true" className="h-4 w-4" />
+                          {azureUnsyncedCount ? <span aria-hidden="true" className="text-xs tabular-nums">{azureUnsyncedCount}</span> : null}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent align="end" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-xl p-0">
@@ -1373,9 +1388,8 @@ export function RoadmapPage() {
                     <Button type="button" variant={focusMode ? 'secondary' : 'outline'} size="sm" onClick={() => {
                       if (!focusMode && view === 'periods') setExpandedEpics(new Set(epics.map((epic) => epic.id)));
                       setFocusMode((current) => !current);
-                    }} className="h-8 gap-2" aria-label={focusMode ? 'Выйти из режима фокуса' : 'Включить режим фокуса'}>
-                      {focusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                      {focusMode ? 'Выйти' : 'Фокус'}
+                    }} className="h-8 px-2.5" aria-label={focusMode ? 'Выйти из режима фокуса' : 'Включить режим фокуса'} title={focusMode ? 'Выйти из режима фокуса' : 'Режим фокуса'}>
+                      {focusMode ? <Minimize2 aria-hidden="true" className="h-4 w-4" /> : <Maximize2 aria-hidden="true" className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
@@ -1448,7 +1462,7 @@ export function RoadmapPage() {
                       >
                       <thead className="sticky top-0 z-20 bg-card [&_th]:isolate">
                         <tr className="border-b border-border bg-[color-mix(in_srgb,var(--color-muted)_40%,var(--color-card))] text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          <th scope="col" data-column-id="name" rowSpan={headerRowSpan} style={pinnedCellStyle('name')} className={cn('relative px-3 py-2.5 pr-5 @lg:px-4 @lg:pr-5', pinnedCellClass('name'))}><div className="flex items-center justify-between gap-1 @lg:gap-3"><span>Эпик / фича</span>{canCreateWorkItem ? <Button ref={createEpicTrigger} type="button" variant="ghost" size="icon" className="size-8 shrink-0" aria-label="Создать эпик" title="Создать эпик" aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)}><Plus aria-hidden="true" className="size-4" /></Button> : null}</div><ColumnResizeHandle columnId="name" /></th>
+                          <th scope="col" data-column-id="name" rowSpan={headerRowSpan} style={pinnedCellStyle('name')} className={cn('group/head relative px-3 py-2.5 pr-5 @lg:px-4 @lg:pr-5', pinnedCellClass('name'))}><div className="flex items-center justify-between gap-1 @lg:gap-3"><span>Эпик / фича</span>{canCreateWorkItem ? <Button ref={createEpicTrigger} type="button" variant="ghost" size="icon" className="size-8 shrink-0 opacity-0 transition-opacity focus-visible:opacity-100 group-hover/head:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100" aria-label="Создать эпик" title="Создать эпик" aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)}><Plus aria-hidden="true" className="size-4" /></Button> : null}</div><ColumnResizeHandle columnId="name" /></th>
                           <th scope="col" data-column-id="summary:plan" rowSpan={headerRowSpan} style={pinnedCellStyle('summary:plan')} className={cn('relative border-l border-border/60 px-3 py-2.5 text-right', pinnedCellClass('summary:plan'))} title={selectedMonth ? 'План выбранного месяца' : 'Назначения выбранного квартала. При их отсутствии используется общая оценка Azure на карточке, без привязки к кварталу.'}>
                             <span className="block">План</span><span className="text-[10px] font-normal normal-case">итого, ч</span>
                             <ColumnResizeHandle columnId="summary:plan" />

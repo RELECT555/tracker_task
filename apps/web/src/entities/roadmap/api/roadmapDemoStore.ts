@@ -21,7 +21,7 @@ const DEMO_SYNC_SETTINGS: SyncSettingsV2 = {
   version: 2, mode: 'off', projectIds: null, workItemType: 'Task',
   titleTemplate: '{role}: {title} ({quarter})', tagsTemplate: 'Roadmap; Roadmap {quarterKey}; {role}',
   writeRules: [], readRules: [], fact: { field: 'Microsoft.VSTS.Scheduling.CompletedWork', scope: 'roadmapTasks', unlinkedTasks: 'featureOnly' },
-  roleFields: [], writeFeatureAggregates: false, conflictPolicy: 'overwrite', removalPolicy: { action: 'keep' }, pushPermission: 'planners',
+  roleFields: [], writeFeatureAggregates: false, conflictPolicy: 'overwrite', removalPolicy: { action: 'delete' }, pushPermission: 'planners',
 };
 
 export type DemoState = {

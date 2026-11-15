@@ -8,6 +8,9 @@ export const allocationAzureApi = {
       method: 'POST',
       body: JSON.stringify({ hours, comment: comment?.trim() || undefined }),
     }),
+  /** Creates the allocation's Azure DevOps Task; plan edits alone never create one. */
+  createTask: (allocationId: string) =>
+    apiFetch<{ taskId: string }>(`/roadmap/allocations/${encodeURIComponent(allocationId)}/azure-task`, { method: 'POST', body: '{}' }),
   /** Takes the Task's estimate and assignee from Azure DevOps into the plan. */
   acceptFromAzure: (allocationId: string) =>
     apiFetch<{ accepted: true }>(`/roadmap/allocations/${encodeURIComponent(allocationId)}/azure-accept`, { method: 'POST', body: '{}' }),

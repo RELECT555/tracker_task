@@ -190,7 +190,7 @@ export interface RoadmapAzurePushPreview {
   mode: RoadmapWriteBackMode;
   workItemType: string;
   projectAllowed: boolean;
-  counts: { create: number; update: number; skip: number };
+  counts: { field: number; update: number; skip: number };
   items: {
     allocationId: string;
     workItemExternalId: string;
@@ -201,8 +201,11 @@ export interface RoadmapAzurePushPreview {
     quarterKey: string;
     estimatedHours: number;
     pushedHours: number | null;
-    action: 'create' | 'update' | 'skip';
+    /** field: hours go to the role field of the feature; update: the linked Task is updated too. */
+    action: 'field' | 'update' | 'skip';
     skipReason: string | null;
+    /** The Azure DevOps field of the feature that receives the role's hours. */
+    roleField: string | null;
     taskTitle: string | null;
     azureTaskId: string | null;
     status: RoadmapAzureSyncStatus | null;
@@ -309,6 +312,12 @@ const liveRoadmapApi = {
     apiFetch<{ queued: number }>(`/roadmap/projects/${encodeURIComponent(projectId)}/azure-push`, { method: 'POST', body: JSON.stringify({ allocationIds }) }),
   pushAllocationToAzure: (allocationId: string) =>
     apiFetch<{ queued: number }>(`/roadmap/allocations/${encodeURIComponent(allocationId)}/azure-push`, { method: 'POST', body: '{}' }),
+  /** Writes a role's hours straight into the feature's role field in Azure DevOps. */
+  setRoleHours: (workItemId: string, roleId: string, hours: number, quarterKey?: string) =>
+    apiFetch<{ field: string; hours: number }>(`/roadmap/work-items/${encodeURIComponent(workItemId)}/roles/${encodeURIComponent(roleId)}/hours`, {
+      method: 'PUT',
+      body: JSON.stringify({ hours, quarterKey }),
+    }),
   people: () => apiFetch<{ data: RoadmapPerson[] }>('/roadmap/people'),
   roles: (projectId: string) => apiFetch<RoadmapRole[]>(`/roadmap/roles?projectId=${encodeURIComponent(projectId)}`),
   adminPeople: () => apiFetch<RoadmapPerson[]>('/roadmap/admin/users'),
@@ -341,6 +350,8 @@ const liveRoadmapApi = {
   deleteRole: (id: string) => apiFetch<{ deleted: boolean }>(`/roadmap/admin/roles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   saveAllocation: (input: {
     allocationId?: string;
+    /** Also creates the allocation's Azure DevOps Task. */
+    createTask?: boolean;
     workItemId: string;
     roleId: string;
     personExternalId: string;

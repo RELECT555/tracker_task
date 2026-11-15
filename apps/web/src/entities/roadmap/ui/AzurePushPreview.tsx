@@ -7,8 +7,8 @@ import { roadmapApi, type RoadmapAzurePushPreview } from '@/entities/roadmap/api
 import { Button } from '@/shared/ui/button';
 
 const ACTION_LABEL: Record<RoadmapAzurePushPreview['items'][number]['action'], { label: string; className: string }> = {
-  create: { label: 'Создать', className: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
-  update: { label: 'Обновить', className: 'bg-sky-500/10 text-sky-700 dark:text-sky-300' },
+  field: { label: 'В поле роли', className: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
+  update: { label: 'Поле и задача', className: 'bg-sky-500/10 text-sky-700 dark:text-sky-300' },
   skip: { label: 'Пропустить', className: 'bg-muted text-muted-foreground' },
 };
 
@@ -56,8 +56,8 @@ export function AzurePushPreview({ projectId, onDone }: { projectId: string; onD
       <div className="space-y-2 border-b border-border px-4 py-3">
         <p className="text-sm font-semibold text-foreground">Что уйдёт в Azure DevOps</p>
         <div className="flex flex-wrap gap-1.5 text-[11px] font-medium">
-          <span className={`rounded-full px-2 py-0.5 ${ACTION_LABEL.create.className}`}>Создать {preview.workItemType}: {preview.counts.create}</span>
-          <span className={`rounded-full px-2 py-0.5 ${ACTION_LABEL.update.className}`}>Обновить: {preview.counts.update}</span>
+          <span className={`rounded-full px-2 py-0.5 ${ACTION_LABEL.field.className}`}>Часы в поле роли: {preview.counts.field}</span>
+          <span className={`rounded-full px-2 py-0.5 ${ACTION_LABEL.update.className}`}>Ещё и обновить {preview.workItemType}: {preview.counts.update}</span>
           {preview.counts.skip ? <span className={`rounded-full px-2 py-0.5 ${ACTION_LABEL.skip.className}`}>Пропустить: {preview.counts.skip}</span> : null}
         </div>
         {preview.mode === 'off' ? <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />Запись выключена в настройках интеграции — отправить нельзя.</p> : null}
@@ -85,7 +85,7 @@ export function AzurePushPreview({ projectId, onDone }: { projectId: string; onD
                     ? <span className="font-medium text-foreground">{item.pushedHours} → {item.estimatedHours} ч</span>
                     : <span className="font-medium text-foreground">{item.estimatedHours} ч</span>}
                 </p>
-                {item.taskTitle ? <p className="truncate text-muted-foreground" title={item.taskTitle}>Название: «{item.taskTitle}»</p> : null}
+                {item.roleField ? <p className="truncate text-muted-foreground" title={item.roleField}>Поле фичи: {item.roleField}</p> : null}
                 {item.action === 'update' ? <p className="text-muted-foreground">Task #{item.azureTaskId}</p> : null}
                 {item.skipReason ? <p className="text-amber-700 dark:text-amber-300">{item.skipReason}</p> : null}
                 {item.error ? <p className="break-words text-destructive">Прошлая ошибка: {item.error}</p> : null}

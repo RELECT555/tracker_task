@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type KeyboardEvent } from 'react';
+import { useEffect, useState, type KeyboardEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Clock3, ExternalLink, Trash2 } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
@@ -68,6 +68,11 @@ export function AllocationAzurePanel({ allocation, canEditPlan, writeEnabled = t
     mutationFn: () => allocationAzureApi.acceptFromAzure(allocation.id),
     onSuccess: refreshPlan,
   });
+  const createTask = useMutation({
+    mutationFn: () => allocationAzureApi.createTask(allocation.id),
+    // Fails and succeeds alike change the row's status and error text.
+    onSettled: refreshPlan,
+  });
 
   const status = allocation.azureSyncStatus ?? null;
   const look = statusLook[status ?? ''] ?? { label: 'Ещё не отправлено', dot: 'bg-muted-foreground/40' };
@@ -75,7 +80,8 @@ export function AllocationAzurePanel({ allocation, canEditPlan, writeEnabled = t
   const canLog = writeEnabled && Boolean(allocation.azureTaskId) && (isAssignee || canEditPlan);
   const validHours = Number(logHours) >= 0.25 && Number(logHours) <= 200;
   const submitLog = () => { if (validHours && !logTime.isPending) logTime.mutate(); };
-  const busy = retrying || accept.isPending;
+  const busy = retrying || accept.isPending || createTask.isPending;
+  const canCreateTask = writeEnabled && canEditPlan && !allocation.azureTaskId && Number(allocation.estimatedHours) > 0 && status !== 'sending';
 
   const taskLink = allocation.azureTaskId ? (
     onOpenTask
@@ -108,6 +114,11 @@ export function AllocationAzurePanel({ allocation, canEditPlan, writeEnabled = t
       <Button type="button" size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={onRetry}>{retrying ? 'Отправляем…' : 'Отправить снова'}</Button>
     ) : null}
     {accept.error ? <p role="alert" className="text-destructive">{accept.error.message}</p> : null}
+
+    {canCreateTask ? <Button type="button" size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => createTask.mutate()}>
+      {createTask.isPending ? 'Создаём task…' : 'Создать task'}
+    </Button> : null}
+    {createTask.error ? <p role="alert" className="break-words text-destructive">{createTask.error.message}</p> : null}
 
     {canLog ? (logging ? <div className="space-y-1.5 border-t border-border pt-2">
       <div className="flex items-center gap-1.5">
@@ -157,13 +168,16 @@ const removalText: Record<string, string> = {
 };
 
 /** Deletes an allocation after a confirmation that says what happens to its Task. */
-export function DeleteAllocationButton({ allocation, removal, onDeleted }: {
+export function DeleteAllocationButton({ allocation, removal, onDeleted, onConfirmingChange }: {
   allocation: RoadmapAllocation;
   removal?: NonNullable<RoadmapProjectPlan['azure']>['removal'];
   onDeleted?: () => void;
+  /** Lets the parent hide its own buttons while the confirmation takes the whole row. */
+  onConfirmingChange?: (confirming: boolean) => void;
 }) {
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
+  useEffect(() => onConfirmingChange?.(confirming), [confirming, onConfirmingChange]);
   const remove = useMutation({
     mutationFn: () => allocationAzureApi.remove(allocation.id),
     onSuccess: async () => {
@@ -178,12 +192,14 @@ export function DeleteAllocationButton({ allocation, removal, onDeleted }: {
       <Trash2 aria-hidden="true" className="size-3.5" />Удалить
     </Button>;
   }
-  return <div role="alertdialog" aria-label="Удалить назначение?" className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-xs">
-    <span className="min-w-0 flex-1 text-muted-foreground">
+  return <div role="alertdialog" aria-label="Удалить назначение?" className="w-full space-y-2 text-xs">
+    <p className="text-muted-foreground">
       {allocation.azureTaskId ? removalText[action].replace('{state}', removal?.state || 'Removed') : 'Удалить назначение?'}
-      {remove.error ? <span role="alert" className="block text-destructive">{remove.error.message}</span> : null}
-    </span>
-    <Button type="button" size="sm" variant="destructive" className="h-7 text-xs" disabled={remove.isPending} onClick={() => remove.mutate()}>{remove.isPending ? 'Удаляем…' : 'Удалить'}</Button>
-    <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" disabled={remove.isPending} onClick={() => { setConfirming(false); remove.reset(); }}>Нет</Button>
+    </p>
+    {remove.error ? <p role="alert" className="break-words text-destructive">{remove.error.message}</p> : null}
+    <div className="flex items-center justify-end gap-1.5">
+      <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" disabled={remove.isPending} onClick={() => { setConfirming(false); remove.reset(); }}>Нет</Button>
+      <Button type="button" size="sm" variant="destructive" className="h-7 text-xs" disabled={remove.isPending} onClick={() => remove.mutate()}>{remove.isPending ? 'Удаляем…' : 'Удалить'}</Button>
+    </div>
   </div>;
 }

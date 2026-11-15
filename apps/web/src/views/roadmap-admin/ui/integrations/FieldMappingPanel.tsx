@@ -250,13 +250,9 @@ export function FieldMappingPanel({ overview, queries = [] }: {
                 Состояние снятой задачи
                 <Input className="h-9" value={draft.removalPolicy.state ?? ''} placeholder="Removed" onChange={(event) => update({ removalPolicy: { ...draft.removalPolicy, state: event.target.value } })} />
               </label> : null}
-              <label className="flex items-start gap-2 text-xs text-foreground sm:col-span-2">
-                <input type="checkbox" className="mt-0.5 accent-primary" checked={draft.writeFeatureAggregates} onChange={(event) => update({ writeFeatureAggregates: event.target.checked })} />
-                <span>
-                  Записывать в фичу сумму плана по каждой роли
-                  <span className="block text-muted-foreground">Пишется в поле оценки роли (или в поле суммы из сопоставления ролей) и перезаписывает значение, введённое в Azure вручную.</span>
-                </span>
-              </label>
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                Часы плана всегда пишутся в фичу: сумма по каждой роли уходит в поле оценки роли (или в поле суммы из сопоставления ролей) и перезаписывает значение, введённое в Azure вручную. Задача в Azure создаётся отдельной кнопкой у назначения.
+              </p>
             </div>
           </section>
         </div>
