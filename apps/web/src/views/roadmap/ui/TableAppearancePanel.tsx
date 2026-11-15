@@ -48,7 +48,7 @@ function PalettePreview({ palette }: { palette: (typeof TABLE_PALETTES)[number] 
   </span>;
 }
 
-export function TableAppearancePanel({ id, preferences, onChange, onReset, status, onRetry, disabled, hasCustomWidths, onResetWidths }: TableAppearanceSettingsProps & { id: string }) {
+export function TableAppearancePanel({ id, preferences, onChange, onReset, status, onRetry, disabled, hasCustomWidths, onResetWidths, portalContainer }: TableAppearanceSettingsProps & { id: string; portalContainer: HTMLElement | null }) {
   const content = useRef<HTMLDivElement>(null);
   const [section, setSection] = useState<'appearance' | 'columns'>('appearance');
   const selectedPalette = getTablePalette(preferences);
@@ -84,8 +84,8 @@ export function TableAppearancePanel({ id, preferences, onChange, onReset, statu
           </section>
           <section className="space-y-2 border-t border-border py-4" aria-labelledby={`${id}-details`}>
             <h3 id={`${id}-details`} className="pb-1 text-sm font-semibold">Текст и линии</h3>
-            <label className="grid min-h-11 grid-cols-2 items-center gap-4 text-sm"><span>Размер текста</span><span className="relative"><SearchableSelect searchable={false} value={preferences.fontSize} onChange={(value) => onChange({ fontSize: value as RoadmapTablePreferences['fontSize'] })} options={[{ value: 'small', label: 'Мелкий' }, { value: 'standard', label: 'Обычный' }, { value: 'large', label: 'Крупный' }]} /></span></label>
-            <label className="grid min-h-11 grid-cols-2 items-center gap-4 text-sm"><span>Разделители</span><span className="relative"><SearchableSelect searchable={false} value={preferences.separators} onChange={(value) => onChange({ separators: value as RoadmapTablePreferences['separators'] })} options={[{ value: 'subtle', label: 'Мягкие' }, { value: 'standard', label: 'Базовые' }, { value: 'strong', label: 'Контрастные' }]} /></span></label>
+            <label className="grid min-h-11 grid-cols-2 items-center gap-4 text-sm"><span>Размер текста</span><span className="relative"><SearchableSelect searchable={false} portalContainer={portalContainer}value={preferences.fontSize} onChange={(value) => onChange({ fontSize: value as RoadmapTablePreferences['fontSize'] })} options={[{ value: 'small', label: 'Мелкий' }, { value: 'standard', label: 'Обычный' }, { value: 'large', label: 'Крупный' }]} /></span></label>
+            <label className="grid min-h-11 grid-cols-2 items-center gap-4 text-sm"><span>Разделители</span><span className="relative"><SearchableSelect searchable={false} portalContainer={portalContainer}value={preferences.separators} onChange={(value) => onChange({ separators: value as RoadmapTablePreferences['separators'] })} options={[{ value: 'subtle', label: 'Мягкие' }, { value: 'standard', label: 'Базовые' }, { value: 'strong', label: 'Контрастные' }]} /></span></label>
             <Toggle label="Переносить названия" checked={preferences.wrapTitles} onChange={(wrapTitles) => onChange({ wrapTitles })} />
             <Toggle label="Чередовать фон строк" checked={preferences.stripedRows} onChange={(stripedRows) => onChange({ stripedRows })} />
           </section>
@@ -101,7 +101,7 @@ export function TableAppearancePanel({ id, preferences, onChange, onReset, statu
             </div>
           </section>
           <section className="space-y-3 border-t border-border py-5">
-            <label className="block space-y-3 text-sm font-semibold"><span>Закрепление столбцов</span><span className="relative block"><SearchableSelect searchable={false} value={preferences.pinnedColumns} onChange={(value) => onChange({ pinnedColumns: value as RoadmapTablePreferences['pinnedColumns'] })} options={[{ value: 'none', label: 'Без закрепления' }, { value: 'name', label: 'Закрепить название' }, { value: 'totals', label: 'Название и итоги' }]} /></span></label>
+            <label className="block space-y-3 text-sm font-semibold"><span>Закрепление столбцов</span><span className="relative block"><SearchableSelect searchable={false} portalContainer={portalContainer}value={preferences.pinnedColumns} onChange={(value) => onChange({ pinnedColumns: value as RoadmapTablePreferences['pinnedColumns'] })} options={[{ value: 'none', label: 'Без закрепления' }, { value: 'name', label: 'Закрепить название' }, { value: 'totals', label: 'Название и итоги' }]} /></span></label>
             <p className="text-xs leading-5 text-muted-foreground">Закреплённые столбцы остаются на месте при горизонтальной прокрутке.</p>
           </section>
           <section className="space-y-3 border-t border-border py-5">

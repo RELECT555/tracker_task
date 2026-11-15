@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { SlidersHorizontal, X } from 'lucide-react';
 import type { RoadmapTablePreferences } from '@tracker/shared';
@@ -28,6 +28,12 @@ export function TableAppearanceSettings(props: TableAppearanceSettingsProps) {
   const trigger = useRef<HTMLButtonElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
+  // Popovers must portal into the modal dialog: it sits in the top layer and makes the rest of the page inert.
+  const [dialogElement, setDialogElement] = useState<HTMLDialogElement | null>(null);
+  const setDialogRef = useCallback((node: HTMLDialogElement | null) => {
+    dialog.current = node;
+    setDialogElement(node);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -49,7 +55,7 @@ export function TableAppearanceSettings(props: TableAppearanceSettingsProps) {
       {status === 'error' ? <span aria-hidden="true" className="size-1.5 rounded-full bg-destructive" /> : null}
     </Button>
     {status === 'error' ? <span id={`${id}-error`} className="sr-only">{errorMessage} Откройте панель, чтобы повторить.</span> : null}
-    <dialog ref={dialog} aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`}
+    <dialog ref={setDialogRef}aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`}
       className="roadmap-sheet table-settings-panel fixed inset-y-0 left-auto right-0 m-0 h-dvh max-h-dvh w-full max-w-md overflow-hidden border-l border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-transparent"
       onClose={() => { setOpen(false); trigger.current?.focus(); }}
       onKeyDown={(event) => { if (event.key === 'Escape') event.stopPropagation(); }}
@@ -64,7 +70,7 @@ export function TableAppearanceSettings(props: TableAppearanceSettingsProps) {
           <div><h2 id={`${id}-title`} className="text-balance text-lg font-semibold">Вид таблицы</h2><p id={`${id}-description`} className="mt-1.5 text-xs text-muted-foreground">Только для вас · Во всех проектах</p></div>
           <Button type="button" variant="ghost" size="icon" className="-mr-2 -mt-1 size-8 shrink-0 text-muted-foreground hover:text-foreground" aria-label="Закрыть настройки таблицы" onClick={closePanel}><X aria-hidden="true" className="size-4" /></Button>
         </header>
-        {open ? <TableAppearancePanel {...props} id={id} /> : null}
+        {open ? <TableAppearancePanel {...props} id={id} portalContainer={dialogElement} /> : null}
       </div>
     </dialog>
   </>;
