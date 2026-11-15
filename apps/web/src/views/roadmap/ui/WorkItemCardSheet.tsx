@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, ArrowLeft, ChevronRight, ExternalLink, FileText, History, Lock, MessageSquare, Pencil, RefreshCw, X, type LucideIcon } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ChevronRight, ExternalLink, FileText, History, Lock, MessageSquare, Pencil, Plus, RefreshCw, X, type LucideIcon } from 'lucide-react';
 import type { RoadmapAllocation, RoadmapWorkItem } from '@/entities/roadmap/api/roadmapApi';
 import { workItemCardApi, workItemCardQueryKey, type WorkItemCard, type WorkItemCardPerson, type WorkItemCardUpdate } from '@/entities/roadmap/api/workItemCardApi';
 import { AzureWorkItemIcon } from '@/entities/roadmap/ui/AzureWorkItemIcon';
@@ -75,7 +75,7 @@ function EmptyState({ icon: Icon, text, action }: { icon: LucideIcon; text: stri
 
 function Property({ label, wide, children }: { label: string; wide?: boolean; children: ReactNode }) {
   return <div className={cn('min-w-0', wide && 'sm:col-span-2')}>
-    <dt className="text-xs text-muted-foreground">{label}</dt>
+    <dt className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">{label}</dt>
     <dd className="mt-1 flex min-h-8 min-w-0 items-center text-sm text-foreground [overflow-wrap:anywhere]">{children}</dd>
   </div>;
 }
@@ -321,7 +321,7 @@ function CardContent({ titleId, projectId, externalId, planItem, taskAllocations
           {conflict ? <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={refresh}>Обновить карточку</Button> : null}
         </div> : null}
 
-        <dl className="mt-6 grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
+        <dl className="mt-6 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
           <Property label="Состояние">
             {item.canEdit && item.states.length ? (
               <SearchableSelect
@@ -459,7 +459,7 @@ function EditableTags({ value, editable, saving, onSave }: { value: string[]; ed
   if (draft === null) {
     return <div className="flex flex-wrap items-center gap-1.5">
       {value.map((tag) => <span key={tag} className="rounded-md bg-muted px-1.5 py-0.5 text-xs">{tag}</span>)}
-      {editable ? <button type="button" onClick={() => setDraft(value.join(', '))} className="rounded px-1 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">{value.length ? 'Изменить' : 'Добавить'}</button> : null}
+      {editable ? <button type="button" onClick={() => setDraft(value.join(', '))} className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">{value.length ? <Pencil aria-hidden="true" className="size-3" /> : <Plus aria-hidden="true" className="size-3" />}{value.length ? 'Изменить' : 'Добавить'}</button> : null}
     </div>;
   }
   const commit = () => {
