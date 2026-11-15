@@ -4,11 +4,11 @@ import { useRef, useState } from 'react';
 import { Check, ChevronDown, LoaderCircle, RotateCcw } from 'lucide-react';
 import type { RoadmapTablePreferences } from '@tracker/shared';
 import { Button } from '@/shared/ui/button';
+import { SearchableSelect } from '@/shared/ui/searchable-select';
 import { cn } from '@/shared/lib/utils';
 import { TABLE_PALETTES, getTablePalette, getPalettePreviewProps } from '../model/table-palettes';
 import type { TableAppearanceSettingsProps } from './TableAppearanceSettings';
 
-const selectClassName = 'h-9 min-w-0 w-full appearance-none rounded-md border border-border bg-card py-0 pl-3 pr-8 text-xs font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50';
 
 function Toggle({ label, description, checked, onChange, disabled }: {
   label: string; description?: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean;
@@ -84,8 +84,8 @@ export function TableAppearancePanel({ id, preferences, onChange, onReset, statu
           </section>
           <section className="space-y-2 border-t border-border py-4" aria-labelledby={`${id}-details`}>
             <h3 id={`${id}-details`} className="pb-1 text-sm font-semibold">Текст и линии</h3>
-            <label className="grid min-h-11 grid-cols-2 items-center gap-4 text-sm"><span>Размер текста</span><span className="relative"><select value={preferences.fontSize} onChange={(event) => onChange({ fontSize: event.target.value as RoadmapTablePreferences['fontSize'] })} className={selectClassName}><option value="small">Мелкий</option><option value="standard">Обычный</option><option value="large">Крупный</option></select><ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2.5 top-3 size-3.5 text-muted-foreground" /></span></label>
-            <label className="grid min-h-11 grid-cols-2 items-center gap-4 text-sm"><span>Разделители</span><span className="relative"><select value={preferences.separators} onChange={(event) => onChange({ separators: event.target.value as RoadmapTablePreferences['separators'] })} className={selectClassName}><option value="subtle">Мягкие</option><option value="standard">Базовые</option><option value="strong">Контрастные</option></select><ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2.5 top-3 size-3.5 text-muted-foreground" /></span></label>
+            <label className="grid min-h-11 grid-cols-2 items-center gap-4 text-sm"><span>Размер текста</span><span className="relative"><SearchableSelect searchable={false} value={preferences.fontSize} onChange={(value) => onChange({ fontSize: value as RoadmapTablePreferences['fontSize'] })} options={[{ value: 'small', label: 'Мелкий' }, { value: 'standard', label: 'Обычный' }, { value: 'large', label: 'Крупный' }]} /></span></label>
+            <label className="grid min-h-11 grid-cols-2 items-center gap-4 text-sm"><span>Разделители</span><span className="relative"><SearchableSelect searchable={false} value={preferences.separators} onChange={(value) => onChange({ separators: value as RoadmapTablePreferences['separators'] })} options={[{ value: 'subtle', label: 'Мягкие' }, { value: 'standard', label: 'Базовые' }, { value: 'strong', label: 'Контрастные' }]} /></span></label>
             <Toggle label="Переносить названия" checked={preferences.wrapTitles} onChange={(wrapTitles) => onChange({ wrapTitles })} />
             <Toggle label="Чередовать фон строк" checked={preferences.stripedRows} onChange={(stripedRows) => onChange({ stripedRows })} />
           </section>
@@ -101,7 +101,7 @@ export function TableAppearancePanel({ id, preferences, onChange, onReset, statu
             </div>
           </section>
           <section className="space-y-3 border-t border-border py-5">
-            <label className="block space-y-3 text-sm font-semibold"><span>Закрепление столбцов</span><span className="relative block"><select value={preferences.pinnedColumns} onChange={(event) => onChange({ pinnedColumns: event.target.value as RoadmapTablePreferences['pinnedColumns'] })} className={selectClassName}><option value="none">Без закрепления</option><option value="name">Закрепить название</option><option value="totals">Название и итоги</option></select><ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2.5 top-3 size-3.5 text-muted-foreground" /></span></label>
+            <label className="block space-y-3 text-sm font-semibold"><span>Закрепление столбцов</span><span className="relative block"><SearchableSelect searchable={false} value={preferences.pinnedColumns} onChange={(value) => onChange({ pinnedColumns: value as RoadmapTablePreferences['pinnedColumns'] })} options={[{ value: 'none', label: 'Без закрепления' }, { value: 'name', label: 'Закрепить название' }, { value: 'totals', label: 'Название и итоги' }]} /></span></label>
             <p className="text-xs leading-5 text-muted-foreground">Закреплённые столбцы остаются на месте при горизонтальной прокрутке.</p>
           </section>
           <p className="border-t border-border py-5 text-xs leading-5 text-muted-foreground">Чтобы изменить ширину, потяните границу столбца в шапке таблицы.</p>

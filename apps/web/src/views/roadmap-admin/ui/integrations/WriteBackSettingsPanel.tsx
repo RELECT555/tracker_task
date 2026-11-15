@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, LoaderCircle, RotateCcw, Save, SlidersHorizontal } from 'lucide-react';
+import { AlertTriangle, LoaderCircle, RotateCcw, Save } from 'lucide-react';
 import type { RoadmapWriteBackMode, RoadmapWriteBackOverview, RoadmapWriteBackSettings } from '@/entities/roadmap/api/roadmapApi';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { Button } from '@/shared/ui/button';
@@ -99,7 +99,6 @@ export function WriteBackSettingsPanel({ settings, overview }: { settings: Roadm
     <Panel
       title="Запись плана в Azure DevOps"
       description="Выберите режим отправки, проекты и поля задач. Настройки применяются при следующей отправке."
-      icon={<SlidersHorizontal aria-hidden="true" className="size-[18px]" strokeWidth={1.7} />}
       actions={<>
         <Button type="button" variant="ghost" size="sm" className="gap-1.5" disabled={saveMutation.isPending} onClick={() => update({ ...DEFAULT_WRITE_BACK, mode: draft.mode, projectIds: draft.projectIds })} title="Вернуть шаблоны и поля по умолчанию"><RotateCcw aria-hidden="true" className="size-4" />По умолчанию</Button>
         <Button type="button" size="sm" className="gap-1.5" disabled={!dirty || saveMutation.isPending || !draft.titleTemplate.trim() || !draft.workItemType.trim()} onClick={() => saveMutation.mutate()}>

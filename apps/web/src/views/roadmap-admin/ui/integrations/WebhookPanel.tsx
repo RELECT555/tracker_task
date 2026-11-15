@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Copy, KeyRound, LoaderCircle, RefreshCw, Webhook } from 'lucide-react';
+import { ChevronDown, Copy, KeyRound, LoaderCircle, RefreshCw } from 'lucide-react';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { baseURL } from '@/shared/api/client';
 import { Button } from '@/shared/ui/button';
@@ -33,7 +33,6 @@ export function WebhookPanel({ webhookConfigured }: { webhookConfigured: boolean
     <Panel
       title="Webhook для Azure DevOps"
       description="Обновляет фактические часы и статусы задач автоматически после изменений в Azure DevOps."
-      icon={<Webhook aria-hidden="true" className="size-[18px]" strokeWidth={1.7} />}
       actions={<><StatusPill active={webhookConfigured} label={webhookConfigured ? 'Секрет создан' : 'Секрет не создан'} /><HelpHint text="Webhook сообщает Roadmap об изменениях в Azure, чтобы факт и конфликты обновлялись автоматически." example="API должен быть доступен Azure DevOps из интернета." faqId="webhook-needed" /></>}
     >
       <div className="space-y-5 p-4 sm:p-5">
@@ -73,16 +72,18 @@ export function WebhookPanel({ webhookConfigured }: { webhookConfigured: boolean
           </Step>
         </ol>
 
-        <div className="rounded-lg bg-muted/50 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">
-          <p className="font-medium text-foreground">Важно знать</p>
-          <ul className="mt-1.5 list-disc space-y-1 pl-4">
+        <details className="group border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground">
+          <summary className="inline-flex min-h-7 cursor-pointer list-none items-center gap-1.5 rounded font-medium hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+            <ChevronDown aria-hidden="true" className="size-3.5 group-open:rotate-180" /> Важно знать
+          </summary>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>API должен быть доступен из интернета по этому адресу. Для локальной разработки нужен туннель (например, cloudflared).</li>
             <li>Roadmap не доверяет данным события: он заново читает work item из Azure по API.</li>
             <li>Изменения, которые записал сам Roadmap, тоже приходят сюда и просто обновляют данные — циклов нет.</li>
             <li>Удалённая в Azure задача помечает назначение ошибкой. Фичи с назначениями не удаляются, а получают состояние Deleted.</li>
             <li>Факт также можно обновить вручную на вкладке «Проекты» или на странице плана.</li>
           </ul>
-        </div>
+        </details>
       </div>
     </Panel>
   );

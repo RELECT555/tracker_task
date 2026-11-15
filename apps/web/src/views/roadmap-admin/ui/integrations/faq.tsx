@@ -40,7 +40,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     id: 'fact-source',
     question: 'Откуда факт и когда обновляется?',
-    answer: <>По умолчанию фактические часы берутся из Completed Work. После первой загрузки Roadmap проверяет изменения в Azure каждые 5 минут. Чтобы обновить проект сразу, нажмите «Обновить проект из Azure» во вкладке «Проекты».</>,
+    answer: <>По умолчанию фактические часы берутся из Completed Work. После первой загрузки Roadmap проверяет изменения в Azure каждые 5 минут. Чтобы обновить проект сразу, нажмите «Обновить из Azure» во вкладке «Проекты».</>,
   },
   {
     id: 'manual-changes',
@@ -88,6 +88,22 @@ export const FAQ_ITEMS: FaqItem[] = [
     answer: <>Начните с режима «По кнопке» на одном проекте. Когда задачи выглядят как нужно, включайте «Автоматически».</>,
   },
 ];
+
+/** Collapsed FAQ card; opens on its own when the page is opened via a #faq-… link. */
+export function FaqSection({ connected, openFromLink }: { connected: boolean; openFromLink: boolean }) {
+  return (
+    <details open={openFromLink} className="group/faq overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_hsl(var(--foreground)/0.04)] dark:shadow-none">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0">
+          <span className="block font-semibold text-foreground">Частые вопросы</span>
+          <span className="mt-0.5 block text-sm text-muted-foreground">{FAQ_ITEMS.length} ответов о синхронизации, записи в Azure и webhook</span>
+        </span>
+        <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted-foreground motion-safe:transition-transform group-open/faq:rotate-180" />
+      </summary>
+      <div className="border-t border-border p-4 sm:p-5"><FaqAccordion connected={connected} /></div>
+    </details>
+  );
+}
 
 export function FaqAccordion({ connected }: { connected: boolean }) {
   const [query, setQuery] = useState('');

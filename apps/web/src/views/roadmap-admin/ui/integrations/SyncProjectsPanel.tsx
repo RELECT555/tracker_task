@@ -3,13 +3,12 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { ArrowDownToLine, ArrowRight, ArrowUpFromLine, ChevronDown, FolderSync, LoaderCircle, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ArrowDownToLine, ArrowRight, ArrowUpFromLine, ChevronDown, LoaderCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { roadmapApi, type RoadmapReadinessCheck, type RoadmapWriteBackOverview } from '@/entities/roadmap/api/roadmapApi';
 import { AzurePushPreview } from '@/entities/roadmap/ui/AzurePushPreview';
 import { routes } from '@/shared/config/routes';
 import { Button, buttonVariants } from '@/shared/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
-import { AdminCard } from '../AdminLayout';
 import { CheckStatusIcon, Chip, errorText, integrationColors, MODE_LABEL, Panel } from './parts';
 
 type OverviewProject = RoadmapWriteBackOverview['projects'][number];
@@ -26,22 +25,21 @@ export function SyncProjectsPanel({ overview }: { overview: RoadmapWriteBackOver
   return (
     <div className="space-y-5">
       <div id="azure-task-sync" className="scroll-mt-4">
-      <AdminCard title="Синхронизация проектов" titleProps={{ tabIndex: -1 }} description="Обновляйте задачи, роли, оценки и фактические часы по добавленным проектам."
-        icon={<FolderSync aria-hidden="true" className="size-[18px]" strokeWidth={1.7} />}>
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm text-muted-foreground sm:px-5">
-          <p>{overview.projects.length ? 'Новый проект можно загрузить на странице плана.' : 'Загрузите первый проект на странице плана.'}</p>
-          <Link href={routes.roadmap} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-            Открыть план проекта <ArrowRight aria-hidden="true" className="size-4" />
-          </Link>
-        </div>
-        {overview.projects.length ? <ul className="divide-y divide-border border-t border-border">
+      <Panel
+        title="Синхронизация проектов"
+        titleProps={{ tabIndex: -1 }}
+        description="Задачи, роли, оценки и фактические часы по добавленным проектам. Новый проект загружается на странице плана."
+        actions={<Link href={routes.roadmap} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+          Открыть план <ArrowRight aria-hidden="true" className="size-4" />
+        </Link>}
+      >
+        {overview.projects.length ? <ul className="divide-y divide-border">
           {overview.projects.map((project) => <ProjectRow key={project.id} project={project} writeBackOff={overview.settings.mode === 'off'} />)}
-        </ul> : null}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2.5 text-sm text-muted-foreground sm:px-5">
-          <span>Режим отправки плана · {MODE_LABEL[overview.settings.mode]}</span>
-          <a href="#azure-write-back" className="rounded font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">Настроить запись</a>
-        </div>
-      </AdminCard>
+        </ul> : <p className="px-4 py-6 text-sm text-muted-foreground sm:px-5">Проектов пока нет. Загрузите первый на странице плана.</p>}
+        <p className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground sm:px-5">
+          Отправка плана: {MODE_LABEL[overview.settings.mode]} · <a href="#azure-write-back" className="rounded font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">изменить</a>
+        </p>
+      </Panel>
       </div>
 
       {overview.errors.length || retryMutation.error ? <Panel title="Ошибки отправки" description="Проверьте причину и повторите отправку назначения.">
@@ -116,7 +114,7 @@ function ProjectRow({ project, writeBackOff }: { project: OverviewProject; write
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="outline" size="sm" disabled={actionsBusy} onClick={() => { setNotice(null); checkMutation.reset(); pullMutation.mutate(); }}>
             {pullMutation.isPending ? <LoaderCircle aria-hidden="true" className="size-4 motion-safe:animate-spin" /> : <ArrowDownToLine aria-hidden="true" className="size-4" />}
-            {pullMutation.isPending ? 'Загружаем проект…' : project.syncedAt ? 'Обновить проект из Azure' : 'Загрузить проект из Azure'}
+            {pullMutation.isPending ? 'Загружаем…' : project.syncedAt ? 'Обновить из Azure' : 'Загрузить из Azure'}
           </Button>
           {writeBackAvailable && toSend > 0 ? <Popover open={previewOpen} onOpenChange={setPreviewOpen}>
             <PopoverTrigger asChild>

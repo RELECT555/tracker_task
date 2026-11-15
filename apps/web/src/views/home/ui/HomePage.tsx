@@ -4,7 +4,7 @@ import Link, { useLinkStatus } from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { ArrowDown, ArrowRight, ChartNoAxesCombined, GitBranch, Layers3 } from 'lucide-react';
+import { ArrowRight, ChartNoAxesCombined, GitBranch, Layers3 } from 'lucide-react';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { routes } from '@/shared/config/routes';
@@ -77,7 +77,7 @@ export function HomePage() {
   ];
 
   return (
-    <main className={cn(styles.page, 'roadmap-scrollbar min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6 sm:py-7 lg:px-8')}>
+    <main className={cn(styles.page, 'roadmap-scrollbar relative min-h-0 flex-1 overflow-auto overscroll-none px-4 py-4 sm:px-6 sm:py-6 lg:px-8')}>
       <section className={styles.hero} aria-labelledby="roadmap-heading">
         <div className={styles.heroContent}>
           <h1 id="roadmap-heading">У проекта есть <span>маршрут.</span></h1>
@@ -88,9 +88,9 @@ export function HomePage() {
             }}>
               <PlanLinkLabel /> <ArrowRight aria-hidden="true" className="size-4" />
             </Link>
-            <a href="#roadmap-features" className={styles.secondary}>
-              Возможности <ArrowDown aria-hidden="true" className="size-4" />
-            </a>
+            <Link href={routes.roadmapAnalytics} prefetch={false} className={styles.secondary}>
+              <ChartNoAxesCombined aria-hidden="true" className="size-4" /> Аналитика
+            </Link>
           </div>
         </div>
       </section>
@@ -104,6 +104,7 @@ export function HomePage() {
                 <div>
                   <h3>{title}</h3>
                   <p>{description}</p>
+                  {href ? null : <span className={styles.featureNote}>Для администраторов</span>}
                 </div>
                 {href ? <ArrowRight aria-hidden="true" className={styles.featureArrow} /> : null}
               </>

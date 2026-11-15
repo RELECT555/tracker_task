@@ -12,7 +12,7 @@ import { QueryErrorNotice } from '@/shared/ui/error-notice';
 import { Input } from '@/shared/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 import { Skeleton, SkeletonStatus } from '@/shared/ui/skeleton';
-import { AdminAlert, AdminPage, AdminPageHeader, StatusPill } from './AdminLayout';
+import { AdminAlert, AdminPage, AdminPageHeader } from './AdminLayout';
 
 const MAX_VISIBLE_ROLES = 3;
 const statusFilters = [
@@ -22,7 +22,7 @@ const statusFilters = [
 ] as const;
 type StatusFilter = (typeof statusFilters)[number]['value'];
 
-const directoryColumns = '@min-[42rem]:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_6rem] @min-[42rem]:gap-x-6';
+const directoryColumns = '@min-[42rem]:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] @min-[42rem]:gap-x-8';
 
 function UserRoles({ person }: { person: RoadmapPerson }) {
   const roles = person.roles ?? [];
@@ -85,10 +85,9 @@ function UserListSkeleton() {
       <div aria-hidden="true" className={cn('hidden border-b border-border bg-muted/30 px-5 py-3 @min-[42rem]:grid', directoryColumns)}>
         <Skeleton className="h-3 w-20" />
         <Skeleton className="h-3 w-28" />
-        <Skeleton className="ml-auto h-3 w-12" />
       </div>
       <ul className="divide-y divide-border/70">
-        {['w-40', 'w-32', 'w-48', 'w-36', 'w-44', 'w-28'].map((width, index) => <li key={index} className={cn('grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2.5 px-3 py-3 sm:px-5 @min-[42rem]:py-3.5', directoryColumns)}>
+        {['w-40', 'w-32', 'w-48', 'w-36', 'w-44', 'w-28'].map((width, index) => <li key={index} className={cn('grid grid-cols-1 items-center gap-y-2.5 px-3 py-3 sm:px-5', directoryColumns)}>
           <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <Skeleton className="size-9 shrink-0 rounded-full sm:size-10" />
             <div className="min-w-0 flex-1 space-y-2">
@@ -96,37 +95,34 @@ function UserListSkeleton() {
               <Skeleton className="h-3 w-32 max-w-full opacity-60" />
             </div>
           </div>
-          <div className="col-span-2 flex gap-1.5 pl-[2.875rem] sm:pl-[3.25rem] @min-[42rem]:col-span-1 @min-[42rem]:pl-0">
-            <Skeleton className="h-6 w-28 rounded-full" />
-            {index % 2 ? null : <Skeleton className="h-6 w-24 rounded-full" />}
+          <div className="flex gap-1.5 pl-[2.875rem] sm:pl-[3.25rem] @min-[42rem]:pl-0">
+            <Skeleton className="h-6 w-28 rounded-md" />
+            {index % 2 ? null : <Skeleton className="h-6 w-24 rounded-md" />}
           </div>
-          <Skeleton className="col-start-2 row-start-1 h-6 w-20 justify-self-end rounded-full @min-[42rem]:col-start-3" />
         </li>)}
       </ul>
     </SkeletonStatus>
   );
 }
 
-function UserRow({ person }: { person: RoadmapPerson }) {
+function UserRow({ person, showInactiveBadge }: { person: RoadmapPerson; showInactiveBadge: boolean }) {
   const active = person.isActive !== false;
 
   return (
-    <li className={cn('grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-2.5 px-3 py-3 hover:bg-muted/20 sm:px-5 @min-[42rem]:items-center @min-[42rem]:py-3.5', directoryColumns)}>
-      <div className="flex min-w-0 items-start gap-2.5 sm:gap-3">
+    <li className={cn('grid grid-cols-1 items-start gap-y-2.5 px-3 py-3 transition-colors hover:bg-muted/25 sm:px-5 @min-[42rem]:items-center', directoryColumns)}>
+      <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
         <RoadmapPersonAvatar person={person} />
-        <div className="min-w-0 self-center">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <p className="min-w-0 text-sm font-semibold wrap-anywhere">{person.name}</p>
+            <p className={cn('min-w-0 text-sm font-semibold wrap-anywhere', !active && 'text-muted-foreground')}>{person.name}</p>
+            {!active && showInactiveBadge ? <span className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium leading-tight text-muted-foreground">неактивен</span> : null}
             {person.isMock ? <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium leading-tight text-muted-foreground">демо</span> : null}
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground wrap-anywhere">{person.email ?? 'Почта не указана'}</p>
         </div>
       </div>
-      <div className="col-span-2 min-w-0 pl-[2.875rem] sm:pl-[3.25rem] @min-[42rem]:col-span-1 @min-[42rem]:pl-0">
+      <div className="min-w-0 pl-[2.875rem] sm:pl-[3.25rem] @min-[42rem]:pl-0">
         <UserRoles person={person} />
-      </div>
-      <div className="col-start-2 row-start-1 justify-self-end @min-[42rem]:col-start-3">
-        <StatusPill active={active} label={active ? 'Активен' : 'Неактивен'} />
       </div>
     </li>
   );
@@ -220,71 +216,76 @@ export function RoadmapUsersPage() {
       ) : null}
 
       {!blockedByError && <section aria-label="Список пользователей" className="@container rounded-xl border border-border bg-card shadow-[0_1px_2px_hsl(var(--foreground)/0.04)] dark:shadow-none">
-        <div className="flex flex-col items-start gap-3 border-b border-border p-3 sm:px-5 sm:py-4 @min-[40rem]:flex-row @min-[40rem]:items-center @min-[40rem]:justify-between">
-          <div role="group" aria-label="Фильтр по статусу" className="inline-flex max-w-full flex-wrap gap-0.5 rounded-lg bg-muted/55 p-1">
-            {statusFilters.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={status === option.value}
-                onClick={() => setStatus(option.value)}
-                className={cn(
-                  'inline-flex min-h-9 items-center gap-1 rounded-md px-1.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring sm:gap-1.5 sm:px-3 sm:text-sm',
-                  status === option.value
-                    ? 'bg-card text-foreground shadow-sm dark:bg-accent'
-                    : 'text-muted-foreground hover:bg-card/55 hover:text-foreground',
-                )}
-              >
-                {option.label}
-                {usersQuery.data ? (
-                  <span className={cn('min-w-4 rounded px-0.5 text-center text-[11px] leading-[1.4rem] tabular-nums sm:min-w-5 sm:px-1', status === option.value ? 'bg-status-progress-bg text-status-progress-fg' : 'text-muted-foreground')}>
-                    {counts[option.value]}
-                  </span>
-                ) : null}
-              </button>
-            ))}
+        <div className="z-10 rounded-t-xl bg-card -top-4 lg:-top-5 @min-[42rem]:sticky">
+          <div className="flex flex-col items-start gap-3 border-b border-border p-3 sm:px-5 sm:py-3.5 @min-[40rem]:flex-row @min-[40rem]:items-center @min-[40rem]:justify-between">
+            <div className="flex max-w-full flex-wrap items-center gap-2">
+              <div role="group" aria-label="Фильтр по статусу" className="inline-flex max-w-full flex-wrap gap-0.5 rounded-lg bg-muted/55 p-1">
+                {statusFilters.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={status === option.value}
+                    onClick={() => setStatus(option.value)}
+                    className={cn(
+                      'inline-flex min-h-9 items-center gap-1 rounded-md px-1.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring sm:gap-1.5 sm:px-3 sm:text-sm',
+                      status === option.value
+                        ? 'bg-card text-foreground shadow-sm dark:bg-accent'
+                        : 'text-muted-foreground hover:bg-card/55 hover:text-foreground',
+                    )}
+                  >
+                    {option.label}
+                    {usersQuery.data ? (
+                      <span className={cn('min-w-4 rounded px-0.5 text-center text-[11px] leading-[1.4rem] tabular-nums sm:min-w-5 sm:px-1', status === option.value ? 'bg-status-progress-bg text-status-progress-fg' : 'text-muted-foreground')}>
+                        {counts[option.value]}
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="relative w-full @min-[40rem]:max-w-72">
+              <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                ref={searchInput}
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Поиск по имени или почте"
+                aria-label="Найти пользователя"
+                className={cn('rounded-lg pl-9 shadow-none [&::-webkit-search-cancel-button]:hidden', search && 'pr-11')}
+              />
+              {search ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Очистить поиск"
+                  onClick={clearSearch}
+                  className="absolute top-1 right-1 size-8 text-muted-foreground"
+                >
+                  <X aria-hidden="true" className="size-4" />
+                </Button>
+              ) : null}
+            </div>
           </div>
-          <div className="relative w-full @min-[40rem]:max-w-72">
-            <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              ref={searchInput}
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Поиск по имени или почте"
-              aria-label="Найти пользователя"
-              className={cn('rounded-lg pl-9 shadow-none [&::-webkit-search-cancel-button]:hidden', search && 'pr-11')}
-            />
-            {search ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="Очистить поиск"
-                onClick={clearSearch}
-                className="absolute top-1 right-1 size-8 text-muted-foreground"
-              >
-                <X aria-hidden="true" className="size-4" />
-              </Button>
-            ) : null}
-          </div>
-        </div>
-
-        <div aria-busy={usersQuery.isFetching}>
           {term && usersQuery.data ? (
             <p role="status" className="border-b border-border px-3 py-2 text-xs text-muted-foreground sm:px-5">Найдено: <span className="font-medium tabular-nums text-foreground">{visibleUsers.length}</span></p>
           ) : null}
+          {!usersQuery.isPending && visibleUsers.length ? (
+            <div aria-hidden="true" className={cn('hidden border-b border-border bg-muted/30 px-5 py-2 text-xs font-medium text-muted-foreground @min-[42rem]:grid', directoryColumns)}>
+              <span>Участник</span>
+              <span>Роли в проектах</span>
+            </div>
+          ) : null}
+        </div>
+
+        <div aria-busy={usersQuery.isFetching}>
           {usersQuery.isPending ? (
             <UserListSkeleton />
           ) : visibleUsers.length ? (
             <>
-              <div aria-hidden="true" className={cn('hidden border-b border-border bg-muted/30 px-5 py-2.5 text-xs font-medium text-muted-foreground @min-[42rem]:grid', directoryColumns)}>
-                <span>Участник</span>
-                <span>Роли в проектах</span>
-                <span className="text-right">Статус</span>
-              </div>
               <ul className="divide-y divide-border/70">
-                {visibleUsers.map((person) => <UserRow key={person.id} person={person} />)}
+                {visibleUsers.map((person) => <UserRow key={person.id} person={person} showInactiveBadge={status === 'all'} />)}
               </ul>
             </>
           ) : !users.length ? (

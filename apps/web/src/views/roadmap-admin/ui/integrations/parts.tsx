@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { AlertCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import type { RoadmapWriteBackMode } from '@/entities/roadmap/api/roadmapApi';
 import { getErrorMessage } from '@/shared/lib/error-message';
@@ -13,8 +13,9 @@ export const MODE_LABEL: Record<RoadmapWriteBackMode, string> = {
 };
 
 /** AdminCard with optional header actions, used by the integration tabs. */
-export function Panel({ title, description, icon, actions, children }: {
+export function Panel({ title, titleProps, description, icon, actions, children }: {
   title: string;
+  titleProps?: ComponentProps<typeof AdminCard>['titleProps'];
   description?: string;
   icon?: ReactNode;
   actions?: ReactNode;
@@ -23,6 +24,7 @@ export function Panel({ title, description, icon, actions, children }: {
   return (
     <AdminCard
       title={title}
+      titleProps={titleProps}
       description={description}
       icon={icon}
       className={actions ? '[&>div:first-child]:flex-wrap [&>div:first-child>div:first-child]:grow [&>div:first-child>div:first-child]:basis-56' : undefined}

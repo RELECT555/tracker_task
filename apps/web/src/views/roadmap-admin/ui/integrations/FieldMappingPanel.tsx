@@ -8,11 +8,11 @@ import { roadmapApi, type RoadmapAzureField, type RoadmapWriteBackOverview } fro
 import { Button } from '@/shared/ui/button';
 import { QueryErrorNotice } from '@/shared/ui/error-notice';
 import { Input } from '@/shared/ui/input';
+import { SearchableSelect } from '@/shared/ui/searchable-select';
 import { HelpHint } from './HelpHint';
 import { Panel } from './parts';
 
 const SAMPLE = { role: 'Backend', title: 'Заявки', quarterKey: '2026-Q4', person: 'Иван Петров', personEmail: 'ivan.petrov@example.test', id: '1234', estimate: 40, remaining: 40, fields: { 'System.AreaPath': 'Roadmap' } };
-const SELECT_CLASS = 'h-9 w-full min-w-0 rounded-md border border-input bg-field px-2 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50';
 const FIELD_LABEL_CLASS = 'grid min-w-0 content-start gap-1.5 text-xs font-medium text-muted-foreground';
 
 export function FieldMappingPanel({ overview, queries = [] }: {
@@ -116,9 +116,7 @@ export function FieldMappingPanel({ overview, queries = [] }: {
         <div className="grid gap-4 px-4 py-4 sm:px-5 lg:grid-cols-3">
           <label className={FIELD_LABEL_CLASS}>
             Проект для просмотра полей
-            <select value={projectId} onChange={(event) => setSelectedProjectId(event.target.value)} className={SELECT_CLASS} disabled={!projectId}>
-              {projects.length ? projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>) : <option value="">Нет добавленных проектов</option>}
-            </select>
+            <SearchableSelect value={projectId} onChange={setSelectedProjectId} disabled={!projectId} placeholder="Нет добавленных проектов" options={projects.map((project) => ({ value: project.id, label: project.name }))} />
           </label>
           <label className={FIELD_LABEL_CLASS}>
             Тип задачи
@@ -126,10 +124,7 @@ export function FieldMappingPanel({ overview, queries = [] }: {
           </label>
           <label className={FIELD_LABEL_CLASS}>
             Кто может отправлять вручную
-            <select value={draft.pushPermission} className={SELECT_CLASS} onChange={(event) => update({ pushPermission: event.target.value === 'admins' ? 'admins' : 'planners' })}>
-              <option value="planners">Пользователи Roadmap</option>
-              <option value="admins">Только администраторы</option>
-            </select>
+            <SearchableSelect searchable={false} value={draft.pushPermission} onChange={(value) => update({ pushPermission: value === 'admins' ? 'admins' : 'planners' })} options={[{ value: 'planners', label: 'Пользователи Roadmap' }, { value: 'admins', label: 'Только администраторы' }]} />
           </label>
           <div className="space-y-2 lg:col-span-3">
             {!projectId ? <p className="text-xs text-muted-foreground">Добавьте проект на вкладке «Проекты», чтобы получить список его полей.</p> : null}
@@ -196,11 +191,7 @@ export function FieldMappingPanel({ overview, queries = [] }: {
               </label>
               <label className={FIELD_LABEL_CLASS}>
                 Вид на плане
-                <select value={rule.display} className={SELECT_CLASS} onChange={(event) => update({ readRules: draft.readRules.map((item) => item.id === rule.id ? { ...item, display: event.target.value as typeof rule.display } : item) })}>
-                  <option value="badge">Значок</option>
-                  <option value="column">Колонка</option>
-                  <option value="hidden">Скрыто</option>
-                </select>
+                <SearchableSelect searchable={false} value={rule.display} onChange={(value) => update({ readRules: draft.readRules.map((item) => item.id === rule.id ? { ...item, display: value as typeof rule.display } : item) })} options={[{ value: 'badge', label: 'Значок' }, { value: 'column', label: 'Колонка' }, { value: 'hidden', label: 'Скрыто' }]} />
               </label>
             </div>)}
             <Button
@@ -230,10 +221,7 @@ export function FieldMappingPanel({ overview, queries = [] }: {
             </label>
             <label className={FIELD_LABEL_CLASS}>
               Какие задачи учитывать
-              <select value={draft.fact.scope} className={SELECT_CLASS} onChange={(event) => update({ fact: { ...draft.fact, scope: event.target.value as SyncSettingsV2['fact']['scope'] } })}>
-                <option value="roadmapTasks">Только задачи Roadmap</option>
-                <option value="allChildTasks">Все дочерние задачи</option>
-              </select>
+              <SearchableSelect searchable={false} value={draft.fact.scope} onChange={(value) => update({ fact: { ...draft.fact, scope: value as SyncSettingsV2['fact']['scope'] } })} options={[{ value: 'roadmapTasks', label: 'Только задачи Roadmap' }, { value: 'allChildTasks', label: 'Все дочерние задачи' }]} />
             </label>
           </section>
         </div>
@@ -271,47 +259,44 @@ function WriteRuleRow({ rule, fields, onChange, onDelete }: { rule: WriteRule; f
     <div className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_110px_auto]">
       <label className={FIELD_LABEL_CLASS}>
         Поле Azure
-        <select value={rule.targetField} className={SELECT_CLASS} onChange={(event) => onChange({ ...rule, targetField: event.target.value })} disabled={!fields.length}>
-          {!hasCurrentField ? <option value={rule.targetField}>{rule.targetField}</option> : null}
-          {fields.map((field) => <option key={field.referenceName} value={field.referenceName} disabled={field.readOnly}>{field.name} · {field.referenceName}</option>)}
-        </select>
+        <SearchableSelect value={rule.targetField} onChange={(value) => onChange({ ...rule, targetField: value })} disabled={!fields.length} options={[
+          ...(!hasCurrentField ? [{ value: rule.targetField, label: rule.targetField }] : []),
+          ...fields.filter((field) => !field.readOnly || field.referenceName === rule.targetField).map((field) => ({ value: field.referenceName, label: field.name, description: field.referenceName })),
+        ]} />
       </label>
       <label className={FIELD_LABEL_CLASS}>
         Источник
-        <select value={source.kind} className={SELECT_CLASS} onChange={(event) => setSource(SOURCE_DEFAULTS[event.target.value as FieldSource['kind']])}>
-          <option value="constant">Постоянное значение</option>
-          <option value="template">Шаблон</option>
-          <option value="roadmap">Roadmap</option>
-          <option value="parentField">Поле родительской задачи</option>
-          <option value="byRole">По ролям</option>
-        </select>
+        <SearchableSelect searchable={false} value={source.kind} onChange={(value) => setSource(SOURCE_DEFAULTS[value as FieldSource['kind']])} options={[
+          { value: 'constant', label: 'Постоянное значение' },
+          { value: 'template', label: 'Шаблон' },
+          { value: 'roadmap', label: 'Roadmap' },
+          { value: 'parentField', label: 'Поле родительской задачи' },
+          { value: 'byRole', label: 'По ролям' },
+        ]} />
       </label>
       <label className={FIELD_LABEL_CLASS}>
         Значение
         {source.kind === 'constant' ? <Input className="h-9" value={String(source.value)} onChange={(event) => setSource({ ...source, value: event.target.value })} />
           : source.kind === 'template' ? <Input className="h-9" value={source.template} onChange={(event) => setSource({ ...source, template: event.target.value })} placeholder="{role} · {quarterKey}" />
           : source.kind === 'parentField' ? <Input className="h-9" value={source.field} onChange={(event) => setSource({ ...source, field: event.target.value })} />
-          : source.kind === 'roadmap' ? <select value={source.value} className={SELECT_CLASS} onChange={(event) => setSource({ ...source, value: event.target.value as typeof source.value })}>
-            <option value="estimate">Оценка</option>
-            <option value="remaining">Remaining Work</option>
-            <option value="assignee">Исполнитель</option>
-            <option value="roleName">Роль</option>
-            <option value="quarterKey">Квартал</option>
-            <option value="quarterStart">Начало квартала</option>
-            <option value="quarterEnd">Конец квартала</option>
-            <option value="iterationPath">Путь итерации</option>
-            <option value="parentAreaPath">Область родительской задачи</option>
-          </select>
+          : source.kind === 'roadmap' ? <SearchableSelect searchable={false} value={source.value} onChange={(value) => setSource({ ...source, value: value as typeof source.value })} options={[
+            { value: 'estimate', label: 'Оценка' },
+            { value: 'remaining', label: 'Remaining Work' },
+            { value: 'assignee', label: 'Исполнитель' },
+            { value: 'roleName', label: 'Роль' },
+            { value: 'quarterKey', label: 'Квартал' },
+            { value: 'quarterStart', label: 'Начало квартала' },
+            { value: 'quarterEnd', label: 'Конец квартала' },
+            { value: 'iterationPath', label: 'Путь итерации' },
+            { value: 'parentAreaPath', label: 'Область родительской задачи' },
+          ]} />
           : <Input className="h-9" value={JSON.stringify(source.values)} onChange={(event) => {
             try { setSource({ ...source, values: JSON.parse(event.target.value) as Record<string, string | number> }); } catch { /* edit in progress */ }
           }} placeholder="{&quot;Backend&quot;:&quot;Development&quot;}" />}
       </label>
       <label className={FIELD_LABEL_CLASS}>
         Когда
-        <select value={rule.apply} className={SELECT_CLASS} onChange={(event) => onChange({ ...rule, apply: event.target.value as WriteRule['apply'] })}>
-          <option value="always">Всегда</option>
-          <option value="create">При создании</option>
-        </select>
+        <SearchableSelect searchable={false} value={rule.apply} onChange={(value) => onChange({ ...rule, apply: value as WriteRule['apply'] })} options={[{ value: 'always', label: 'Всегда' }, { value: 'create', label: 'При создании' }]} />
       </label>
       <div className="flex flex-wrap items-center gap-2 sm:col-span-2 xl:col-span-1 xl:self-end">
         <label className="flex min-h-9 items-center gap-1.5 text-xs">

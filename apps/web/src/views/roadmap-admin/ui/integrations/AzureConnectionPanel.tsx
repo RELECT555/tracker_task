@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Eye, EyeOff, LoaderCircle, PlugZap } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { roadmapApi, type RoadmapIntegrationSettings } from '@/entities/roadmap/api/roadmapApi';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
@@ -68,10 +68,7 @@ export function AzureConnectionPanel({ settings, openFromLink, onFirstConnect }:
   return (
     <section id="azure-connection" aria-labelledby="azure-connection-title" className="scroll-mt-4 rounded-xl border border-border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5">
-        <div className="flex min-w-0 flex-1 basis-full items-start gap-3 sm:basis-0">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <PlugZap aria-hidden="true" className="size-5" strokeWidth={1.7} />
-          </span>
+        <div className="min-w-0 flex-1 basis-full sm:basis-0">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <h2 id="azure-connection-title" className="font-semibold text-foreground">Azure DevOps</h2>
@@ -85,7 +82,7 @@ export function AzureConnectionPanel({ settings, openFromLink, onFirstConnect }:
         {settings.configured ? (
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
             aria-expanded={editing}
             aria-controls="azure-connection-form"

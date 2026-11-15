@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { aggregateRoadmapSummaries, azureRoleEstimate, getRoadmapFactRoots, getRoadmapRolePlan, getRoadmapSummary } from '@tracker/shared';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, ExternalLink, Maximize2, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Equal, ExternalLink, ListChecks, Maximize2, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
@@ -16,6 +16,7 @@ import { Button } from '@/shared/ui/button';
 import { QueryErrorNotice } from '@/shared/ui/error-notice';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 import { SearchableSelect } from '@/shared/ui/searchable-select';
+import { RoleCatalogPicker } from './RoleCatalogPicker';
 import { ColorMark, RoleMark } from '@/shared/ui/color-mark';
 import {
   getRoadmapMonthlyFact,
@@ -36,6 +37,7 @@ import { type ColumnWidthsApi, type ColumnWidthConfig } from '../model/use-roadm
 import { useRoadmapTablePreferences } from '../model/use-roadmap-table-preferences';
 import { getTableAppearanceProps } from '../model/table-appearance';
 import { TableAppearanceSettings } from './TableAppearanceSettings';
+import { CreatedTasksPanel } from './CreatedTasksPanel';
 import './table-appearance.css';
 import { ColumnResizeHandle, planColumnOffset, ResizablePlanTable, type PlanColumn } from './ResizablePlanTable';
 import { PlanTableSkeleton, PortfolioTableSkeleton } from './PlanTableSkeleton';
@@ -621,7 +623,6 @@ export function RoadmapPage() {
   const appearanceSettings = <TableAppearanceSettings preferences={preferences} onChange={tableSettings.change} onReset={tableSettings.reset} status={tableSettings.status} onRetry={tableSettings.retry} disabled={!tableSettings.ready} />;
   const [showUnassignedPeriods, setShowUnassignedPeriods] = useState(false);
   const pinnedColumns = preferences.pinnedColumns;
-  const setPinnedColumns = (value: string) => tableSettings.change({ pinnedColumns: value as typeof pinnedColumns });
   const [quarterSelection, setQuarterSelection] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), quarter: Math.floor(now.getMonth() / 3) + 1 };
@@ -1080,7 +1081,10 @@ export function RoadmapPage() {
     </label>
     <span id="roadmap-planned-roles-description" hidden>Роли с положительным планом. В квартальном виде учитываются назначения выбранного квартала, а при их отсутствии — оценка Azure DevOps на всю карточку. В месячном виде учитываются только часы выбранного месяца.</span>
   </>;
-  const periodControls = <>
+  const periodControls = <div role="group" aria-label="Период" className="flex h-8 items-center rounded-md border border-border bg-card shadow-xs">
+    <Button type="button" variant="ghost" size="icon" className="h-full w-7 rounded-r-none" aria-label="Предыдущий квартал" onClick={() => shiftQuarter(-1)}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></Button>
+    <span aria-live="polite" className="min-w-16 text-center text-xs font-semibold tabular-nums">{currentQuarterLabel}</span>
+    <Button type="button" variant="ghost" size="icon" className="h-full w-7 rounded-l-none" aria-label="Следующий квартал" onClick={() => shiftQuarter(1)}><ChevronRight aria-hidden="true" className="h-4 w-4" /></Button>
     {view === 'roles' ? <SearchableSelect
       ariaLabel="Период плана"
       value={selectedMonthKey}
@@ -1090,14 +1094,9 @@ export function RoadmapPage() {
         { value: '', label: 'Весь квартал' },
         ...currentQuarterMonths.map((month) => ({ value: month.monthKey, label: monthOptionLabel(month) })),
       ]}
-      className="h-8 min-h-8 w-auto max-w-full border-border bg-background px-2.5 py-0 text-xs font-medium shadow-xs hover:bg-muted"
+      className="h-full min-h-0 w-auto max-w-full rounded-none rounded-r-md border-0 border-l border-border bg-transparent px-2.5 py-0 text-xs font-medium shadow-none hover:bg-muted/60"
     /> : null}
-    <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
-      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Предыдущий квартал" onClick={() => shiftQuarter(-1)}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></Button>
-      <span aria-live="polite" className="min-w-20 text-center text-xs font-semibold tabular-nums">{currentQuarterLabel}</span>
-      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Следующий квартал" onClick={() => shiftQuarter(1)}><ChevronRight aria-hidden="true" className="h-4 w-4" /></Button>
-    </div>
-  </>;
+  </div>;
 
   return (
     <main className="roadmap-scrollbar relative min-h-0 flex-1 overflow-auto overscroll-none px-4 py-5 sm:px-6 lg:px-8">
@@ -1114,6 +1113,7 @@ export function RoadmapPage() {
                 placeholder={plan?.name ?? (demoMode ? 'Демо-проект' : configured ? 'Выбрать проект Azure DevOps' : 'Выбрать локальный проект')}
               />
               {plan && !canEditPlan ? <span className="text-sm text-muted-foreground">Только просмотр</span> : null}
+              {plan && createdTasks.length > 0 ? <CreatedTasksPanel items={createdTasks} /> : null}
               {canImportProject && <Button
                 type="button"
                 onClick={() => selectedProject && syncMutation.mutate(selectedProject)}
@@ -1217,25 +1217,6 @@ export function RoadmapPage() {
             />}
           </section> : plan ? (
             <>
-              {createdTasks.length > 0 && (
-                <details className="rounded-xl border border-border bg-card">
-                  <summary className="cursor-pointer rounded-xl px-4 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
-                    Задачи, созданные из Roadmap <span className="ml-1 tabular-nums text-muted-foreground">{createdTasks.length}</span>
-                  </summary>
-                  <ul className="max-h-64 divide-y divide-border overflow-y-auto border-t border-border px-4">
-                    {createdTasks.map((item) => <li key={item.id} className="flex items-start gap-2 py-2.5 text-sm">
-                      <AzureWorkItemIcon type={item.type} className="mt-0.5" />
-                      {item.url ? (
-                        <a href={item.url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-start gap-2 rounded-sm font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">
-                          <span className="min-w-0 break-words">#{item.externalId} · {item.title}</span>
-                          <ExternalLink aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                        </a>
-                      ) : <span className="min-w-0 break-words">#{item.externalId} · {item.title}</span>}
-                    </li>)}
-                  </ul>
-                </details>
-              )}
-
               {focusMode ? <div className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm" aria-hidden="true" /> : null}
               <section
                 {...appearanceProps}
@@ -1268,7 +1249,7 @@ export function RoadmapPage() {
                         {pushPreviewOpen ? <AzurePushPreview projectId={roadmapProjectId} onDone={() => setPushPreviewOpen(false)} /> : null}
                       </PopoverContent>
                     </Popover> : null}
-                    {canConfigure ? <Link href={roleSettingsHref} className="inline-flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm font-medium text-foreground hover:bg-muted"><Users aria-hidden="true" className="h-4 w-4" />Роли и участники</Link> : null}
+                    {canConfigure ? <Link href={roleSettingsHref} className="inline-flex h-9 items-center gap-2 rounded-md border border-input px-3 text-xs font-medium text-foreground hover:bg-muted"><Users aria-hidden="true" className="h-4 w-4" />Роли и участники</Link> : null}
                     <Button type="button" variant={focusMode ? 'secondary' : 'outline'} size="sm" onClick={() => {
                       if (!focusMode && view === 'periods') setExpandedEpics(new Set(epics.map((epic) => epic.id)));
                       setFocusMode((current) => !current);
@@ -1299,34 +1280,26 @@ export function RoadmapPage() {
                       </Button>
                       {plannedRoleFilter}
                     </> : null}
+                    {canConfigure ? <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
+                      <PopoverTrigger asChild><Button type="button" variant="ghost" size="sm" className={cn(ROLE_CONTROL_CLASS, 'shrink-0 text-muted-foreground hover:text-foreground')} aria-label="Добавить роль" title="Добавить роль" disabled={!roadmapProjectId || addRoleMutation.isPending}><UserRoundPlus aria-hidden="true" className="size-3.5" />Роль</Button></PopoverTrigger>
+                      <PopoverContent align="start" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(320px,calc(100vw-2rem))] overflow-hidden rounded-xl p-0">
+                        <RoleCatalogPicker
+                          templates={availableRoleTemplates}
+                          catalogSize={(roleCatalogQuery.data ?? []).length}
+                          loading={roleCatalogQuery.isLoading}
+                          pendingId={addRoleMutation.isPending ? addRoleMutation.variables?.templateId ?? null : null}
+                          onAdd={(templateId) => addRoleMutation.mutate({ projectId: roadmapProjectId, templateId })}
+                        />
+                      </PopoverContent>
+                    </Popover> : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    {view === 'roles' ? <SearchableSelect
-                      ariaLabel="Закрепление столбцов"
-                      value={pinnedColumns}
-                      onChange={setPinnedColumns}
-                      searchable={false}
-                      options={[
-                        { value: 'none', label: 'Без закрепления' },
-                        { value: 'name', label: 'Закрепить название' },
-                        { value: 'totals', label: 'Название и итоги' },
-                      ]}
-                      className="hidden h-8 min-h-8 w-auto max-w-full border-border bg-background px-2.5 py-0 text-xs font-medium shadow-xs hover:bg-muted md:inline-flex"
-                    /> : null}
                     {columnWidths.hasCustomWidths ? (
                       <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={columnWidths.resetWidths} title="Вернуть исходную ширину всех столбцов для вашего аккаунта">Сбросить ширину</Button>
                     ) : null}
                     {view === 'periods' && focusMode ? <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setExpandedEpics(allEpicsExpanded ? new Set() : new Set(epics.map((epic) => epic.id)))}>{allEpicsExpanded ? 'Свернуть всё' : 'Развернуть всё'}</Button> : null}
                     {view === 'periods' ? <Button type="button" variant={showUnassignedPeriods ? 'secondary' : 'outline'} size="sm" className="h-8" onClick={() => setShowUnassignedPeriods((value) => !value)}>{showUnassignedPeriods ? 'Скрыть без назначений' : 'Показать без назначений'}</Button> : null}
                     {periodControls}
-
-                    {canConfigure ? <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
-                      <PopoverTrigger asChild><Button type="button" variant="outline" size="icon" className="size-9 shrink-0" aria-label="Добавить роль" title="Добавить роль" disabled={!roadmapProjectId || addRoleMutation.isPending}><UserRoundPlus aria-hidden="true" className="size-4" /></Button></PopoverTrigger>
-                      <PopoverContent align="end" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(320px,calc(100vw-2rem))] rounded-xl p-2">
-                        <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Роли из каталога</p>
-                        {roleCatalogQuery.isLoading ? <p className="px-2 py-4 text-center text-sm text-muted-foreground">Загружаем каталог…</p> : availableRoleTemplates.length ? availableRoleTemplates.map((template) => <button key={template.id} type="button" disabled={addRoleMutation.isPending} onClick={() => addRoleMutation.mutate({ projectId: roadmapProjectId, templateId: template.id })} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-foreground hover:bg-muted disabled:opacity-50"><ColorMark color={template.color} size="md" /><span className="min-w-0 flex-1 truncate">{template.name}</span>{template.isMock ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-amber-700 dark:text-amber-300">демо</span> : null}<Plus className="h-3.5 w-3.5 text-muted-foreground" /></button>) : <div className="px-2 py-3 text-sm text-muted-foreground">{(roleCatalogQuery.data ?? []).length ? 'Все роли из каталога уже добавлены.' : 'Каталог ролей пуст.'}{!(roleCatalogQuery.data ?? []).length ? <Link href={routes.roadmapAdminRoles} className="mt-1 block text-primary hover:underline">Создать роли в администрировании</Link> : null}</div>}
-                      </PopoverContent>
-                    </Popover> : null}
                   </div>
                 </div>
 

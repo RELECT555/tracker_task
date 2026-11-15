@@ -2,15 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, FolderSync, ListFilter, Upload, Webhook } from 'lucide-react';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { cn } from '@/shared/lib/utils';
 import { QueryErrorNotice } from '@/shared/ui/error-notice';
-import { AdminCard, AdminPage, AdminPageHeader } from './AdminLayout';
+import { AdminPage, AdminPageHeader } from './AdminLayout';
 import { AzureConnectionPanel } from './integrations/AzureConnectionPanel';
 import { ConnectionSkeleton, ProjectsOverviewSkeleton } from './integrations/IntegrationSkeletons';
 import { AzureSyncGuide } from './integrations/AzureSyncGuide';
-import { FaqAccordion } from './integrations/faq';
+import { FaqSection } from './integrations/faq';
 import { FieldMappingPanel } from './integrations/FieldMappingPanel';
 import { integrationColors } from './integrations/parts';
 import { SyncProjectsPanel } from './integrations/SyncProjectsPanel';
@@ -18,11 +17,11 @@ import { WebhookPanel } from './integrations/WebhookPanel';
 import { WriteBackSettingsPanel } from './integrations/WriteBackSettingsPanel';
 
 const SECTIONS = [
-  { id: 'azure-projects', label: 'Проекты', icon: FolderSync },
-  { id: 'azure-write-back', label: 'Запись в Azure', icon: Upload },
-  { id: 'azure-mapping', label: 'Поля задач', icon: ListFilter },
-  { id: 'azure-webhook', label: 'Webhook', icon: Webhook },
-  { id: 'azure-help', label: 'Справка', icon: BookOpen },
+  { id: 'azure-projects', label: 'Проекты' },
+  { id: 'azure-write-back', label: 'Запись в Azure' },
+  { id: 'azure-mapping', label: 'Поля задач' },
+  { id: 'azure-webhook', label: 'Webhook' },
+  { id: 'azure-help', label: 'Справка' },
 ] as const;
 
 export function RoadmapIntegrationsPage() {
@@ -47,7 +46,17 @@ export function RoadmapIntegrationsPage() {
   const overview = overviewQuery.data;
   const overviewReady = Boolean(overview);
   const contentRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLElement>(null);
   const lastFocusedFragment = useRef('');
+
+  // On narrow screens the tab strip scrolls horizontally; keep the active tab visible without moving the page.
+  useEffect(() => {
+    const nav = navRef.current;
+    const active = nav?.querySelector<HTMLElement>('[aria-current]');
+    if (!nav || !active) return;
+    if (active.offsetLeft < nav.scrollLeft) nav.scrollLeft = active.offsetLeft;
+    else if (active.offsetLeft + active.offsetWidth > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = active.offsetLeft + active.offsetWidth - nav.clientWidth;
+  }, [section, configured]);
 
   useEffect(() => {
     if (!configured || !overviewReady) return;
@@ -104,7 +113,7 @@ export function RoadmapIntegrationsPage() {
     <AdminPage className={integrationColors}>
       <AdminPageHeader
         title="Интеграции"
-        description="Управляйте подключением Azure DevOps и обменом данными с Roadmap."
+        description="Подключение Azure DevOps и синхронизация с Roadmap."
       />
 
       {settingsQuery.isLoading ? <ConnectionSkeleton /> : null}
@@ -126,8 +135,8 @@ export function RoadmapIntegrationsPage() {
       ) : null}
 
       {configured ? (
-        <nav aria-label="Настройки Azure DevOps" className="flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1.5">
-          {SECTIONS.map(({ id, label, icon: Icon }) => (
+        <nav ref={navRef} aria-label="Настройки Azure DevOps" className="relative flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden shadow-[inset_0_-1px_0_hsl(var(--border))]">
+          {SECTIONS.map(({ id, label }) => (
             <a
               key={id}
               href={`#${id}`}
@@ -141,11 +150,10 @@ export function RoadmapIntegrationsPage() {
                 setFragment(id);
               }}
               className={cn(
-                'inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
-                section === id ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                'inline-flex min-h-10 shrink-0 items-center border-b-2 px-3 text-sm font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+                section === id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
               )}
             >
-              <Icon aria-hidden="true" className="size-4 shrink-0" strokeWidth={1.8} />
               {label}
             </a>
           ))}
@@ -165,7 +173,7 @@ export function RoadmapIntegrationsPage() {
           {section === 'azure-webhook' ? <WebhookPanel webhookConfigured={settings.webhookConfigured} /> : null}
           {section === 'azure-help' ? (
             <>
-              <AdminCard title="Частые вопросы"><div className="p-4 sm:p-5"><FaqAccordion key={fragment} connected={configured} /></div></AdminCard>
+              <FaqSection key={fragment} connected={configured} openFromLink={fragment.startsWith('faq-')} />
               <AzureSyncGuide />
             </>
           ) : null}

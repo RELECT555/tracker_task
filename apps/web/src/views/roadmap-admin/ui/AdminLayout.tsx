@@ -4,18 +4,18 @@ import { cn } from '@/shared/lib/utils';
 /** Общая обёртка страниц администрирования. */
 export function AdminPage({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <main className="roadmap-scrollbar relative min-h-0 flex-1 overflow-auto overscroll-none px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <div className={cn('space-y-6', className)}>{children}</div>
+    <main className="roadmap-scrollbar relative min-h-0 flex-1 overflow-auto overscroll-none px-4 py-4 sm:px-6 lg:px-8 lg:py-5">
+      <div className={cn('space-y-4', className)}>{children}</div>
     </main>
   );
 }
 
 export function AdminPageHeader({ title, description, actions }: { title: string; description?: React.ReactNode; actions?: React.ReactNode }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
+    <header className="flex flex-wrap items-center justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
-        {description ? <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">{description}</p> : null}
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
+        {description ? <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </header>

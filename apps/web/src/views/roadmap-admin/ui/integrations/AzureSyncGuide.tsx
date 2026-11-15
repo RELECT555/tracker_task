@@ -1,4 +1,4 @@
-import { AlertCircle, AlertTriangle, ArrowRight, BookOpen, Check, RefreshCw, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowRight, Check, RefreshCw, X } from 'lucide-react';
 import { Panel } from './parts';
 
 const OWNERSHIP: { field: string; owner: 'Roadmap' | 'Azure DevOps'; rule: string }[] = [
@@ -39,7 +39,7 @@ const STATUSES: { mark: React.ReactNode; label: string; detail: string }[] = [
 export function AzureSyncGuide() {
   return (
     <div className="space-y-5">
-      <Panel title="Как работает синхронизация" description="План ведётся в Roadmap, факт — в Azure DevOps. Каждое назначение превращается в отдельную задачу." icon={<BookOpen className="h-[18px] w-[18px]" strokeWidth={1.7} />}>
+      <Panel title="Как работает синхронизация" description="План ведётся в Roadmap, факт — в Azure DevOps. Каждое назначение превращается в отдельную задачу.">
         <div className="grid gap-3 p-5 lg:grid-cols-[1fr_auto_1fr_auto_1fr] lg:items-stretch">
           <FlowCard title="Roadmap" lines={['Фича × роль × человек × квартал', 'Оценка в часах']} />
           <FlowArrow label="план" hint="автоматически или по кнопке" />
