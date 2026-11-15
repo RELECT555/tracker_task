@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ExternalLink, Layers2, LoaderCircle, Minus, Plus, X } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Layers2, LoaderCircle, Minus, X } from 'lucide-react';
 import { roadmapApi, type CreatedAzureWorkItem, type CreateAzureWorkItemInput, type RoadmapPerson, type RoadmapProjectsResult, type RoadmapWorkItem } from '@/entities/roadmap/api/roadmapApi';
 import { RoadmapPersonAvatar } from '@/entities/roadmap/ui/RoadmapPersonAvatar';
 import { Button, buttonVariants } from '@/shared/ui/button';
@@ -11,7 +11,6 @@ import { Label } from '@/shared/ui/label';
 import { SearchableSelect } from '@/shared/ui/searchable-select';
 
 type Draft = Omit<CreateAzureWorkItemInput, 'requestId'>;
-const initialDraft: Draft = { type: 'Feature', title: '' };
 const typeOptions = [
   { value: 'Epic', label: 'Epic' },
   { value: 'Feature', label: 'Feature' },
@@ -26,22 +25,24 @@ async function requestStorageKey(externalProjectId: string, draft: Draft) {
   return `roadmap-azure-create:${key}`;
 }
 
-export function CreateAzureWorkItem({ externalProjectId, projectName, items, people, onCreated }: {
+export function CreateAzureWorkItem({ externalProjectId, projectName, items, people, initialType, parentExternalId, onCreated, onClose }: {
   externalProjectId: string;
   projectName: string;
   items: RoadmapWorkItem[];
   people: RoadmapPerson[];
+  initialType: 'Epic' | 'Feature';
+  parentExternalId?: string;
   onCreated: (item: CreatedAzureWorkItem, parentExternalId?: string) => void;
+  onClose: () => void;
 }) {
   const client = useQueryClient();
   const id = useId();
   const [dialog, setDialog] = useState<HTMLDialogElement | null>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
   const titleField = useRef<HTMLInputElement>(null);
   const resultLink = useRef<HTMLAnchorElement>(null);
   const submitting = useRef(false);
   const attempt = useRef<{ key: string; id: string } | null>(null);
-  const [draft, setDraft] = useState<Draft>(initialDraft);
+  const [draft, setDraft] = useState<Draft>(() => ({ type: initialType, title: '', parentExternalId }));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [invalidTitle, setInvalidTitle] = useState(false);
@@ -54,17 +55,14 @@ export function CreateAzureWorkItem({ externalProjectId, projectName, items, peo
   const isFeature = draft.type === 'Feature';
 
   useEffect(() => {
+    if (!dialog) return;
+    dialog.showModal();
+    titleField.current?.focus();
+  }, [dialog]);
+
+  useEffect(() => {
     if (result) resultLink.current?.focus();
   }, [result]);
-
-  function show() {
-    setDraft(initialDraft);
-    setError('');
-    setInvalidTitle(false);
-    setResult(undefined);
-    dialog?.showModal();
-    titleField.current?.focus();
-  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -119,25 +117,17 @@ export function CreateAzureWorkItem({ externalProjectId, projectName, items, peo
   }
 
   return (
-    <>
-      <Button ref={trigger} type="button" variant="outline" size="sm" className="h-9 text-sm" onClick={show} aria-haspopup="dialog">
-        <Plus aria-hidden="true" className="size-4" />
-        Создать карточку
-      </Button>
       <dialog
         ref={setDialog}
         aria-labelledby={`${id}-heading`}
         onCancel={(event) => { if (submitting.current) event.preventDefault(); }}
-        onClose={() => {
-          setResult(undefined);
-          trigger.current?.focus();
-        }}
+        onClose={onClose}
         className="m-auto max-h-none w-[min(32rem,calc(100vw-2rem))] overflow-visible rounded-xl border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/50"
       >
         <div className="max-h-[calc(100dvh-2rem-2px)] overflow-y-auto overscroll-contain rounded-[inherit]">
           <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
             <div className="min-w-0">
-              <h2 id={`${id}-heading`} className="text-base font-semibold">Создать в Azure DevOps</h2>
+              <h2 id={`${id}-heading`} className="text-base font-semibold">{draft.type === 'Epic' ? 'Создать эпик' : isFeature ? 'Создать фичу' : 'Создать задачу'}</h2>
               <p className="mt-1 text-sm text-muted-foreground wrap-anywhere">{projectName}</p>
             </div>
             <Button type="button" variant="ghost" size="icon" className="-mr-2 -mt-1 size-8 shrink-0" aria-label="Закрыть" disabled={pending} onClick={() => dialog?.close()}>
@@ -258,6 +248,5 @@ export function CreateAzureWorkItem({ externalProjectId, projectName, items, peo
           )}
         </div>
       </dialog>
-    </>
   );
 }

@@ -37,7 +37,7 @@ Project import runs through `POST /roadmap/projects/:externalId/sync`. If the Az
 
 After the first import, the Roadmap API checks for new and changed work items every five minutes. It refreshes names, types, states, parent links, the standard `Completed Work` value and role estimates even when the plan is closed. Use **Обновить проект из Azure** in **Интеграции → Проекты** for a manual refresh, including the list of roles. Actual hours on Features and Epics include their own `Completed Work` plus actual hours from descendant Tasks, following intermediate parent work items. Existing planning assignments remain attached to the matching Azure DevOps work item IDs.
 
-Use **Создать карточку** in the planning table to add an Epic, Feature, or Task to Azure DevOps. You can link a Feature to an Epic and a Task to a Feature or an Epic.
+Use **+** in the **Эпик / фича** table heading to create an Epic, or **+** on an Epic row to create a Feature with that Epic already selected as its parent. An empty plan offers **Создать эпик**. The form still lets you change the work item type, including Task, and select a different parent. Use the person-with-plus **Добавить роль** button beside the quarter selector to add a role from the catalog.
 
 ## Two-way sync with Azure DevOps
 

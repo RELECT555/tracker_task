@@ -629,6 +629,13 @@ export function RoadmapPage() {
   const [selectedMonthKey, setSelectedMonthKey] = useState('');
   const [expandedEpics, setExpandedEpics] = useState<Set<string>>(() => new Set());
   const [rolePickerOpen, setRolePickerOpen] = useState(false);
+  const createEpicTrigger = useRef<HTMLButtonElement>(null);
+  const [createTarget, setCreateTarget] = useState<{
+    externalProjectId: string;
+    type: 'Epic' | 'Feature';
+    parentExternalId?: string;
+    trigger: HTMLButtonElement;
+  } | null>(null);
 
   useEffect(() => {
     if (!focusMode) return;
@@ -688,6 +695,11 @@ export function RoadmapPage() {
   const createdTaskIds = new Set(plan?.azure?.createdTaskIds);
   const createdTasks = plan?.workItems.filter((item) => createdTaskIds.has(item.externalId)) ?? [];
   const createProject = canConfigure && configured && !demoMode && projectsQuery.data?.source === 'azure' ? selectedProject : undefined;
+  const canCreateWorkItem = Boolean(createProject && plan?.externalId === createProject.id);
+  function openCreateWorkItem(trigger: HTMLButtonElement, parentExternalId?: string) {
+    if (!createProject || !canCreateWorkItem) return;
+    setCreateTarget({ externalProjectId: createProject.id, type: parentExternalId ? 'Feature' : 'Epic', parentExternalId, trigger });
+  }
   const currentQuarterKey = `${quarterSelection.year}-Q${quarterSelection.quarter}`;
   const currentQuarterLabel = `Q${quarterSelection.quarter} ${quarterSelection.year}`;
   const currentQuarterMonths = quarterMonths(quarterSelection.year, quarterSelection.quarter);
@@ -867,7 +879,7 @@ export function RoadmapPage() {
       <tr key={item.id} className={`group/row align-top transition-colors ${isEpic ? 'border-t border-border bg-muted/30 hover:bg-muted/45' : 'border-t border-border/50 hover:bg-muted/15'}`}>
         <th scope="row" style={pinnedCellStyle('name')} className={cn('py-2 text-left font-normal', pinnedCellClass('name', isEpic), isEpic ? 'px-3 inset-shadow-[2px_0_0] inset-shadow-primary/40 sm:px-4' : isChild ? 'px-0' : 'px-3 sm:px-4')}>
           {isEpic ? (
-            <div className="-ml-1 grid grid-cols-[1.75rem_1rem_minmax(0,1fr)] items-start gap-x-2">
+            <div className={cn('-ml-1 grid items-start gap-x-2', canCreateWorkItem ? 'grid-cols-[1.75rem_1rem_minmax(0,1fr)_2rem]' : 'grid-cols-[1.75rem_1rem_minmax(0,1fr)]')}>
               <Button
                 type="button"
                 variant="ghost"
@@ -890,6 +902,16 @@ export function RoadmapPage() {
                   </span>
                 </div>
               </div>
+              {canCreateWorkItem ? <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="-mt-1 size-8 text-muted-foreground hover:text-foreground"
+                aria-label={`Создать фичу в эпике ${item.title}`}
+                title="Создать фичу"
+                aria-haspopup="dialog"
+                onClick={(event) => openCreateWorkItem(event.currentTarget, item.externalId)}
+              ><Plus aria-hidden="true" className="size-4" /></Button> : null}
             </div>
           ) : (
             <div className={isChild
@@ -1211,20 +1233,13 @@ export function RoadmapPage() {
                       <span aria-live="polite" className="min-w-20 text-center text-xs font-semibold tabular-nums">{currentQuarterLabel}</span>
                       <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Следующий квартал" onClick={() => shiftQuarter(1)}><ChevronRight aria-hidden="true" className="h-4 w-4" /></Button>
                     </div>
-                    {createProject && plan.externalId === createProject.id && (
-                      <CreateAzureWorkItem
-                        key={createProject.id}
-                        externalProjectId={createProject.id}
-                        projectName={createProject.name}
-                        items={plan.workItems}
-                        people={people}
-                        onCreated={(item, parentExternalId) => {
-                          if (item.type !== 'Feature' || !parentExternalId) return;
-                          const parent = epics.find((epic) => epic.externalId === parentExternalId);
-                          if (parent) setExpandedEpics((current) => new Set(current).add(parent.id));
-                        }}
-                      />
-                    )}
+                    {canConfigure ? <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
+                      <PopoverTrigger asChild><Button type="button" variant="outline" size="icon" className="size-9 shrink-0" aria-label="Добавить роль" title="Добавить роль" disabled={!roadmapProjectId || addRoleMutation.isPending}><UserRoundPlus aria-hidden="true" className="size-4" /></Button></PopoverTrigger>
+                      <PopoverContent align="end" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(320px,calc(100vw-2rem))] rounded-xl p-2">
+                        <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Роли из каталога</p>
+                        {roleCatalogQuery.isLoading ? <p className="px-2 py-4 text-center text-sm text-muted-foreground">Загружаем каталог…</p> : availableRoleTemplates.length ? availableRoleTemplates.map((template) => <button key={template.id} type="button" disabled={addRoleMutation.isPending} onClick={() => addRoleMutation.mutate({ projectId: roadmapProjectId, templateId: template.id })} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-foreground hover:bg-muted disabled:opacity-50"><ColorMark color={template.color} size="md" /><span className="min-w-0 flex-1 truncate">{template.name}</span>{template.isMock ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-amber-700 dark:text-amber-300">демо</span> : null}<Plus className="h-3.5 w-3.5 text-muted-foreground" /></button>) : <div className="px-2 py-3 text-sm text-muted-foreground">{(roleCatalogQuery.data ?? []).length ? 'Все роли из каталога уже добавлены.' : 'Каталог ролей пуст.'}{!(roleCatalogQuery.data ?? []).length ? <Link href={routes.roadmapAdminRoles} className="mt-1 block text-primary hover:underline">Создать роли в администрировании</Link> : null}</div>}
+                      </PopoverContent>
+                    </Popover> : null}
                   </div>
                 </div>
 
@@ -1242,7 +1257,8 @@ export function RoadmapPage() {
 
                 {!epics.length && !features.length ? (
                   <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-                    В проекте пока нет эпиков или фич.{canImportProject ? ' Загрузите проект из Azure DevOps.' : createProject ? ' Создайте первую карточку.' : ''}
+                    <p>В проекте пока нет эпиков или фич.{canImportProject ? ' Загрузите проект из Azure DevOps.' : ''}</p>
+                    {canCreateWorkItem ? <Button ref={createEpicTrigger} type="button" variant="outline" size="sm" className="mt-4" aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)}><Plus aria-hidden="true" className="size-4" />Создать эпик</Button> : null}
                   </div>
                 ) : (
                   <div className={focusMode ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : undefined}>
@@ -1295,13 +1311,7 @@ export function RoadmapPage() {
                       >
                       <thead className="sticky top-0 z-20 bg-card">
                         <tr className="border-b border-border bg-muted/40 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          <th scope="col" data-column-id="name" rowSpan={headerRowSpan} style={pinnedCellStyle('name')} className={cn('relative px-3 py-2.5 pr-5 @lg:px-4 @lg:pr-5', pinnedCellClass('name', true))}><div className="flex items-center justify-between gap-1 @lg:gap-3"><span>Эпик / фича</span>{canConfigure ? <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
-                            <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-8 shrink-0 gap-1 px-2 text-xs @lg:px-2.5" aria-label="Добавить роль" title="Добавить роль" disabled={!roadmapProjectId || addRoleMutation.isPending}><Plus aria-hidden="true" className="size-3.5" /><span className="hidden @lg:inline">Добавить роль</span></Button></PopoverTrigger>
-                            <PopoverContent align="start" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(320px,calc(100vw-2rem))] rounded-xl p-2">
-                              <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Роли из каталога</p>
-                              {roleCatalogQuery.isLoading ? <p className="px-2 py-4 text-center text-sm text-muted-foreground">Загружаем каталог…</p> : availableRoleTemplates.length ? availableRoleTemplates.map((template) => <button key={template.id} type="button" disabled={addRoleMutation.isPending} onClick={() => addRoleMutation.mutate({ projectId: roadmapProjectId, templateId: template.id })} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-foreground hover:bg-muted disabled:opacity-50"><ColorMark color={template.color} size="md" /><span className="min-w-0 flex-1 truncate">{template.name}</span>{template.isMock ? <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-amber-700 dark:text-amber-300">демо</span> : null}<Plus className="h-3.5 w-3.5 text-muted-foreground" /></button>) : <div className="px-2 py-3 text-sm text-muted-foreground">{(roleCatalogQuery.data ?? []).length ? 'Все роли из каталога уже добавлены.' : 'Каталог ролей пуст.'}{!(roleCatalogQuery.data ?? []).length ? <Link href={routes.roadmapAdminRoles} className="mt-1 block text-primary hover:underline">Создать роли в администрировании</Link> : null}</div>}
-                            </PopoverContent>
-                          </Popover> : null}</div><ColumnResizeHandle columnId="name" /></th>
+                          <th scope="col" data-column-id="name" rowSpan={headerRowSpan} style={pinnedCellStyle('name')} className={cn('relative px-3 py-2.5 pr-5 @lg:px-4 @lg:pr-5', pinnedCellClass('name', true))}><div className="flex items-center justify-between gap-1 @lg:gap-3"><span>Эпик / фича</span>{canCreateWorkItem ? <Button ref={createEpicTrigger} type="button" variant="ghost" size="icon" className="size-8 shrink-0" aria-label="Создать эпик" title="Создать эпик" aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)}><Plus aria-hidden="true" className="size-4" /></Button> : null}</div><ColumnResizeHandle columnId="name" /></th>
                           <th scope="col" data-column-id="summary:plan" rowSpan={headerRowSpan} style={pinnedCellStyle('summary:plan')} className={cn('relative border-l border-border/60 px-3 py-2.5 text-right', pinnedCellClass('summary:plan', true))} title={selectedMonth ? 'План выбранного месяца' : 'Назначения выбранного квартала. При их отсутствии используется общая оценка Azure на карточке, без привязки к кварталу.'}>
                             <span className="block">План</span><span className="text-[10px] font-normal normal-case">итого, ч</span>
                             <ColumnResizeHandle columnId="summary:plan" />
@@ -1397,6 +1407,24 @@ export function RoadmapPage() {
                     </ResizablePlanTable></div>}
                   </div>
                 )}
+                {createTarget && createProject && createTarget.externalProjectId === createProject.id && plan.externalId === createProject.id ? <CreateAzureWorkItem
+                  key={JSON.stringify([createProject.id, createTarget.type, createTarget.parentExternalId])}
+                  externalProjectId={createProject.id}
+                  projectName={createProject.name}
+                  items={plan.workItems}
+                  people={people}
+                  initialType={createTarget.type}
+                  parentExternalId={createTarget.parentExternalId}
+                  onCreated={(item, parentExternalId) => {
+                    if (item.type !== 'Feature' || !parentExternalId) return;
+                    const parent = epics.find((epic) => epic.externalId === parentExternalId);
+                    if (parent) setExpandedEpics((current) => new Set(current).add(parent.id));
+                  }}
+                  onClose={() => {
+                    setCreateTarget(null);
+                    (createTarget.trigger.isConnected ? createTarget.trigger : createEpicTrigger.current)?.focus();
+                  }}
+                /> : null}
               </section>
             </>
           ) : loadingMessage || emptyPlanMessage ? (
