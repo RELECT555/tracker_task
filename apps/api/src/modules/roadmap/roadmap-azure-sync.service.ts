@@ -1796,6 +1796,7 @@ export class RoadmapAzureSyncService {
           select: {
             id: true,
             quarterKey: true,
+            personExternalId: true,
             estimatedHours: true,
             azureTaskId: true,
             azureCreateAttemptId: true,
@@ -1829,6 +1830,10 @@ export class RoadmapAzureSyncService {
       return { field, hours };
     }
 
+    if (!quarterKey)
+      throw new BadRequestException(
+        'Не указан квартал: у роли есть назначения, и часы делятся между ними внутри квартала.',
+      );
     const current = item.allocations.filter(
       (allocation) => allocation.quarterKey === quarterKey,
     );
@@ -1839,6 +1844,20 @@ export class RoadmapAzureSyncService {
     if (current.some((allocation) => allocation.azureSyncClaimId))
       throw new ConflictException(
         'Назначение сейчас отправляется в Azure DevOps. Повторите через минуту.',
+      );
+    // Demo participants are never sent to Azure DevOps, so the typed total could not be written.
+    const demoPeople = await this.prisma.roadmapPerson.findMany({
+      where: {
+        externalId: {
+          in: current.map((allocation) => allocation.personExternalId),
+        },
+        isMock: true,
+      },
+      select: { externalId: true },
+    });
+    if (demoPeople.length)
+      throw new BadRequestException(
+        'В назначениях роли есть демо-участники: их часы не отправляются в Azure DevOps, поэтому общую сумму роли здесь изменить нельзя.',
       );
     // The cell shows the selected quarter, so the typed value is that quarter's total; the field
     // then gets the sum over all quarters, computed from the allocations below.
@@ -1869,14 +1888,10 @@ export class RoadmapAzureSyncService {
           where: { id: allocation.id, azureSyncClaimId: null },
           data: {
             estimatedHours: share,
-            // A linked Task is updated by the worker; without one the field is the whole sync.
-            ...(hasTask
-              ? { ...this.pendingUpdate, azureSyncRequested: true }
-              : {
-                  azureSyncStatus: 'synced',
-                  azureSyncError: null,
-                  azureSyncedAt: new Date(),
-                }),
+            // A linked Task is updated by the worker; without one the field is the whole sync,
+            // and the row is marked synced only once the field has actually been written.
+            ...this.pendingUpdate,
+            ...(hasTask ? { azureSyncRequested: true } : {}),
           },
         });
         if (!updated.count)
@@ -1896,15 +1911,47 @@ export class RoadmapAzureSyncService {
           });
       }
     });
-    await this.writeFeatureAggregates(workItemId, settings, credentials, {
-      quick: true,
-    });
     const withTask = shares
       .filter(
         ({ allocation }) =>
           allocation.azureTaskId || allocation.azureCreateAttemptId,
       )
       .map(({ allocation }) => allocation.id);
+    const fieldOnly = shares
+      .map(({ allocation }) => allocation.id)
+      .filter((id) => !withTask.includes(id));
+    // Rows still "pending" are only those this call has not settled yet.
+    const settleFieldOnly = async (
+      data: Prisma.RoadmapAllocationUpdateInput,
+    ) => {
+      for (const id of fieldOnly)
+        await this.prisma.roadmapAllocation.updateMany({
+          where: { id, azureSyncClaimId: null, azureSyncStatus: 'pending' },
+          data,
+        });
+    };
+    try {
+      await this.writeFeatureAggregates(workItemId, settings, credentials, {
+        quick: true,
+      });
+    } catch (error) {
+      // The plan already holds the new hours: show the rows as failed so they can be sent again.
+      await settleFieldOnly({
+        azureSyncStatus: 'error',
+        azureSyncError:
+          `Часы не записаны в поле роли у фичи: ${this.message(error)}`.slice(
+            0,
+            1000,
+          ),
+      });
+      if (withTask.length) this.enqueue(withTask);
+      throw error;
+    }
+    await settleFieldOnly({
+      azureSyncStatus: 'synced',
+      azureSyncError: null,
+      azureSyncedAt: new Date(),
+    });
     if (withTask.length) this.enqueue(withTask);
     return { field, hours };
   }

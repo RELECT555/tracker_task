@@ -150,6 +150,7 @@ function setup(type = 'Feature') {
       url.includes('/workitems/$'),
     );
   return {
+    prisma,
     row,
     requestJson,
     request: integration.request,
@@ -249,7 +250,7 @@ describe('Azure write-back claims', () => {
   });
 
   it('re-splits the people of the role to the typed total and writes the field from them', async () => {
-    const { request, roleHours, workItems, allocationUpdates } = setup();
+    const { row, request, roleHours, workItems, allocationUpdates } = setup();
     workItems.findUnique
       .mockResolvedValueOnce({
         externalId: '101',
@@ -291,15 +292,80 @@ describe('Azure write-back claims', () => {
     expect(allocationUpdates).toContainEqual(
       expect.objectContaining({
         estimatedHours: 10,
-        azureSyncStatus: 'synced',
+        azureSyncStatus: 'pending',
       }),
     );
+    // The row is marked synced only after the field has been written.
+    expect(row).toMatchObject({ azureSyncStatus: 'synced' });
     const [, init] = request.mock.calls[0] as [string, { body: string }];
     expect(JSON.parse(init.body)).toEqual(
       expect.arrayContaining([
         { op: 'add', path: '/fields/Custom.BackendHours', value: 13 },
       ]),
     );
+  });
+
+  describe('role hours edge cases', () => {
+    const roleWith = (people = 'person') => ({
+      externalId: '101',
+      projectId: 'project',
+      type: 'Feature',
+      allocations: [
+        {
+          id: 'allocation',
+          quarterKey: '2026-Q4',
+          personExternalId: people,
+          estimatedHours: 2,
+          azureTaskId: null,
+          azureCreateAttemptId: null,
+          azureSyncClaimId: null,
+          periods: [],
+        },
+      ],
+    });
+
+    it('asks for the quarter when the role has assignments', async () => {
+      const { roleHours, workItems, request } = setup();
+      workItems.findUnique.mockResolvedValueOnce(roleWith());
+
+      await expect(roleHours()(10)).rejects.toThrow('Не указан квартал');
+      expect(request).not.toHaveBeenCalled();
+    });
+
+    it('marks the row failed, not synced, when Azure DevOps rejects the write', async () => {
+      const { row, roleHours, workItems, requestJson } = setup();
+      workItems.findUnique
+        .mockResolvedValueOnce(roleWith())
+        .mockResolvedValueOnce({
+          externalId: '101',
+          projectId: 'project',
+          allocations: [
+            { roleId: 'role', estimatedHours: 10, personExternalId: 'person' },
+          ],
+        });
+      requestJson.mockRejectedValueOnce(new Error('Azure 503'));
+
+      await expect(roleHours()(10, '2026-Q4')).rejects.toThrow('Azure 503');
+      expect(row).toMatchObject({
+        estimatedHours: 10,
+        azureSyncStatus: 'error',
+        azureSyncError: expect.stringContaining('Azure 503') as unknown,
+      });
+    });
+
+    it('refuses to edit the total of a role that has demo participants', async () => {
+      const { roleHours, workItems, prisma, request, requestJson } = setup();
+      workItems.findUnique.mockResolvedValueOnce(roleWith('demo'));
+      prisma.roadmapPerson.findMany.mockResolvedValueOnce([
+        { externalId: 'demo' },
+      ]);
+
+      await expect(roleHours()(10, '2026-Q4')).rejects.toThrow(
+        'демо-участники',
+      );
+      expect(requestJson).not.toHaveBeenCalled();
+      expect(request).not.toHaveBeenCalled();
+    });
   });
 
   it('lets one worker create the task and saves its link before importing', async () => {

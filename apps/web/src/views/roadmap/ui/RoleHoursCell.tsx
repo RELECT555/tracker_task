@@ -63,7 +63,7 @@ export function RoleHoursCell({ workItemId, roleId, roleName, quarterKey, hours,
     />;
   }
   return <>
-    {save.error ? <span role="alert" className="mr-2 max-w-[10rem] truncate text-[11px] text-destructive" title={save.error.message}>{save.error.message}</span> : null}
+    {save.error ? <span role="alert" className="mr-2 line-clamp-4 max-w-[14rem] break-words text-right text-[11px] leading-4 text-destructive" title={save.error.message}>{save.error.message}</span> : null}
     <button
       type="button"
       disabled={save.isPending}
