@@ -322,6 +322,17 @@ export class RoadmapController {
     return { ...plan, canEditPlan };
   }
 
+  /** Azure iteration of a quarter; the plan shows the cards of this iteration. */
+  @Get('projects/:projectId/iteration')
+  async projectQuarterIteration(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Query('quarterKey') quarterKey?: string,
+  ) {
+    await this.access.require(actor, { projectId }, 'read');
+    return this.azureSync.findQuarterIteration(projectId, quarterKey ?? '');
+  }
+
   @Get('projects/:projectId/fact')
   async projectFact(
     @CurrentUser() actor: AuthenticatedUser,
