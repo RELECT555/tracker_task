@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Migrations additive only: one new folder `apps/api/prisma/migrations/20261116120000_roadmap_work_item_iteration/`. Do not touch `20261116090000_roadmap_notifications` (uncommitted work of another feature on this branch).
+- Migrations additive only: one new folder `apps/api/prisma/migrations/20261116130000_roadmap_work_item_iteration/`. Do not touch `20261116090000_roadmap_notifications` (uncommitted work of another feature on this branch).
 - Column: `iterationPath String? @map("iteration_path") @db.VarChar(1000)`.
 - After shared changes: `npm run build -w @tracker/shared`.
 - No filtering (all cards visible, no badges) when the quarter path is `null` **or** no epic/feature of the project has a non-null `iterationPath`.
@@ -68,7 +68,7 @@
 
 **Files:**
 - Modify: `apps/api/prisma/schema.prisma` (`RoadmapWorkItem`)
-- Create: `apps/api/prisma/migrations/20261116120000_roadmap_work_item_iteration/migration.sql`
+- Create: `apps/api/prisma/migrations/20261116130000_roadmap_work_item_iteration/migration.sql`
 - Modify: `apps/api/src/modules/roadmap/roadmap-work-item-import.service.ts` (`upsert` data)
 - Modify: `apps/api/src/modules/roadmap/roadmap.service.ts` (`importProjectWorkItems` enrichment block)
 - Test: `apps/api/src/modules/roadmap/roadmap-work-item-iteration.spec.ts`
