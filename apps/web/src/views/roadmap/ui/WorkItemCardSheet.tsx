@@ -21,6 +21,8 @@ import { AllocationAzurePanel } from './AllocationAzurePanel';
 type Tab = 'description' | 'plan' | 'children' | 'discussion' | 'history';
 
 const UNASSIGNED = '__unassigned__';
+/** The item's history loads one page of plan changes (the API's maximum). */
+const PLAN_CHANGES_LIMIT = 200;
 const dateFormat = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
 const dateTimeFormat = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const hoursFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
@@ -224,7 +226,7 @@ function CardContent({ titleId, projectId, externalId, planItem, taskAllocations
   const hasPlanChanges = cardType === 'Feature' || cardType === 'Epic';
   const planChanges = useQuery({
     queryKey: planChangesQueryKey(projectId, externalId),
-    queryFn: ({ signal }) => planChangesApi.list(projectId, { workItemExternalId: externalId, limit: 200 }, signal),
+    queryFn: ({ signal }) => planChangesApi.list(projectId, { workItemExternalId: externalId, limit: PLAN_CHANGES_LIMIT }, signal),
     enabled: hasPlanChanges,
     staleTime: 15_000,
     retry: (count, error) => !(error instanceof ApiError && (error.status ?? 500) < 500) && count < 2,
@@ -286,7 +288,7 @@ function CardContent({ titleId, projectId, externalId, planItem, taskAllocations
         {planItem?.url ? <a href={planItem.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-sm text-primary hover:underline">Открыть в Azure DevOps<ExternalLink aria-hidden="true" className="size-3.5" /></a> : null}
         {hasPlanChanges && planChanges.data?.items.length ? <section aria-label="Изменения плана" className="mt-6">
           <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">Изменения плана</h2>
-          <HistoryTab item={null} planChanges={planChanges} />
+          <HistoryTab item={null} planChanges={planChanges} onOpenTask={onOpen} />
         </section> : null}
       </div>
     </div>;
@@ -404,7 +406,7 @@ function CardContent({ titleId, projectId, externalId, planItem, taskAllocations
         {tab === 'plan' ? <PlanTab allocations={allocations} currentTaskId={externalId} canEditPlan={canEditPlan} writeEnabled={writeEnabled} onOpen={onOpen} onRetry={onRetryAllocation} retrying={retrying} /> : null}
         {tab === 'children' ? <ChildrenTab item={item} onOpen={onOpen} /> : null}
         {tab === 'discussion' ? <DiscussionTab item={item} projectId={projectId} /> : null}
-        {tab === 'history' ? <HistoryTab item={item} planChanges={hasPlanChanges ? planChanges : undefined} /> : null}
+        {tab === 'history' ? <HistoryTab item={item} planChanges={hasPlanChanges ? planChanges : undefined} onOpenTask={onOpen} /> : null}
       </div>
     </div>
   </div>;
@@ -658,7 +660,7 @@ function groupHistory(history: WorkItemCard['history']) {
 }
 
 /** The Azure history and the plan changes (Roadmap) of one item, newest first. */
-function HistoryTab({ item, planChanges }: { item: WorkItemCard | null; planChanges?: UseQueryResult<PlanChangePage> }) {
+function HistoryTab({ item, planChanges, onOpenTask }: { item: WorkItemCard | null; planChanges?: UseQueryResult<PlanChangePage>; onOpenTask: (azureTaskId: string) => void }) {
   const azureEntries = item ? groupHistory(item.history) : [];
   const planGroups = groupByBatch(planChanges?.data?.items ?? []);
   const timeOf = (value: string | null) => {
@@ -678,9 +680,10 @@ function HistoryTab({ item, planChanges }: { item: WorkItemCard | null; planChan
     {entries.length ? <ol className="relative space-y-5 before:absolute before:top-2 before:bottom-2 before:left-[5px] before:w-px before:bg-border">
       {entries.map(({ key, entry, group }) => <li key={key} className="relative pl-6">
         <span aria-hidden="true" className={cn('absolute top-1.5 left-0 size-[11px] rounded-full border-2 border-card', group ? 'bg-primary/60' : 'bg-muted-foreground/40')} />
-        {group ? <PlanChangeEntry group={group} /> : entry ? <AzureHistoryEntry entry={entry} /> : null}
+        {group ? <PlanChangeEntry group={group} onOpenTask={onOpenTask} /> : entry ? <AzureHistoryEntry entry={entry} /> : null}
       </li>)}
     </ol> : null}
+    {planChanges?.data?.nextCursor ? <p className="text-xs text-muted-foreground">Показаны последние {PLAN_CHANGES_LIMIT} изменений</p> : null}
   </div>;
 }
 

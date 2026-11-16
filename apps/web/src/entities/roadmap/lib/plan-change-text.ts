@@ -13,8 +13,10 @@ export interface PlanChangeDescription {
   text: string;
   /** Who made the change: the person, or Azure DevOps when no one did. */
   author: string;
-  /** «Ассистент (применил X)» / «Из Azure DevOps (задача #N)» for changes that did not come from the plan screen. */
+  /** «Ассистент (применил X)» / «Из Azure DevOps» for changes that did not come from the plan screen. */
   origin: string | null;
+  /** Azure id of the Task an Azure-sourced change came from: shown after the origin as «(задача #N)». */
+  taskId: string | null;
   /** Role and quarter, when `text` does not already name them. */
   context: string | null;
 }
@@ -57,18 +59,22 @@ const TASK_OUTCOME: Record<string, string> = {
   kept: 'задача в Azure оставлена',
 };
 
-export function planChangeAuthor(change: Pick<PlanChange, 'actorName'>): string {
-  return change.actorName ?? AZURE_AUTHOR;
+export function planChangeAuthor(change: Pick<PlanChange, 'actorName' | 'actorEmail' | 'source'>): string {
+  return change.actorName ?? change.actorEmail ?? (change.source === 'azure' ? AZURE_AUTHOR : '—');
 }
 
 function planChangeOrigin(change: PlanChange): string | null {
   if (change.source === 'ai') return `Ассистент (применил ${planChangeAuthor(change)})`;
-  if (change.source === 'azure') return change.azureTaskId ? `Из Azure DevOps (задача #${change.azureTaskId})` : 'Из Azure DevOps';
+  if (change.source === 'azure') return 'Из Azure DevOps';
   return null;
 }
 
 export function describePlanChange(change: PlanChange): PlanChangeDescription {
-  const base = { author: planChangeAuthor(change), origin: planChangeOrigin(change) };
+  const base = {
+    author: planChangeAuthor(change),
+    origin: planChangeOrigin(change),
+    taskId: change.source === 'azure' ? change.azureTaskId : null,
+  };
   const { before, after } = change;
   const place = `${change.roleName} · ${formatQuarter(change.quarterKey)}`;
 

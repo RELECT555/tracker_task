@@ -32,11 +32,15 @@ export interface PlanChange {
   batchId: string;
   action: PlanChangeAction;
   source: PlanChangeSource;
-  /** `null` for changes that came from Azure DevOps. */
+  /** `null` when no user made the change (an Azure DevOps pull). */
+  actorUserId: string | null;
   actorName: string | null;
   actorEmail: string | null;
+  allocationId: string;
+  workItemId: string | null;
   workItemExternalId: string;
   workItemTitle: string;
+  roleId: string;
   roleName: string;
   quarterKey: string;
   azureTaskId: string | null;
@@ -51,7 +55,7 @@ export interface PlanChangeQuery {
   personExternalId?: string;
   /** ISO date or date-time; entries created at or after it. */
   from?: string;
-  /** ISO date or date-time; a plain date includes that whole day. */
+  /** ISO date or date-time; a date-time is inclusive, a plain date includes that whole UTC day. */
   to?: string;
   cursor?: string;
   limit?: number;

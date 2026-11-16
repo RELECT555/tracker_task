@@ -73,6 +73,21 @@ export function PlanChangesSheet({ projectId, open, onClose, onOpenWorkItem, rol
   );
 }
 
+/** `YYYY-MM-DD` from a date input → midnight of that day in the viewer's time zone. */
+function startOfLocalDay(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+/**
+ * Last millisecond of that local day. The API includes a date-time `to` (`createdAt <= to`) and
+ * keeps millisecond precision, so this takes the whole day and nothing of the next one.
+ */
+function endOfLocalDay(value: string): Date {
+  const start = startOfLocalDay(value);
+  return new Date(new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1).getTime() - 1);
+}
+
 function peopleOptions(roles: RoadmapRole[]): SearchableSelectOption[] {
   const seen = new Map<string, string>();
   for (const role of roles) {
@@ -104,8 +119,8 @@ function FeedContent({ titleId, projectId, roles, portal, onClose, onOpenWorkIte
     queryKey: planChangesQueryKey(projectId, 'feed', person, from, to),
     queryFn: ({ pageParam, signal }) => planChangesApi.list(projectId, {
       personExternalId: person === ANYONE ? undefined : person,
-      from: from || undefined,
-      to: to || undefined,
+      from: from ? startOfLocalDay(from).toISOString() : undefined,
+      to: to ? endOfLocalDay(to).toISOString() : undefined,
       cursor: pageParam,
       limit: PAGE_SIZE,
     }, signal),
@@ -164,14 +179,17 @@ function FeedContent({ titleId, projectId, roles, portal, onClose, onOpenWorkIte
     <div ref={scroller} className="min-h-0 flex-1 roadmap-scrollbar overflow-y-auto px-4 py-4 sm:px-6">
       {feed.isPending ? <div role="status" aria-label="Загружаем журнал изменений" className="space-y-4">
         {[0, 1, 2, 3].map((row) => <div key={row} className="space-y-2"><div className="h-3 w-1/3 animate-pulse rounded bg-muted/70 motion-reduce:animate-none" /><div className="h-4 w-4/5 animate-pulse rounded bg-muted motion-reduce:animate-none" /></div>)}
-      </div> : feed.isError ? <ErrorNotice title="Не удалось загрузить журнал изменений" errors={[feed.error]} onRetry={() => feed.refetch()} retrying={feed.isFetching} />
-        : !groups.length ? <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-6 py-10 text-center">
+      </div> : feed.isError && !feed.data ? <ErrorNotice title="Не удалось загрузить журнал изменений" errors={[feed.error]} onRetry={() => feed.refetch()} retrying={feed.isFetching} />
+        : <>
+        {/* A failed background refresh keeps what is already shown; a failed next page has its own notice below. */}
+        {feed.isError && !feed.isFetchNextPageError ? <div className="mb-4"><ErrorNotice title="Не удалось обновить журнал изменений" errors={[feed.error]} onRetry={() => feed.refetch()} retrying={feed.isFetching} /></div> : null}
+        {!groups.length ? <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-6 py-10 text-center">
           <span aria-hidden="true" className="flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground"><History className="size-4" /></span>
           <p className="text-sm text-muted-foreground">{filtered ? 'По этим фильтрам изменений нет' : 'Изменений пока нет'}</p>
         </div> : <>
           <ul className="space-y-4">
             {groups.map((group) => <li key={`${group.batchId}:${group.items[0].id}`} className="border-b border-border pb-4 last:border-b-0">
-              <PlanChangeEntry group={group} showWorkItem onOpenWorkItem={onOpenWorkItem} />
+              <PlanChangeEntry group={group} showWorkItem onOpenWorkItem={onOpenWorkItem} onOpenTask={onOpenWorkItem} />
             </li>)}
           </ul>
           <div ref={sentinel} className="h-px" aria-hidden="true" />
@@ -180,6 +198,7 @@ function FeedContent({ titleId, projectId, roles, portal, onClose, onOpenWorkIte
             <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={feed.isFetchingNextPage} onClick={() => void feed.fetchNextPage()}>{feed.isFetchingNextPage ? 'Загружаем…' : 'Показать ещё'}</Button>
           </div> : null}
         </>}
+      </>}
     </div>
   </div>;
 }
