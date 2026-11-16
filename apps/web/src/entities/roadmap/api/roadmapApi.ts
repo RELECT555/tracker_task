@@ -103,6 +103,8 @@ export interface RoadmapWorkItem {
   /** Completed Work stored on this card, before descendant roll-up. */
   ownActualHours?: number | string | null;
   azureCustomFields: Record<string, unknown> | null;
+  /** Azure DevOps iteration, e.g. "Project\2026\Q4"; null for cards imported before it was stored. */
+  iterationPath?: string | null;
   allocations: RoadmapAllocation[];
 }
 
@@ -319,6 +321,9 @@ const liveRoadmapApi = {
     ),
   plan: (projectId: string, includeChildEpics = false) =>
     apiFetch<RoadmapProjectPlan>(`/roadmap/projects/${projectId}/plan${includeChildEpics ? '?includeChildEpics=1' : ''}`),
+  /** Azure iteration of a `YYYY-Qn` quarter; null means the plan is not filtered by iteration. */
+  quarterIteration: (projectId: string, quarterKey: string, signal?: AbortSignal) =>
+    apiFetch<{ iterationPath: string | null }>(`/roadmap/projects/${encodeURIComponent(projectId)}/iteration?quarterKey=${encodeURIComponent(quarterKey)}`, { signal }),
   createWorkItem: (externalProjectId: string, input: CreateAzureWorkItemInput) =>
     apiFetch<CreatedAzureWorkItem>(`/roadmap/azure-projects/${encodeURIComponent(externalProjectId)}/work-items`, {
       method: 'POST',

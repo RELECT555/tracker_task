@@ -292,6 +292,7 @@ export class RoadmapWorkItemImportService {
         item.url,
       actualHours: completedWork(item),
       azureCustomFields: azureCustomFields as Prisma.InputJsonObject,
+      iterationPath: stringValue(fields[ITERATION_PATH]),
     };
     return this.prisma.roadmapWorkItem.upsert({
       where: {
