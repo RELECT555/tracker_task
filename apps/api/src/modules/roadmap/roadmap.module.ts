@@ -17,6 +17,7 @@ import { RoadmapProjectAccessController } from './roadmap-project-access.control
 import { RoadmapProjectAccessService } from './roadmap-project-access.service';
 import { RoadmapTablePreferencesController } from './roadmap-table-preferences.controller';
 import { RoadmapTablePreferencesService } from './roadmap-table-preferences.service';
+import { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 
 @Module({
   imports: [IdentityModule],
@@ -39,8 +40,13 @@ import { RoadmapTablePreferencesService } from './roadmap-table-preferences.serv
     RoadmapAllocationAzureService,
     RoadmapProjectAccessService,
     RoadmapTablePreferencesService,
+    RoadmapPlanChangeService,
     AdminRoleGuard,
   ],
-  exports: [RoadmapService, RoadmapProjectAccessService],
+  exports: [
+    RoadmapService,
+    RoadmapProjectAccessService,
+    RoadmapPlanChangeService,
+  ],
 })
 export class RoadmapModule {}

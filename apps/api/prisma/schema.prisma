@@ -394,6 +394,7 @@ model RoadmapProject {
   azureState RoadmapAzureProjectState?
   access     RoadmapProjectAccess[]
   alerts     RoadmapAlert[]
+  planChanges RoadmapPlanChange[]
 
   @@map("roadmap_projects")
 }
@@ -559,6 +560,40 @@ model RoadmapAllocation {
   @@index([azureSyncClaimedAt])
   @@index([azureTaskId])
   @@map("roadmap_allocations")
+}
+
+/// Append-only log of plan (allocation) changes. allocationId, workItemId and actorUserId are
+/// deliberately not foreign keys: entries must outlive the allocation, work item and user.
+model RoadmapPlanChange {
+  id                 String         @id @default(uuid()) @db.Uuid
+  projectId          String         @map("project_id") @db.Uuid
+  batchId            String         @map("batch_id") @db.Uuid
+  /// created | updated | deleted
+  action             String         @db.VarChar(20)
+  /// plan | ai | azure
+  source             String         @db.VarChar(20)
+  actorUserId        String?        @map("actor_user_id") @db.Uuid
+  actorEmail         String?        @map("actor_email") @db.VarChar(255)
+  actorName          String?        @map("actor_name") @db.VarChar(255)
+  azureTaskId        String?        @map("azure_task_id") @db.VarChar(100)
+  allocationId       String         @map("allocation_id") @db.Uuid
+  workItemId         String?        @map("work_item_id") @db.Uuid
+  workItemExternalId String         @map("work_item_external_id") @db.VarChar(100)
+  workItemTitle      String         @map("work_item_title") @db.VarChar(1000)
+  roleId             String         @map("role_id") @db.Uuid
+  roleName           String         @map("role_name") @db.VarChar(100)
+  quarterKey         String         @map("quarter_key") @db.VarChar(7)
+  before             Json?
+  after              Json?
+  details            Json
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+  project            RoadmapProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([workItemId, createdAt(sort: Desc)])
+  @@index([allocationId, createdAt])
+  @@index([batchId])
+  @@map("roadmap_plan_changes")
 }
 
 model RoadmapPeriodAllocation {
