@@ -75,9 +75,11 @@ if $PROD; then
   step "Запускаю API и веб в production-режиме (лог: $LOG)"
   : >"$LOG"
   (cd apps/api && NODE_ENV=production nohup node --max-old-space-size=256 dist/src/main >>"$LOG" 2>&1 &)
-  VITE_BIN="$(ls "$ROOT/apps/web/node_modules/.bin/vite" "$ROOT/node_modules/.bin/vite" 2>/dev/null | head -n 1)"
+  VITE_BIN=""
+  for candidate in "$ROOT/apps/web/node_modules/.bin/vite" "$ROOT/node_modules/.bin/vite"; do
+    if [ -e "$candidate" ]; then VITE_BIN="$(readlink -f "$candidate")"; break; fi
+  done
   [ -n "$VITE_BIN" ] || fail "не найден vite в node_modules/.bin. Запустите npm install."
-  VITE_BIN="$(readlink -f "$VITE_BIN")"
   (cd apps/web && nohup node --max-old-space-size=128 "$VITE_BIN" preview >>"$LOG" 2>&1 &)
   echo "Запущено."
 else
