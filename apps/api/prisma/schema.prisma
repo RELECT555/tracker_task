@@ -482,6 +482,8 @@ model RoadmapWorkItem {
   url              String?             @db.VarChar(1000)
   actualHours      Decimal?            @map("actual_hours") @db.Decimal(10, 2)
   azureCustomFields Json?               @map("azure_custom_fields")
+  /// Azure DevOps System.IterationPath, e.g. "Project\2026\Q4"; null for cards imported before it was stored.
+  iterationPath    String?             @map("iteration_path") @db.VarChar(1000)
   updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz()
   project          RoadmapProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   allocations      RoadmapAllocation[]

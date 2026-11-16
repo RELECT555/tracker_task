@@ -72,6 +72,8 @@ export const roadmapDemoApi = {
     call<RoadmapPortfolio>('projectSummaries', [input], signal),
   syncProject: (project: AzureProject) => call<RoadmapProjectSyncResult>('syncProject', [project]),
   plan: (projectId: string) => call<RoadmapProjectPlan>('plan', [projectId]),
+  // Demo cards have no Azure iterations, so the demo plan is never filtered by iteration.
+  quarterIteration: (): Promise<{ iterationPath: string | null }> => Promise.resolve({ iterationPath: null }),
   createWorkItem: (): Promise<CreatedAzureWorkItem> =>
     Promise.reject(new Error('Создание карточек в Azure DevOps недоступно в демо.')),
   previewAzurePush: (projectId: string) => call<RoadmapAzurePushPreview>('previewAzurePush', [projectId]),

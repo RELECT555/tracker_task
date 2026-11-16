@@ -2075,6 +2075,41 @@ export class RoadmapAzureSyncService {
       });
   }
 
+  /**
+   * The quarter's iteration for the plan filter, by the same rule Task write-back uses.
+   * Null when the integration is off or Azure cannot answer: the plan then shows every card.
+   */
+  async findQuarterIteration(
+    projectId: string,
+    quarterKey: string,
+  ): Promise<{ iterationPath: string | null }> {
+    if (typeof quarterKey !== 'string' || !/^\d{4}-Q[1-4]$/.test(quarterKey)) {
+      throw new BadRequestException('Quarter must use YYYY-Qn format');
+    }
+    const project = await this.prisma.roadmapProject.findUnique({
+      where: { id: projectId },
+      select: { externalId: true },
+    });
+    if (!project) throw new NotFoundException('Roadmap project was not found');
+    try {
+      if (!(await this.integration.getPublicSettings()).configured)
+        return { iterationPath: null };
+      const credentials = await this.integration.getCredentials();
+      return {
+        iterationPath: await this.quarterIterationPath(
+          project.externalId,
+          quarterKey,
+          credentials,
+        ),
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Quarter iteration lookup failed for project ${projectId}: ${this.message(error)}`,
+      );
+      return { iterationPath: null };
+    }
+  }
+
   /** Finds the iteration for a `YYYY-Qn` quarter: by name first, then the narrowest one spanning the quarter. */
   private async quarterIterationPath(
     projectExternalId: string,
