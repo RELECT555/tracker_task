@@ -14,6 +14,10 @@ import {
 } from '@tracker/shared';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { alertLink } from './roadmap-alert-format';
+import {
+  RoadmapSyncProblemsService,
+  type SyncProblemsViewer,
+} from './roadmap-sync-problems.service';
 
 const PLAN_PAGE = '/roadmap';
 const UUID_PATTERN =
@@ -22,7 +26,10 @@ const UUID_PATTERN =
 /** A user's sync health notifications (spec §6); every query is scoped to that user. */
 @Injectable()
 export class RoadmapNotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly syncProblems: RoadmapSyncProblemsService,
+  ) {}
 
   async list(
     user: { id: string; isAdmin: boolean },
@@ -54,7 +61,23 @@ export class RoadmapNotificationsService {
       },
     });
 
-    const items = rows.slice(0, limit).map((row): RoadmapNotificationDto => {
+    const page = rows.slice(0, limit);
+    const episodes = page.length
+      ? await this.prisma.roadmapAlertEpisode.findMany({
+          where: {
+            OR: page.map((row) => ({
+              alertId: row.alertId,
+              generation: row.generation,
+            })),
+          },
+          select: { alertId: true, generation: true, openedCount: true },
+        })
+      : [];
+    const openedCounts = new Map(
+      episodes.map((e) => [`${e.alertId}:${e.generation}`, e.openedCount]),
+    );
+
+    const items = page.map((row): RoadmapNotificationDto => {
       const { alert } = row;
       const sameEpisode = alert.generation === row.generation;
       const active = alert.state === 'open' && sameEpisode;
@@ -78,6 +101,8 @@ export class RoadmapNotificationsService {
             ? ((alert.resolution as RoadmapAlertResolution | null) ?? null)
             : 'fixed',
         current: active ? (alert.details as RoadmapAlertDetails) : null,
+        openedCount:
+          openedCounts.get(`${row.alertId}:${row.generation}`) ?? null,
       };
     });
 
@@ -87,8 +112,9 @@ export class RoadmapNotificationsService {
     };
   }
 
-  async summary(userId: string): Promise<RoadmapNotificationSummary> {
-    const [unread, openUnread] = await Promise.all([
+  async summary(user: SyncProblemsViewer): Promise<RoadmapNotificationSummary> {
+    const userId = user.id;
+    const [unread, openUnread, canViewSyncProblems] = await Promise.all([
       this.prisma.roadmapNotification.count({
         where: { userId, readAt: null },
       }),
@@ -96,8 +122,10 @@ export class RoadmapNotificationsService {
         where: { userId, readAt: null, alert: { state: 'open' } },
         select: { generation: true, alert: { select: { generation: true } } },
       }),
+      this.syncProblems.canView(user),
     ]);
     return {
+      canViewSyncProblems,
       unread,
       activeUnread: openUnread.filter(
         (row) => row.generation === row.alert.generation,

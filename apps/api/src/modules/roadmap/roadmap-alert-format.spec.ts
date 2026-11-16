@@ -1,4 +1,6 @@
 import {
+  alertAction,
+  alertHint,
   alertLink,
   formatAlert,
   pluralAssignments,
@@ -127,5 +129,49 @@ describe('alertLink', () => {
     expect(alertLink('webhook_silent', 'p1')).toBe(
       '/roadmap/admin/integrations#azure-webhook',
     );
+  });
+});
+
+describe('alertHint and alertAction', () => {
+  it('gives the exact hint for every kind', () => {
+    expect(alertHint('sync_errors')).toBe(
+      'Откройте назначения с ошибкой, проверьте текст ошибки и отправьте снова.',
+    );
+    expect(alertHint('sync_conflicts')).toBe(
+      'Назначение изменили вручную в Azure. Решите, чья версия верна, и отправьте снова или примите значение из Azure.',
+    );
+    expect(alertHint('import_failing')).toBe(
+      'Проверьте, что у PAT есть доступ к проекту, и обновите проект из Azure.',
+    );
+    expect(alertHint('azure_auth')).toBe(
+      'Azure не принимает PAT. Выпустите новый PAT и сохраните его в подключении.',
+    );
+    expect(alertHint('webhook_silent')).toBe(
+      'Изменения в Azure находит только опрос. Проверьте service hook в Azure DevOps.',
+    );
+  });
+
+  it('admins get integration tabs', () => {
+    expect(alertAction('sync_errors', 'p1', true)).toEqual({
+      label: 'Интеграции → Проекты',
+      link: '/roadmap/admin/integrations#azure-projects',
+    });
+    expect(alertAction('azure_auth', null, true)).toEqual({
+      label: 'Подключение',
+      link: '/roadmap/admin/integrations#azure-connection',
+    });
+    expect(alertAction('webhook_silent', 'p1', true)).toEqual({
+      label: 'Webhook',
+      link: '/roadmap/admin/integrations#azure-webhook',
+    });
+  });
+
+  it('planners get the plan, and nothing for global kinds', () => {
+    expect(alertAction('sync_conflicts', 'p1', false)).toEqual({
+      label: 'Открыть план',
+      link: '/roadmap',
+    });
+    expect(alertAction('azure_auth', null, false)).toBeNull();
+    expect(alertAction('webhook_silent', 'p1', false)).toBeNull();
   });
 });

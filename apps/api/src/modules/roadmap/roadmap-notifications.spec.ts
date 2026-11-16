@@ -3,6 +3,7 @@ import type { AuthenticatedUser } from '../../shared/presentation/decorators/cur
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { RoadmapNotificationsController } from './roadmap-notifications.controller';
 import { RoadmapNotificationsService } from './roadmap-notifications.service';
+import { RoadmapSyncProblemsService } from './roadmap-sync-problems.service';
 
 const userId = '00000000-0000-4000-8000-000000000005';
 const projectId = '10000000-0000-4000-8000-000000000001';
@@ -46,9 +47,16 @@ function setup() {
       count: jest.fn().mockResolvedValue(0),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
+    roadmapAlertEpisode: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    roadmapProjectAccess: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
   };
   const service = new RoadmapNotificationsService(
     prisma as unknown as PrismaService,
+    new RoadmapSyncProblemsService(prisma as unknown as PrismaService),
   );
   return {
     prisma,
@@ -131,6 +139,7 @@ describe('RoadmapNotificationsService', () => {
       active: true,
       resolution: null,
       current: { count: 2 },
+      openedCount: null,
     });
     expect(page.items[1]).toMatchObject({
       active: false,
@@ -184,6 +193,7 @@ describe('RoadmapNotificationsService', () => {
     await expect(controller.summary(user)).resolves.toEqual({
       unread: 3,
       activeUnread: 1,
+      canViewSyncProblems: false,
     });
     expect(prisma.roadmapNotification.count).toHaveBeenCalledWith({
       where: { userId, readAt: null },
@@ -248,5 +258,58 @@ describe('RoadmapNotificationsService', () => {
       BadRequestException,
     );
     expect(prisma.roadmapNotification.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('RoadmapNotificationsService sync page link and opened count', () => {
+  it('canViewSyncProblems: admin yes, planner yes, viewer only no', async () => {
+    const { controller, prisma } = setup();
+    await expect(controller.summary(admin)).resolves.toMatchObject({
+      canViewSyncProblems: true,
+    });
+    expect(prisma.roadmapProjectAccess.findFirst).not.toHaveBeenCalled();
+
+    prisma.roadmapProjectAccess.findFirst.mockResolvedValueOnce({ projectId });
+    await expect(controller.summary(user)).resolves.toMatchObject({
+      canViewSyncProblems: true,
+    });
+    expect(prisma.roadmapProjectAccess.findFirst).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: { email: 'employee@company.example', role: 'planner' },
+      }),
+    );
+
+    prisma.roadmapProjectAccess.findFirst.mockResolvedValueOnce(null);
+    await expect(controller.summary(user)).resolves.toMatchObject({
+      canViewSyncProblems: false,
+    });
+  });
+
+  it('list returns openedCount from the matching episode, or null', async () => {
+    const { service, prisma } = setup();
+    prisma.roadmapNotification.findMany.mockResolvedValue([
+      row('with', 2, { state: 'open', generation: 2 }),
+      {
+        ...row('without', 1, { state: 'open', generation: 2 }),
+        alertId: 'other',
+      },
+    ]);
+    prisma.roadmapAlertEpisode.findMany.mockResolvedValue([
+      { alertId: 'alert-id', generation: 2, openedCount: 4 },
+    ]);
+
+    const page = await service.list(admin, {});
+
+    expect(page.items.map((item) => item.openedCount)).toEqual([4, null]);
+    expect(prisma.roadmapAlertEpisode.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [
+            { alertId: 'alert-id', generation: 2 },
+            { alertId: 'other', generation: 1 },
+          ],
+        },
+      }),
+    );
   });
 });

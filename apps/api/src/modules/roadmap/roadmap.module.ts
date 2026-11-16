@@ -30,6 +30,8 @@ import { RoadmapTablePreferencesService } from './roadmap-table-preferences.serv
 import { RoadmapAlertsService } from './roadmap-alerts.service';
 import { RoadmapNotificationsController } from './roadmap-notifications.controller';
 import { RoadmapNotificationsService } from './roadmap-notifications.service';
+import { RoadmapSyncProblemsController } from './roadmap-sync-problems.controller';
+import { RoadmapSyncProblemsService } from './roadmap-sync-problems.service';
 
 @Module({
   imports: [IdentityModule],
@@ -41,6 +43,7 @@ import { RoadmapNotificationsService } from './roadmap-notifications.service';
     RoadmapProjectAccessController,
     RoadmapTablePreferencesController,
     RoadmapNotificationsController,
+    RoadmapSyncProblemsController,
   ],
   providers: [
     RoadmapService,
@@ -65,6 +68,7 @@ import { RoadmapNotificationsService } from './roadmap-notifications.service';
     RoadmapTablePreferencesService,
     RoadmapAlertsService,
     RoadmapNotificationsService,
+    RoadmapSyncProblemsService,
     AdminRoleGuard,
   ],
   exports: [

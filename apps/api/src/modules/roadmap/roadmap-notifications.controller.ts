@@ -17,7 +17,7 @@ export class RoadmapNotificationsController {
 
   @Get('summary')
   summary(@CurrentUser() user: AuthenticatedUser) {
-    return this.notifications.summary(user.id);
+    return this.notifications.summary(user);
   }
 
   @Post('read-all')
