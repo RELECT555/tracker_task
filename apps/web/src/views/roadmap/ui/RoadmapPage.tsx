@@ -33,6 +33,7 @@ import {
   type RoadmapRole,
   type RoadmapWorkItem,
 } from '@/entities/roadmap/api/roadmapApi';
+import { invalidatePlanChanges } from '@/entities/roadmap/api/planChangesApi';
 import { isRoadmapDemoMode } from '@/entities/roadmap/api/roadmapDemo';
 import { ALL_ROADMAP_PROJECTS, useRoadmapProject } from '@/entities/roadmap/model/roadmap-project-selection';
 import { useRoadmapCatalog } from '@/entities/roadmap/model/use-roadmap-catalog';
@@ -845,14 +846,19 @@ export function RoadmapPage() {
   });
   const isSelectedProjectSync = syncMutation.variables?.id === activeAzureProjectId;
   const syncResult = isSelectedProjectSync ? syncMutation.data : undefined;
+  // Every allocation write lands in the plan change log too.
+  const refreshAfterAllocationWrite = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
+    invalidatePlanChanges(queryClient),
+  ]);
   const saveMutation = useMutation({
     mutationFn: roadmapApi.saveAllocation,
     // The allocation is saved even when creating its Task fails, so refresh either way.
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
+    onSettled: refreshAfterAllocationWrite,
   });
   const saveQuarterMutation = useMutation({
     mutationFn: ({ allocationId, quarterKey, months }: { allocationId: string; quarterKey: string; months: { monthKey: string; hours: number }[] }) => roadmapApi.saveAllocationQuarter(allocationId, quarterKey, months),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
+    onSuccess: refreshAfterAllocationWrite,
   });
   const [pushPreviewOpen, setPushPreviewOpen] = useState(false);
   const pushAllocationMutation = useMutation({
@@ -896,7 +902,7 @@ export function RoadmapPage() {
   });
   const splitMutation = useMutation({
     mutationFn: roadmapApi.rebalanceAllocations,
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
+    onSettled: refreshAfterAllocationWrite,
   });
   const monthKey = selectedMonth?.monthKey;
   const summary = useMemo(() => plan ? getRoadmapSummary(plan, {
@@ -1501,7 +1507,7 @@ export function RoadmapPage() {
                       projectId={roadmapProjectId}
                       quarterKey={currentQuarterKey}
                       canEditPlan={canEditPlan}
-                      onApplied={() => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] })}
+                      onApplied={refreshAfterAllocationWrite}
                     /> : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">

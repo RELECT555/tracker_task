@@ -1,3 +1,4 @@
+import type { QueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/shared/api/client';
 import { isRoadmapDemoMode, roadmapDemoApi } from './roadmapDemo';
 
@@ -76,3 +77,7 @@ export const planChangesApi = {
 /** Key prefix shared by every plan change query: invalidate it after any allocation write. */
 export const PLAN_CHANGES_QUERY_KEY = 'plan-changes';
 export const planChangesQueryKey = (projectId: string, ...rest: unknown[]) => [PLAN_CHANGES_QUERY_KEY, projectId, ...rest] as const;
+
+/** Refreshes every open change log (item history and project feed) after an allocation write. */
+export const invalidatePlanChanges = (queryClient: QueryClient) =>
+  queryClient.invalidateQueries({ queryKey: [PLAN_CHANGES_QUERY_KEY] });
