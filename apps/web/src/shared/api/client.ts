@@ -84,7 +84,8 @@ export async function apiFetch<T>(
     throw new ApiError(message, body?.error?.code, response.status);
   }
 
-  const data = await response.json() as T;
+  // 204 No Content (e.g. mark-as-read) has no body to parse.
+  const data = response.status === 204 ? undefined as T : await response.json() as T;
   if (provider && provider.getSessionId() !== sessionId) {
     throw new ApiError('Session changed', 'SESSION_CHANGED', 401);
   }

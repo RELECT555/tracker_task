@@ -1,5 +1,7 @@
 import { apiFetch } from '@/shared/api/client';
-import type { RoadmapPortfolio, RoadmapPortfolioInput, SyncSettingsV2 } from '@tracker/shared';
+import type {
+  RoadmapNotificationPage, RoadmapNotificationSummary, RoadmapPortfolio, RoadmapPortfolioInput, SyncSettingsV2,
+} from '@tracker/shared';
 import { isRoadmapDemoMode, roadmapDemoApi } from './roadmapDemo';
 
 export interface AzureProject {
@@ -297,6 +299,12 @@ const liveRoadmapApi = {
   webhookSecret: () => apiFetch<{ secret: string }>('/roadmap/settings/azure-devops/webhook-secret'),
   rotateWebhookSecret: () =>
     apiFetch<{ secret: string }>('/roadmap/settings/azure-devops/webhook-secret/rotate', { method: 'POST', body: '{}' }),
+  notifications: (cursor?: string) =>
+    apiFetch<RoadmapNotificationPage>(`/roadmap/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
+  notificationSummary: () => apiFetch<RoadmapNotificationSummary>('/roadmap/notifications/summary'),
+  markNotificationRead: (id: string) =>
+    apiFetch<void>(`/roadmap/notifications/${encodeURIComponent(id)}/read`, { method: 'POST', body: '{}' }),
+  markAllNotificationsRead: () => apiFetch<void>('/roadmap/notifications/read-all', { method: 'POST', body: '{}' }),
   projects: () => apiFetch<RoadmapProjectsResult>('/roadmap/projects'),
   localProjects: () => apiFetch<RoadmapProjectsResult>('/roadmap/projects/local'),
   projectSummaries: (input: RoadmapPortfolioInput, signal?: AbortSignal) =>
