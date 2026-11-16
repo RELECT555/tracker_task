@@ -32,14 +32,34 @@ interface NotificationRow {
   createdAt: Date;
 }
 
+interface EpisodeRow {
+  id: string;
+  alertId: string;
+  generation: number;
+  kind: string;
+  projectId: string | null;
+  openedAt: Date;
+  resolvedAt: Date | null;
+  resolution: string | null;
+  details: unknown;
+  peakCount: number | null;
+  openedCount: number | null;
+}
+
 type Where = Record<string, unknown>;
 
 /** Lets other pending promises run, so concurrent calls interleave like on two instances. */
 const yieldTurn = () => new Promise<void>((resolve) => setImmediate(resolve));
 
+const comparable = (value: unknown) =>
+  value instanceof Date ? value.getTime() : (value as number);
+
 function matches(row: object, where: Where): boolean {
   const values = row as Record<string, unknown>;
   return Object.entries(where).every(([field, expected]) => {
+    if (field === 'OR') {
+      return (expected as Where[]).some((branch) => matches(row, branch));
+    }
     const actual = values[field];
     if (expected === null) return actual === null;
     if (expected instanceof Date || typeof expected !== 'object') {
@@ -50,17 +70,14 @@ function matches(row: object, where: Where): boolean {
     const filter = expected as Record<string, unknown>;
     if ('in' in filter) return (filter.in as unknown[]).includes(actual);
     if ('lt' in filter)
-      return (actual as Date).getTime() < (filter.lt as Date).getTime();
+      return actual !== null && comparable(actual) < comparable(filter.lt);
     if ('lte' in filter)
-      return (
-        actual !== null &&
-        (actual as Date).getTime() <= (filter.lte as Date).getTime()
-      );
+      return actual !== null && comparable(actual) <= comparable(filter.lte);
     throw new Error(`Unsupported filter on ${field}`);
   });
 }
 
-function applyData(row: AlertRow, data: Record<string, unknown>) {
+function applyData(row: object, data: Record<string, unknown>) {
   for (const [field, value] of Object.entries(data)) {
     if (value && typeof value === 'object' && 'increment' in value) {
       (row as unknown as Record<string, number>)[field] += (
@@ -75,6 +92,7 @@ function applyData(row: AlertRow, data: Record<string, unknown>) {
 function fakePrisma() {
   const alerts: AlertRow[] = [];
   const notifications: NotificationRow[] = [];
+  const episodes: EpisodeRow[] = [];
 
   const roadmapAlert = {
     findMany: jest.fn(async ({ where }: { where?: Where } = {}) => {
@@ -129,15 +147,109 @@ function fakePrisma() {
     ),
     deleteMany: jest.fn(async ({ where }: { where: Where }) => {
       await yieldTurn();
-      const { notifications: relation, ...rest } = where as {
+      const {
+        notifications: noNotifications,
+        episodes: noEpisodes,
+        ...rest
+      } = where as {
         notifications?: { none: object };
+        episodes?: { none: object };
       };
       const doomed = alerts.filter(
         (row) =>
           matches(row, rest) &&
-          (!relation || !notifications.some((n) => n.alertId === row.id)),
+          (!noNotifications ||
+            !notifications.some((n) => n.alertId === row.id)) &&
+          (!noEpisodes || !episodes.some((e) => e.alertId === row.id)),
       );
       doomed.forEach((row) => alerts.splice(alerts.indexOf(row), 1));
+      return { count: doomed.length };
+    }),
+  };
+
+  const findEpisode = (key: { alertId?: string; generation?: number }) =>
+    episodes.find(
+      (row) => row.alertId === key.alertId && row.generation === key.generation,
+    );
+  const newEpisode = (data: Partial<EpisodeRow>): EpisodeRow => ({
+    id: randomUUID(),
+    alertId: '',
+    generation: 0,
+    kind: '',
+    projectId: null,
+    openedAt: new Date(0),
+    resolvedAt: null,
+    resolution: null,
+    details: {},
+    peakCount: null,
+    openedCount: null,
+    ...data,
+  });
+
+  const roadmapAlertEpisode = {
+    createMany: jest.fn(
+      async ({
+        data,
+        skipDuplicates,
+      }: {
+        data: Partial<EpisodeRow>[];
+        skipDuplicates?: boolean;
+      }) => {
+        await yieldTurn();
+        let count = 0;
+        for (const item of data) {
+          if (findEpisode(item)) {
+            if (skipDuplicates) continue;
+            throw new Prisma.PrismaClientKnownRequestError(
+              'Unique constraint',
+              { code: 'P2002', clientVersion: 'test' },
+            );
+          }
+          episodes.push(newEpisode(item));
+          count += 1;
+        }
+        return { count };
+      },
+    ),
+    upsert: jest.fn(
+      async ({
+        where,
+        create,
+        update,
+      }: {
+        where: { alertId_generation: { alertId: string; generation: number } };
+        create: Partial<EpisodeRow>;
+        update: Record<string, unknown>;
+      }) => {
+        await yieldTurn();
+        const existing = findEpisode(where.alertId_generation);
+        if (existing) {
+          applyData(existing, update);
+          return { ...existing };
+        }
+        const row = newEpisode(create);
+        episodes.push(row);
+        return { ...row };
+      },
+    ),
+    updateMany: jest.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: Where;
+        data: Record<string, unknown>;
+      }) => {
+        await yieldTurn();
+        const hit = episodes.filter((row) => matches(row, where));
+        hit.forEach((row) => applyData(row, data));
+        return { count: hit.length };
+      },
+    ),
+    deleteMany: jest.fn(async ({ where }: { where: Where }) => {
+      await yieldTurn();
+      const doomed = episodes.filter((row) => matches(row, where));
+      doomed.forEach((row) => episodes.splice(episodes.indexOf(row), 1));
       return { count: doomed.length };
     }),
   };
@@ -195,6 +307,7 @@ function fakePrisma() {
   const prisma = {
     roadmapAlert,
     roadmapNotification,
+    roadmapAlertEpisode,
     user: {
       findMany: jest.fn(async () => {
         await yieldTurn();
@@ -209,7 +322,7 @@ function fakePrisma() {
   };
   // No rollback: the fake runs the transaction body against the same tables.
   prisma.$transaction.mockImplementation((run) => run(prisma));
-  return { prisma, alerts, notifications };
+  return { prisma, alerts, notifications, episodes };
 }
 
 const projectId = '10000000-0000-4000-8000-000000000001';
@@ -496,6 +609,245 @@ describe('RoadmapAlertsService.evaluate', () => {
 
     await service.evaluate(new Date('2026-11-17T00:01:00'));
     expect(prisma.roadmapNotification.deleteMany).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('RoadmapAlertsService episode journal', () => {
+  it('opening creates one episode with openedCount and peakCount', async () => {
+    const { service, alerts, episodes, setErrors } = setup();
+    setErrors(3);
+
+    await service.evaluate(at(0));
+
+    expect(episodes).toHaveLength(1);
+    expect(episodes[0]).toMatchObject({
+      alertId: alerts[0].id,
+      generation: 1,
+      kind: 'sync_errors',
+      projectId,
+      openedAt: at(0),
+      resolvedAt: null,
+      resolution: null,
+      details: { count: 3 },
+      openedCount: 3,
+      peakCount: 3,
+    });
+  });
+
+  it('refresh raises peakCount but never lowers it', async () => {
+    const { service, episodes, setErrors } = setup();
+    setErrors(3);
+    await service.evaluate(at(0));
+    setErrors(5);
+    await service.evaluate(at(1));
+    setErrors(2);
+    await service.evaluate(at(2));
+
+    expect(episodes).toHaveLength(1);
+    expect(episodes[0]).toMatchObject({
+      details: { count: 2 },
+      peakCount: 5,
+      openedCount: 3,
+    });
+  });
+
+  it('fixed resolve ends the episode at clearSince', async () => {
+    const { service, alerts, episodes, setErrors } = setup();
+    setErrors(2);
+    await service.evaluate(at(0));
+    setErrors(0);
+    for (let minute = 1; minute <= 11; minute += 1) {
+      await service.evaluate(at(minute));
+    }
+
+    expect(alerts[0]).toMatchObject({ state: 'resolved', resolvedAt: at(11) });
+    expect(episodes).toHaveLength(1);
+    expect(episodes[0]).toMatchObject({
+      resolvedAt: at(1),
+      resolution: 'fixed',
+    });
+  });
+
+  it('obsolete resolve ends the episode at now', async () => {
+    const { service, episodes, setErrors } = setup();
+    setErrors(2);
+    await service.evaluate(at(0));
+    // The project left the sync scope, so its open key no longer maps to anything.
+    jest
+      .spyOn(service, 'loadHealth')
+      .mockImplementation((now: Date) =>
+        Promise.resolve({ ...health(now), projects: [] }),
+      );
+
+    await service.evaluate(at(3));
+
+    expect(episodes[0]).toMatchObject({
+      resolvedAt: at(3),
+      resolution: 'obsolete',
+    });
+  });
+
+  it('two concurrent evaluate() open one episode', async () => {
+    const { service, episodes, setErrors } = setup();
+    setErrors(4);
+
+    await Promise.all([service.evaluate(at(0)), service.evaluate(at(0))]);
+
+    expect(episodes).toHaveLength(1);
+    expect(episodes[0]).toMatchObject({ generation: 1, peakCount: 4 });
+  });
+
+  it('a reopened alert starts a new episode next to the closed one', async () => {
+    const { service, episodes, setErrors } = setup();
+    setErrors(1);
+    await service.evaluate(at(0));
+    setErrors(0);
+    await service.evaluate(at(1));
+    await service.evaluate(at(11));
+    setErrors(6);
+
+    await Promise.all([service.evaluate(at(12)), service.evaluate(at(12))]);
+
+    expect(
+      episodes.map(({ generation, resolution, peakCount }) => ({
+        generation,
+        resolution,
+        peakCount,
+      })),
+    ).toEqual([
+      { generation: 1, resolution: 'fixed', peakCount: 1 },
+      { generation: 2, resolution: null, peakCount: 6 },
+    ]);
+  });
+
+  it('a lost resolve race writes nothing to the episode', async () => {
+    const { service, prisma, alerts, episodes, setErrors } = setup();
+    setErrors(2);
+    await service.evaluate(at(0));
+    setErrors(0);
+    await service.evaluate(at(1));
+    const updateMany = prisma.roadmapAlert.updateMany.getMockImplementation()!;
+    prisma.roadmapAlert.updateMany.mockImplementation((args) => {
+      if (args.data.state === 'resolved') {
+        // Another instance saw the problem again just before this write.
+        alerts[0].clearSince = null;
+      }
+      return updateMany(args);
+    });
+
+    await service.evaluate(at(11));
+
+    expect(alerts[0].state).toBe('open');
+    expect(episodes).toHaveLength(1);
+    expect(episodes[0]).toMatchObject({ resolvedAt: null, resolution: null });
+  });
+
+  it('an alert opened before the journal gets an episode on its first refresh', async () => {
+    const { service, alerts, episodes, setErrors } = setup();
+    alerts.push({
+      id: 'legacy-alert',
+      key: syncErrorsKey,
+      kind: 'sync_errors',
+      projectId,
+      state: 'open',
+      generation: 3,
+      openedAt: at(-30),
+      resolvedAt: null,
+      resolution: null,
+      clearSince: null,
+      details: { count: 1 },
+    });
+    setErrors(4);
+
+    await service.evaluate(at(0));
+
+    expect(episodes).toHaveLength(1);
+    expect(episodes[0]).toMatchObject({
+      alertId: 'legacy-alert',
+      generation: 3,
+      kind: 'sync_errors',
+      projectId,
+      openedAt: at(-30),
+      resolvedAt: null,
+      details: { count: 4 },
+      peakCount: 4,
+      openedCount: null,
+    });
+  });
+
+  it('an alert opened before the journal gets a closed episode when it resolves', async () => {
+    const { service, alerts, episodes } = setup();
+    alerts.push({
+      id: 'legacy-alert',
+      key: syncErrorsKey,
+      kind: 'sync_errors',
+      projectId,
+      state: 'open',
+      generation: 2,
+      openedAt: at(-30),
+      resolvedAt: null,
+      resolution: null,
+      clearSince: at(-20),
+      details: { count: 7 },
+    });
+
+    await service.evaluate(at(0));
+
+    expect(episodes).toHaveLength(1);
+    expect(episodes[0]).toMatchObject({
+      alertId: 'legacy-alert',
+      generation: 2,
+      openedAt: at(-30),
+      resolvedAt: at(-20),
+      resolution: 'fixed',
+      details: { count: 7 },
+      peakCount: 7,
+    });
+  });
+
+  it('cleanup deletes resolved episodes older than 90 days and keeps resolved alerts that still have episodes', async () => {
+    const { service, alerts, episodes } = setup();
+    const old = new Date(start.getTime() - 91 * 24 * minutes(60));
+    const recent = new Date(start.getTime() - 89 * 24 * minutes(60));
+    const alert = (id: string, kind: string): AlertRow => ({
+      id,
+      key: `${kind}:${projectId}`,
+      kind,
+      projectId,
+      state: 'resolved',
+      generation: 1,
+      openedAt: old,
+      resolvedAt: old,
+      resolution: 'fixed',
+      clearSince: null,
+      details: {},
+    });
+    alerts.push(
+      alert('stale-alert', 'sync_conflicts'),
+      alert('kept-alert', 'import_failing'),
+    );
+    const episode = (id: string, alertId: string, resolvedAt: Date) => ({
+      id,
+      alertId,
+      generation: 1,
+      kind: 'sync_conflicts',
+      projectId,
+      openedAt: old,
+      resolvedAt,
+      resolution: 'fixed',
+      details: {},
+      peakCount: null,
+      openedCount: null,
+    });
+    episodes.push(
+      episode('old', 'stale-alert', old),
+      episode('recent', 'kept-alert', recent),
+    );
+
+    await service.evaluate(at(0));
+
+    expect(episodes.map((row) => row.id)).toEqual(['recent']);
+    expect(alerts.map((row) => row.id)).toEqual(['kept-alert']);
   });
 });
 

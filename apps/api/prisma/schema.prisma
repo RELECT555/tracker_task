@@ -396,6 +396,7 @@ model RoadmapProject {
   azureState RoadmapAzureProjectState?
   access     RoadmapProjectAccess[]
   alerts     RoadmapAlert[]
+  alertEpisodes RoadmapAlertEpisode[]
 
   @@map("roadmap_projects")
 }
@@ -448,8 +449,31 @@ model RoadmapAlert {
   updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamptz()
   project       RoadmapProject?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   notifications RoadmapNotification[]
+  episodes      RoadmapAlertEpisode[]
 
   @@map("roadmap_alerts")
+}
+
+/// One row per alert episode (generation): the history shown on the sync problems page.
+model RoadmapAlertEpisode {
+  id          String          @id @default(uuid()) @db.Uuid
+  alertId     String          @map("alert_id") @db.Uuid
+  generation  Int
+  kind        String          @db.VarChar(50)
+  projectId   String?         @map("project_id") @db.Uuid
+  openedAt    DateTime        @map("opened_at") @db.Timestamptz()
+  resolvedAt  DateTime?       @map("resolved_at") @db.Timestamptz()
+  resolution  String?         @db.VarChar(20)
+  details     Json
+  peakCount   Int?            @map("peak_count")
+  openedCount Int?            @map("opened_count")
+  alert       RoadmapAlert    @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  project     RoadmapProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([alertId, generation])
+  @@index([projectId, openedAt(sort: Desc)])
+  @@index([resolvedAt])
+  @@map("roadmap_alert_episodes")
 }
 
 model RoadmapNotification {

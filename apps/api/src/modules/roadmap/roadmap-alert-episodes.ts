@@ -38,7 +38,9 @@ export async function createEpisode(
   details: RoadmapAlertDetails,
 ): Promise<void> {
   await db.roadmapAlertEpisode.createMany({
-    data: [{ ...newEpisode(alert, details), openedCount: details.count ?? null }],
+    data: [
+      { ...newEpisode(alert, details), openedCount: details.count ?? null },
+    ],
     skipDuplicates: true,
   });
 }
@@ -82,7 +84,11 @@ export async function closeEpisode(
 ): Promise<void> {
   await db.roadmapAlertEpisode.upsert({
     where: episodeKey(alert),
-    create: { ...newEpisode(alert, alert.details), resolvedAt: endedAt, resolution },
+    create: {
+      ...newEpisode(alert, alert.details),
+      resolvedAt: endedAt,
+      resolution,
+    },
     update: { resolvedAt: endedAt, resolution },
   });
 }

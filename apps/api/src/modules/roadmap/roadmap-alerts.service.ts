@@ -1,7 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
+import type {
+  RoadmapAlertDetails,
+  RoadmapAlertResolution,
+} from '@tracker/shared';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
+import {
+  closeEpisode,
+  createEpisode,
+  touchEpisode,
+} from './roadmap-alert-episodes';
 import { formatAlert } from './roadmap-alert-format';
 import { resolveRecipients } from './roadmap-alert-recipients';
 import {
@@ -19,6 +28,15 @@ import { RoadmapIntegrationService } from './roadmap-integration.service';
 const TITLE_MAX = 200;
 const BODY_MAX = 1000;
 const DAY_MS = 24 * 60 * 60_000;
+
+/** The alert columns an episode row copies. */
+const episodeAlertSelect = {
+  id: true,
+  generation: true,
+  kind: true,
+  projectId: true,
+  openedAt: true,
+} as const;
 
 interface StatusCountRow {
   project_id: string;
@@ -161,7 +179,6 @@ export class RoadmapAlertsService {
   ): Promise<void> {
     const action = decideAlert(current, condition, now);
     const { key } = condition;
-    const details = condition.details as Prisma.InputJsonObject;
 
     switch (action.type) {
       case 'none':
@@ -170,10 +187,7 @@ export class RoadmapAlertsService {
         await this.open(condition, now, current !== null);
         return;
       case 'refresh':
-        await this.prisma.roadmapAlert.updateMany({
-          where: { key, state: 'open' },
-          data: { details, clearSince: null },
-        });
+        await this.refresh(condition);
         return;
       case 'start-clear':
         await this.prisma.roadmapAlert.updateMany({
@@ -182,26 +196,85 @@ export class RoadmapAlertsService {
         });
         return;
       case 'resolve':
-        await this.prisma.roadmapAlert.updateMany({
-          where:
-            action.resolution === 'fixed'
-              ? {
-                  key,
-                  state: 'open',
-                  // Another instance may have seen the problem again and reset the clock.
-                  clearSince: {
-                    lte: new Date(now.getTime() - ALERT_CLEAR_DELAY_MS),
-                  },
-                }
-              : { key, state: 'open' },
-          data: {
-            state: 'resolved',
-            resolvedAt: now,
-            resolution: action.resolution,
-          },
-        });
+        await this.resolve(key, action.resolution, now);
         return;
     }
+  }
+
+  /** Stores the latest details; only the instance whose write lands journals them. */
+  private async refresh(condition: AlertCondition): Promise<void> {
+    const { key } = condition;
+    const details = condition.details as Prisma.InputJsonObject;
+    const won = await this.prisma.roadmapAlert.updateMany({
+      where: { key, state: 'open' },
+      data: { details, clearSince: null },
+    });
+    if (won.count !== 1) return;
+    const alert = await this.prisma.roadmapAlert.findUnique({
+      where: { key },
+      select: episodeAlertSelect,
+    });
+    if (!alert?.openedAt) return;
+    await touchEpisode(
+      this.prisma,
+      { ...alert, openedAt: alert.openedAt },
+      condition.details,
+    );
+  }
+
+  /**
+   * Closes the alert and its episode in one transaction. A `fixed` episode ends when the
+   * condition actually went away (`clearSince`), not when the clear delay ran out.
+   */
+  private async resolve(
+    key: string,
+    resolution: RoadmapAlertResolution,
+    now: Date,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const alert = await tx.roadmapAlert.findUnique({
+        where: { key },
+        select: { ...episodeAlertSelect, clearSince: true, details: true },
+      });
+      if (!alert) return;
+      const won = await tx.roadmapAlert.updateMany({
+        where:
+          resolution === 'fixed'
+            ? {
+                key,
+                state: 'open',
+                generation: alert.generation,
+                // Another instance may have seen the problem again and reset the clock.
+                clearSince: {
+                  lte: new Date(now.getTime() - ALERT_CLEAR_DELAY_MS),
+                },
+              }
+            : { key, state: 'open', generation: alert.generation },
+        data: { state: 'resolved', resolvedAt: now, resolution },
+      });
+      if (won.count !== 1) return;
+
+      let endedAt = now;
+      if (resolution === 'fixed') {
+        if (alert.clearSince) {
+          endedAt = alert.clearSince;
+        } else {
+          this.logger.warn(
+            `Sync health alert ${key} resolved as fixed without clearSince; ending its episode now`,
+          );
+        }
+      }
+      await closeEpisode(
+        tx,
+        {
+          ...alert,
+          openedAt: alert.openedAt ?? now,
+          details: alert.details as RoadmapAlertDetails,
+        },
+        resolution,
+        endedAt,
+      );
+    });
   }
 
   /**
@@ -245,6 +318,11 @@ export class RoadmapAlertsService {
             select: { id: true, generation: true },
           });
         }
+        await createEpisode(
+          tx,
+          { ...alert, kind, projectId, openedAt: now },
+          condition.details,
+        );
 
         const { title, body } = formatAlert(
           kind,
@@ -273,20 +351,29 @@ export class RoadmapAlertsService {
     }
   }
 
-  /** Once per server-local day: drops old notifications, then closed alerts left without any. */
+  /**
+   * Once per server-local day: drops old notifications and closed episodes, then closed
+   * alerts left without either (so the cascade never erases episode history).
+   */
   private async cleanup(now: Date): Promise<void> {
     const today = localDate(now);
     if (this.lastCleanupDate === today) return;
+    const cutoff = new Date(
+      now.getTime() - NOTIFICATION_RETENTION_DAYS * DAY_MS,
+    );
     try {
       await this.prisma.roadmapNotification.deleteMany({
-        where: {
-          createdAt: {
-            lt: new Date(now.getTime() - NOTIFICATION_RETENTION_DAYS * DAY_MS),
-          },
-        },
+        where: { createdAt: { lt: cutoff } },
+      });
+      await this.prisma.roadmapAlertEpisode.deleteMany({
+        where: { resolvedAt: { lt: cutoff } },
       });
       await this.prisma.roadmapAlert.deleteMany({
-        where: { state: 'resolved', notifications: { none: {} } },
+        where: {
+          state: 'resolved',
+          notifications: { none: {} },
+          episodes: { none: {} },
+        },
       });
       this.lastCleanupDate = today;
     } catch (error) {
