@@ -12,7 +12,12 @@ const reply = (status: number, headers: Record<string, string> = {}) =>
 describe('Azure DevOps requests', () => {
   const service = new RoadmapIntegrationService(
     {} as ConfigService,
-    {} as PrismaService,
+    {
+      systemSetting: {
+        findUnique: () => Promise.resolve(null),
+        upsert: () => Promise.resolve(),
+      },
+    } as unknown as PrismaService,
   );
   let fetchMock: jest.SpyInstance;
 

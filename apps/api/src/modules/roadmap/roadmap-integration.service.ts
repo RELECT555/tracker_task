@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   Injectable,
+  Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -41,12 +42,27 @@ type StoredIntegration = {
   encryptedWebhookSecret?: EncryptedPat;
 };
 
+/** Global Azure access state, kept in `system_settings` as ISO strings. */
+type StoredAuthHealth = {
+  authFailedAt: string | null;
+  authOkAt: string | null;
+  httpStatus: number | null;
+};
+
+export interface AzureAuthHealth {
+  authFailedAt: Date | null;
+  authOkAt: Date | null;
+  httpStatus: number | null;
+}
+
 export const AZURE_WEBHOOK_SECRET_HEADER = 'x-roadmap-webhook-secret';
 
 const AZURE_REQUEST_TIMEOUT_MS = 30_000;
 const AZURE_MAX_RETRIES = 2;
 const AZURE_MAX_RETRY_DELAY_MS = 5_000;
 const RETRYABLE_GATEWAY_STATUSES = new Set([502, 503, 504]);
+const AUTH_HEALTH_KEY = 'roadmap.integration.health';
+const AUTH_HEALTH_CACHE_TTL_MS = 60_000;
 
 /** Azure DevOps answered with a non-success HTTP status. */
 export class AzureDevOpsHttpError extends BadGatewayException {
@@ -61,6 +77,14 @@ export class AzureDevOpsHttpError extends BadGatewayException {
 @Injectable()
 export class RoadmapIntegrationService {
   private readonly settingKey = 'roadmap.integration.azure-devops';
+  private readonly logger = new Logger(RoadmapIntegrationService.name);
+  /** Database state of the auth health as last seen by this instance; stale after 60 s. */
+  private authHealthCache: {
+    value: StoredAuthHealth;
+    loadedAt: number;
+  } | null = null;
+  /** Serialises health updates so concurrent Azure calls write a state change once. */
+  private authHealthQueue: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly config: ConfigService,
@@ -96,9 +120,15 @@ export class RoadmapIntegrationService {
   async getCredentials(): Promise<AzureDevOpsCredentials> {
     const stored = await this.readStoredSettings();
     const organizationUrl = stored?.organizationUrl ?? this.environmentUrl();
-    const pat = stored?.encryptedPat
-      ? this.decryptPat(stored.encryptedPat)
-      : (this.config.get<string>('AZURE_DEVOPS_PAT')?.trim() ?? '');
+    let pat = this.config.get<string>('AZURE_DEVOPS_PAT')?.trim() ?? '';
+    if (stored?.encryptedPat) {
+      try {
+        pat = this.decryptPat(stored.encryptedPat);
+      } catch (error) {
+        await this.recordAuthHealth('failed', null);
+        throw error;
+      }
+    }
     if (!organizationUrl || !pat) {
       throw new ServiceUnavailableException(
         'Configure Azure DevOps in Roadmap administration before importing project data',
@@ -258,7 +288,13 @@ export class RoadmapIntegrationService {
       } catch {
         throw new BadGatewayException('Could not reach Azure DevOps');
       }
-      if (response.ok) return response;
+      if (response.ok) {
+        await this.recordAuthHealth('ok');
+        return response;
+      }
+      if (response.status === 401) {
+        await this.recordAuthHealth('failed', 401);
+      }
       const retryable =
         response.status === 429 ||
         (idempotent && RETRYABLE_GATEWAY_STATUSES.has(response.status));
@@ -271,6 +307,91 @@ export class RoadmapIntegrationService {
       }
       throw new AzureDevOpsHttpError(response.status, await response.text());
     }
+  }
+
+  /** Auth health as stored in the database, for the alert watcher. */
+  async getAuthHealth(): Promise<AzureAuthHealth> {
+    const stored = await this.readAuthHealth();
+    return {
+      authFailedAt: this.parseDate(stored.authFailedAt),
+      authOkAt: this.parseDate(stored.authOkAt),
+      httpStatus: stored.httpStatus,
+    };
+  }
+
+  /**
+   * Notes that Azure accepted or rejected the PAT. Writes only when the state differs from the
+   * database state (cached for up to 60 s), and never fails the caller's Azure request.
+   */
+  private recordAuthHealth(
+    outcome: 'failed' | 'ok',
+    httpStatus: number | null = null,
+  ): Promise<void> {
+    const task = this.authHealthQueue.then(async () => {
+      try {
+        const current = await this.cachedAuthHealth();
+        const failing =
+          current.authFailedAt !== null &&
+          (current.authOkAt === null ||
+            current.authFailedAt > current.authOkAt);
+        const healthy = !failing && current.authOkAt !== null;
+        if (outcome === 'failed' ? failing : healthy) return;
+        const now = new Date().toISOString();
+        const next: StoredAuthHealth =
+          outcome === 'failed'
+            ? { ...current, authFailedAt: now, httpStatus }
+            : { ...current, authOkAt: now };
+        this.authHealthCache = { value: next, loadedAt: Date.now() };
+        try {
+          await this.prisma.systemSetting.upsert({
+            where: { key: AUTH_HEALTH_KEY },
+            create: { key: AUTH_HEALTH_KEY, value: next },
+            update: { value: next },
+          });
+        } catch (error) {
+          this.authHealthCache = null;
+          throw error;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Could not record Azure auth health: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    });
+    this.authHealthQueue = task;
+    return task;
+  }
+
+  private async cachedAuthHealth(): Promise<StoredAuthHealth> {
+    const cache = this.authHealthCache;
+    if (cache && Date.now() - cache.loadedAt < AUTH_HEALTH_CACHE_TTL_MS)
+      return cache.value;
+    const value = await this.readAuthHealth();
+    this.authHealthCache = { value, loadedAt: Date.now() };
+    return value;
+  }
+
+  private async readAuthHealth(): Promise<StoredAuthHealth> {
+    const setting = await this.prisma.systemSetting.findUnique({
+      where: { key: AUTH_HEALTH_KEY },
+    });
+    const value =
+      setting?.value &&
+      typeof setting.value === 'object' &&
+      !Array.isArray(setting.value)
+        ? (setting.value as Partial<StoredAuthHealth>)
+        : {};
+    return {
+      authFailedAt: value.authFailedAt ?? null,
+      authOkAt: value.authOkAt ?? null,
+      httpStatus: value.httpStatus ?? null,
+    };
+  }
+
+  private parseDate(value: string | null): Date | null {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   private retryDelayMs(response: Response, attempt: number) {

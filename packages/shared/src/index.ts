@@ -6,3 +6,4 @@ export * from './roadmap-plan/rebalance';
 export * from './roadmap-plan/role-plan';
 export * from './roadmap-plan/summary';
 export * from './roadmap-table-preferences';
+export * from './roadmap-notifications';
