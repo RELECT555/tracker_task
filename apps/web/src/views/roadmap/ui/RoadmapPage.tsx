@@ -14,6 +14,7 @@ import { AzureProjectPicker } from '@/entities/roadmap/ui/AzureProjectPicker';
 import { AzureWorkItemIcon } from '@/entities/roadmap/ui/AzureWorkItemIcon';
 import { WorkItemStateBadge } from '@/entities/roadmap/ui/WorkItemStateBadge';
 import { Button } from '@/shared/ui/button';
+import { IconButton } from '@/shared/ui/icon-button';
 import { QueryErrorNotice } from '@/shared/ui/error-notice';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 import { SearchableSelect } from '@/shared/ui/searchable-select';
@@ -1073,17 +1074,18 @@ export function RoadmapPage() {
                   </span>
                 </div>
               </div>
-              {canCreateWorkItem ? <Button
-                type="button"
+              {canCreateWorkItem ? <IconButton
                 variant="ghost"
-                size="icon"
+                side="left"
                 data-plan-action
-                className="self-center size-8 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100"
-                aria-label={`Создать фичу в эпике ${item.title}`}
-                title="Создать фичу"
+                wrapperClassName="self-center"
+                className="text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100"
+                label={`Создать фичу в эпике ${item.title}`}
+                tooltip="Создать фичу в эпике"
+                icon={<Plus aria-hidden="true" />}
                 aria-haspopup="dialog"
                 onClick={(event) => openCreateWorkItem(event.currentTarget, item.externalId)}
-              ><Plus aria-hidden="true" className="size-4" /></Button> : null}
+              /> : null}
             </div>
           ) : (
             <div data-plan-name className={cn(isChild ? 'pl-[68px] sm:pl-[72px]' : 'pl-3', canCreateWorkItem && 'pr-10')}>
@@ -1228,9 +1230,9 @@ export function RoadmapPage() {
     {plannedRolesSwitch(!showRoleDetails)}
   </div>;
   const periodControls = <div role="group" aria-label="Период" data-tour="plan-period" className="flex h-8 items-center rounded-md border border-border bg-card shadow-xs">
-    <Button type="button" variant="ghost" size="icon" className="h-full w-7 rounded-r-none" aria-label="Предыдущий квартал" onClick={() => shiftQuarter(-1)}><ChevronLeft aria-hidden="true" className="h-4 w-4" /></Button>
+    <IconButton variant="ghost" label="Предыдущий квартал" icon={<ChevronLeft aria-hidden="true" />} wrapperClassName="self-stretch" className="h-full w-7 rounded-r-none" onClick={() => shiftQuarter(-1)} />
     <span aria-live="polite" className="min-w-16 text-center text-xs font-semibold tabular-nums">{currentQuarterLabel}</span>
-    <Button type="button" variant="ghost" size="icon" className="h-full w-7 rounded-l-none" aria-label="Следующий квартал" onClick={() => shiftQuarter(1)}><ChevronRight aria-hidden="true" className="h-4 w-4" /></Button>
+    <IconButton variant="ghost" label="Следующий квартал" icon={<ChevronRight aria-hidden="true" />} wrapperClassName="self-stretch" className="h-full w-7 rounded-l-none" onClick={() => shiftQuarter(1)} />
     {view === 'roles' ? <SearchableSelect
       ariaLabel="Период плана"
       value={selectedMonthKey}
@@ -1322,35 +1324,9 @@ export function RoadmapPage() {
             </PlanNotice> : null}
           </div>
 
-          {isAllProjects ? <section {...appearanceProps} data-tour="plan-table" aria-label="Планы всех проектов" className={cn(appearanceProps.className, 'min-w-0 overflow-hidden rounded-xl border border-border bg-card')}>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-              <div>
-                <h2 className="font-medium text-foreground">Все проекты</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">Импортированных проектов: {overviewProjects.length}. Раскройте проект, чтобы увидеть эпики и фичи.</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">{appearanceSettings}{overviewData ? <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5" disabled={overviewQuery.isFetching || overviewFactQuery.isFetching} onClick={() => {
-                void overviewQuery.refetch();
-                void queryClient.refetchQueries({ queryKey: ['roadmap', 'plan'], type: 'active' });
-                if (!demoMode) {
-                  void overviewFactQuery.refetch();
-                  void queryClient.refetchQueries({ queryKey: ['roadmap', 'monthly-fact'], type: 'active' });
-                }
-              }}><RefreshCw aria-hidden="true" className="size-3.5" />Обновить</Button> : null}</div>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
-              <div className={switchGroupClass}>{plannedRolesSwitch()}</div>
-              <div className="flex flex-wrap items-center gap-2">{periodControls}</div>
-            </div>
-            {overviewLoading ? <p role="status" className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
-              Загружаем сводку проектов…
-            </p> : null}
-            {overviewData && !overviewSummary ? <p role="status" className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
-              Данные части проектов недоступны. Обновите сводку.
-            </p> : null}
-            {monthKey && overviewProjects.length ? <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
-              <p role="status">{demoMode ? 'Факт за месяц доступен в проектах Azure DevOps.' : overviewFactQuery.isPending ? 'Загружаем факт за месяц…' : overviewFactQuery.data?.factIncomplete ? 'Не удалось загрузить факт за месяц для части проектов.' : overviewFactQuery.isSuccess ? 'План и факт за выбранный месяц.' : null}</p>
-              <QueryErrorNotice title="Не удалось загрузить факт за месяц" queries={[overviewFactQuery]} />
-            </div> : null}
+          {isAllProjects ? <section {...appearanceProps} data-tour="plan-table" aria-label="Планы всех проектов" className={cn(appearanceProps.className, 'flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card')}>
+            {/* The project picker above already says "Все проекты"; the heading is kept for assistive tech only, like in the project table. */}
+            <h2 className="sr-only">Все проекты</h2>
             {!projectsQuery.isLoading && !overviewProjects.length ? <div className="px-6 py-10 text-center text-sm text-muted-foreground">
               <p>Пока нет импортированных проектов.</p>
               <p className="mt-1">Выберите отдельный проект в списке, чтобы открыть или загрузить его план.</p>
@@ -1364,6 +1340,40 @@ export function RoadmapPage() {
               plannedRolesOnly={plannedRolesOnly}
               showFact={preferences.showFact}
               refreshInterval={demoMode ? false : PLAN_REFRESH_INTERVAL}
+              columnWidths={columnWidths}
+              pinnedColumns={pinnedColumns}
+              filters={<div className={switchGroupClass}>{plannedRolesSwitch()}</div>}
+              period={periodControls}
+              actions={<>
+                {appearanceSettings}
+                <IconButton
+                  label="Обновить сводку"
+                  tooltip="Перечитать сводку и раскрытые проекты"
+                  icon={<RefreshCw aria-hidden="true" className={cn(overviewQuery.isFetching && 'animate-spin motion-reduce:animate-none')} />}
+                  align="end"
+                  disabled={!overviewData || overviewQuery.isFetching || overviewFactQuery.isFetching}
+                  onClick={() => {
+                    void overviewQuery.refetch();
+                    void queryClient.refetchQueries({ queryKey: ['roadmap', 'plan'], type: 'active' });
+                    if (!demoMode) {
+                      void overviewFactQuery.refetch();
+                      void queryClient.refetchQueries({ queryKey: ['roadmap', 'monthly-fact'], type: 'active' });
+                    }
+                  }}
+                />
+              </>}
+              notices={<>
+                {overviewLoading ? <p role="status" className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+                  Загружаем сводку проектов…
+                </p> : null}
+                {overviewData && !overviewSummary ? <p role="status" className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+                  Данные части проектов недоступны. Обновите сводку.
+                </p> : null}
+                {monthKey && overviewProjects.length ? <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+                  <p role="status">{demoMode ? 'Факт за месяц доступен в проектах Azure DevOps.' : overviewFactQuery.isPending ? 'Загружаем факт за месяц…' : overviewFactQuery.data?.factIncomplete ? 'Не удалось загрузить факт за месяц для части проектов.' : overviewFactQuery.isSuccess ? 'План и факт за выбранный месяц.' : null}</p>
+                  <QueryErrorNotice title="Не удалось загрузить факт за месяц" queries={[overviewFactQuery]} />
+                </div> : null}
+              </>}
             />}
           </section> : plan ? (
             <>
@@ -1431,21 +1441,32 @@ export function RoadmapPage() {
                     {appearanceSettings}
                     {canPushToAzure ? <Popover open={pushPreviewOpen} onOpenChange={setPushPreviewOpen}>
                       <PopoverTrigger asChild>
-                        <Button type="button" variant={plan.azure?.mode === 'manual' && azureUnsyncedCount ? 'default' : 'outline'} size="sm" className="h-8 gap-1.5 px-2.5" disabled={!azureUnsyncedCount} aria-label={azureUnsyncedCount ? `Отправить в Azure (${azureUnsyncedCount})` : 'Всё в Azure'} title={azureUnsyncedCount ? `Отправить в Azure DevOps изменений: ${azureUnsyncedCount}` : 'Всё уже отправлено в Azure DevOps'}>
-                          <ArrowUpFromLine aria-hidden="true" className="h-4 w-4" />
-                          {azureUnsyncedCount ? <span aria-hidden="true" className="text-xs tabular-nums">{azureUnsyncedCount}</span> : null}
-                        </Button>
+                        <IconButton
+                          variant={plan.azure?.mode === 'manual' && azureUnsyncedCount ? 'default' : 'outline'}
+                          disabled={!azureUnsyncedCount}
+                          label={azureUnsyncedCount ? `Отправить в Azure (${azureUnsyncedCount})` : 'Всё в Azure'}
+                          tooltip={azureUnsyncedCount ? `Отправить в Azure DevOps изменений: ${azureUnsyncedCount}` : 'Всё уже отправлено в Azure DevOps'}
+                          icon={<ArrowUpFromLine aria-hidden="true" />}
+                          badge={azureUnsyncedCount || undefined}
+                          align="end"
+                        />
                       </PopoverTrigger>
                       <PopoverContent align="end" side="bottom" sideOffset={8} collisionPadding={16} className="w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-xl p-0">
                         {pushPreviewOpen ? <AzurePushPreview projectId={roadmapProjectId} onDone={() => setPushPreviewOpen(false)} /> : null}
                       </PopoverContent>
                     </Popover> : null}
-                    <Button type="button" data-tour="plan-focus" variant={focusMode ? 'secondary' : 'outline'} size="sm" onClick={() => {
-                      if (!focusMode && view === 'periods') setExpandedEpics(new Set(epics.map((epic) => epic.id)));
-                      setFocusMode((current) => !current);
-                    }} className="h-8 px-2.5" aria-label={focusMode ? 'Выйти из режима фокуса' : 'Включить режим фокуса'} title={focusMode ? 'Выйти из режима фокуса' : 'Режим фокуса'}>
-                      {focusMode ? <Minimize2 aria-hidden="true" className="h-4 w-4" /> : <Maximize2 aria-hidden="true" className="h-4 w-4" />}
-                    </Button>
+                    <IconButton
+                      data-tour="plan-focus"
+                      variant={focusMode ? 'secondary' : 'outline'}
+                      align="end"
+                      onClick={() => {
+                        if (!focusMode && view === 'periods') setExpandedEpics(new Set(epics.map((epic) => epic.id)));
+                        setFocusMode((current) => !current);
+                      }}
+                      label={focusMode ? 'Выйти из режима фокуса' : 'Включить режим фокуса'}
+                      tooltip={focusMode ? 'Выйти из режима фокуса' : 'Режим фокуса: таблица на весь экран'}
+                      icon={focusMode ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
+                    />
                   </div>
                 </div>
 
@@ -1539,7 +1560,7 @@ export function RoadmapPage() {
                                 })}
                               </ul>
                             </PopoverContent>
-                          </Popover> : null}</span>{canCreateWorkItem ? <Button ref={createEpicTrigger} type="button" variant="ghost" size="icon" className="size-8 shrink-0 opacity-0 transition-opacity focus-visible:opacity-100 group-hover/head:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100" aria-label="Создать эпик" title="Создать эпик" aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)}><Plus aria-hidden="true" className="size-4" /></Button> : null}</div><ColumnResizeHandle columnId="name" /></th>
+                          </Popover> : null}</span>{canCreateWorkItem ? <IconButton ref={createEpicTrigger} variant="ghost" side="left" className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover/head:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100" label="Создать эпик" icon={<Plus aria-hidden="true" />} aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)} /> : null}</div><ColumnResizeHandle columnId="name" /></th>
                           <th scope="col" data-tone="plan" data-column-id="summary:plan" rowSpan={headerRowSpan} style={pinnedCellStyle('summary:plan')} className={cn('relative border-l border-border/60 px-3 py-2.5 text-right', pinnedCellClass('summary:plan'))} title={selectedMonth ? 'План выбранного месяца' : 'Назначения выбранного квартала. При их отсутствии используется общая оценка Azure на карточке, без привязки к кварталу.'}>
                             <span className="block">План</span><span className="text-[10px] font-normal normal-case">итого, ч</span>
                             <ColumnResizeHandle columnId="summary:plan" />

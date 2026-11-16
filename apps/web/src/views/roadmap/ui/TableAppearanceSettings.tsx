@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { SlidersHorizontal, X } from 'lucide-react';
 import type { RoadmapTablePreferences } from '@tracker/shared';
 import { Button } from '@/shared/ui/button';
+import { IconButton } from '@/shared/ui/icon-button';
 import './table-settings-panel.css';
 
 export interface TableAppearanceSettingsProps {
@@ -50,10 +51,18 @@ export function TableAppearanceSettings(props: TableAppearanceSettingsProps) {
   const errorMessage = disabled ? 'Не удалось загрузить настройки.' : 'Не удалось сохранить настройки.';
 
   return <>
-    <Button ref={trigger} type="button" variant="outline" size="sm" className="h-8 gap-1.5 px-2.5" aria-label="Вид таблицы" aria-haspopup="dialog" aria-expanded={open} aria-describedby={status === 'error' ? `${id}-error` : undefined} title={status === 'error' ? `Вид таблицы. ${errorMessage} Откройте панель, чтобы повторить.` : 'Вид таблицы'} onClick={openPanel}>
-      <SlidersHorizontal aria-hidden="true" className="size-4" />
-      {status === 'error' ? <span aria-hidden="true" className="size-1.5 rounded-full bg-destructive" /> : null}
-    </Button>
+    <IconButton
+      ref={trigger}
+      label="Вид таблицы"
+      tooltip={status === 'error' ? `Вид таблицы. ${errorMessage} Откройте панель, чтобы повторить.` : 'Вид таблицы: цвета, плотность, столбцы'}
+      icon={<SlidersHorizontal aria-hidden="true" />}
+      align="end"
+      badge={status === 'error' ? <span className="block size-1.5 rounded-full bg-destructive" /> : undefined}
+      aria-haspopup="dialog"
+      aria-expanded={open}
+      aria-describedby={status === 'error' ? `${id}-error` : undefined}
+      onClick={openPanel}
+    />
     {status === 'error' ? <span id={`${id}-error`} className="sr-only">{errorMessage} Откройте панель, чтобы повторить.</span> : null}
     <dialog ref={setDialogRef} aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`}
       className="roadmap-sheet table-settings-panel fixed inset-y-0 left-auto right-0 m-0 h-dvh max-h-dvh w-full max-w-md overflow-hidden border-l border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-transparent"
