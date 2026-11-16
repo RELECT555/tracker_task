@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useTheme } from 'next-themes';
-import { ChartNoAxesCombined, ChevronDown, ChevronsUpDown, GitBranch, House, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Settings2, Sun, type LucideIcon } from 'lucide-react';
+import { Activity, ChartNoAxesCombined, ChevronDown, ChevronsUpDown, GitBranch, House, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Settings2, Sun, type LucideIcon } from 'lucide-react';
 import { RoadmapProjectSelection } from '@/entities/roadmap/model/roadmap-project-selection';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { ProductTour } from '@/features/product-tour/ui/ProductTour';
@@ -13,7 +13,9 @@ import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { roadmapAdminSections } from '@/shared/config/roadmap-admin-sections';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
-import { NotificationBell } from './NotificationBell';
+import { useQuery } from '@tanstack/react-query';
+import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
+import { NOTIFICATION_SUMMARY_KEY, NotificationBell } from './NotificationBell';
 
 const SIDEBAR_STORAGE_KEY = 'roadmap:sidebar-collapsed';
 const ADMIN_LABEL = 'Администрирование';
@@ -25,6 +27,8 @@ const roadmapLinks = [
   { href: routes.roadmap, label: 'План проекта', icon: Rows3 },
   { href: routes.roadmapAnalytics, label: 'Аналитика', icon: ChartNoAxesCombined },
 ];
+
+const syncLink = { href: routes.roadmapSync, label: 'Синхронизация', icon: Activity };
 
 const isAnalyticsPath = (path: string) => path === routes.roadmapAnalytics || path.startsWith(`${routes.roadmapAnalytics}/`);
 
@@ -134,6 +138,9 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
   const navPath = pendingPath ?? pathname;
   const isPlanPage = pathname === routes.roadmap;
   const isAdmin = isAdminUser(auth.user);
+  // Same query as the bell: it decides whether the sync problems page is open to this user.
+  const notificationSummary = useQuery({ queryKey: NOTIFICATION_SUMMARY_KEY, queryFn: roadmapApi.notificationSummary, enabled: Boolean(auth.user) });
+  const workspaceLinks = notificationSummary.data?.canViewSyncProblems ? [...roadmapLinks, syncLink] : roadmapLinks;
   const isAdminHome = pathname === routes.roadmapAdminHome;
   const activeAdminSection = roadmapAdminSections.find(({ href }) => pathname === href);
   const isAdminSection = isAdminHome || pathname.startsWith(`${routes.roadmapAdminHome}/`);
@@ -241,6 +248,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
     ...(isPlanPage ? [{ label: 'План проекта' }] : []),
     ...(isAdminSection ? [{ label: ADMIN_LABEL, href: isAdminHome ? undefined : routes.roadmapAdminHome }] : []),
     ...(isAnalyticsPath(pathname) ? [{ label: 'Аналитика' }] : []),
+    ...(pathname === routes.roadmapSync ? [{ label: 'Синхронизация' }] : []),
     ...(activeAdminSection ? [{ label: activeAdminSection.title }] : []),
   ];
 
@@ -295,7 +303,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
             </span>
             <ul className="space-y-0.5">
               <NavSectionLabel label="Рабочее пространство" collapsed={sidebarCollapsed} first />
-              {roadmapLinks.map((link) => (
+              {workspaceLinks.map((link) => (
                 <li key={link.href}>
                   <RoadmapNavLink {...link} active={navPath === link.href || (link.href === routes.roadmapAnalytics && isAnalyticsPath(navPath))} collapsed={sidebarCollapsed} />
                 </li>
