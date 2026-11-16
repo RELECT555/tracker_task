@@ -1,7 +1,7 @@
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import type { IsActiveAdminHandler } from '../identity/application/queries/is-active-admin.handler';
 import type { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
-import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import { createAzureSyncServices } from './roadmap-azure-sync.testing';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import { DEFAULT_WRITE_BACK_SETTINGS } from './roadmap-write-back.settings';
@@ -119,34 +119,34 @@ function setup(type = 'Feature') {
     request: jest.fn().mockResolvedValue({}),
   };
   const worker = (createTask = true) => {
-    const service = new RoadmapAzureSyncService(
+    const service = createAzureSyncServices(
       prisma as unknown as PrismaService,
       integration as unknown as RoadmapIntegrationService,
       importer as unknown as RoadmapWorkItemImportService,
       {} as IsActiveAdminHandler,
       {} as RoadmapAllocationAzureService,
-    );
+    ).sync;
     return () => service['syncAllocation']('allocation', createTask);
   };
   const roleHours = () => {
-    const service = new RoadmapAzureSyncService(
+    const service = createAzureSyncServices(
       prisma as unknown as PrismaService,
       integration as unknown as RoadmapIntegrationService,
       importer as unknown as RoadmapWorkItemImportService,
       {} as IsActiveAdminHandler,
       {} as RoadmapAllocationAzureService,
-    );
+    ).sync;
     return (hours: number, quarterKey?: string) =>
       service.setRoleHours('user', 'feature-id', 'role', hours, quarterKey);
   };
   const refreshField = () => {
-    const service = new RoadmapAzureSyncService(
+    const service = createAzureSyncServices(
       prisma as unknown as PrismaService,
       integration as unknown as RoadmapIntegrationService,
       importer as unknown as RoadmapWorkItemImportService,
       {} as IsActiveAdminHandler,
       {} as RoadmapAllocationAzureService,
-    );
+    ).featureFields;
     return () => service.refreshFeatureField('feature-id', 'role');
   };
   const createPosts = () =>

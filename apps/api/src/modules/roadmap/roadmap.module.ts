@@ -11,6 +11,12 @@ import { RoadmapPeopleService } from './roadmap-people.service';
 import { RoadmapRolesService } from './roadmap-roles.service';
 import { RoadmapAllocationService } from './roadmap-allocation.service';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import { RoadmapAzureProcessService } from './roadmap-azure-process.service';
+import { RoadmapAzureTaskService } from './roadmap-azure-task.service';
+import { RoadmapAzureFeatureFieldsService } from './roadmap-azure-feature-fields.service';
+import { RoadmapWriteBackAccessService } from './roadmap-write-back-access.service';
+import { RoadmapAzureWebhookService } from './roadmap-azure-webhook.service';
+import { RoadmapAzureSyncStatusService } from './roadmap-azure-sync-status.service';
 import { RoadmapWebhookController } from './roadmap-webhook.controller';
 import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
@@ -45,6 +51,12 @@ import { RoadmapNotificationsService } from './roadmap-notifications.service';
     RoadmapIntegrationService,
     RoadmapWorkItemImportService,
     RoadmapAzureSyncService,
+    RoadmapAzureProcessService,
+    RoadmapAzureTaskService,
+    RoadmapAzureFeatureFieldsService,
+    RoadmapWriteBackAccessService,
+    RoadmapAzureWebhookService,
+    RoadmapAzureSyncStatusService,
     RoadmapAzureCatalogService,
     RoadmapWorkItemCreateService,
     RoadmapWorkItemCardService,

@@ -1,7 +1,7 @@
 import {
   worstReadinessStatus,
   type ReadinessCheck,
-} from './roadmap-azure-sync.service';
+} from './roadmap-azure-sync-status.service';
 
 const check = (status: ReadinessCheck['status']): ReadinessCheck => ({
   key: status,

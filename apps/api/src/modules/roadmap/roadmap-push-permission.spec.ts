@@ -2,7 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import type { IsActiveAdminHandler } from '../identity/application/queries/is-active-admin.handler';
 import type { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
-import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import { createAzureSyncServices } from './roadmap-azure-sync.testing';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import {
@@ -24,7 +24,7 @@ function setup(
     findMany: jest.fn().mockResolvedValue([]),
     findUnique: jest.fn(),
   };
-  const service = new RoadmapAzureSyncService(
+  const { sync: service, status } = createAzureSyncServices(
     { roadmapAllocation: allocations } as unknown as PrismaService,
     {
       getWriteBackSettings: () => Promise.resolve(settings),
@@ -33,18 +33,18 @@ function setup(
     { execute } as unknown as IsActiveAdminHandler,
     {} as RoadmapAllocationAzureService,
   );
-  return { service, execute, allocations };
+  return { service, status, execute, allocations };
 }
 
 describe('Manual Azure write-back permission', () => {
   it('rejects push, preview and retry before reading any allocations', async () => {
-    const { service, allocations } = setup('admins', false);
+    const { service, status, allocations } = setup('admins', false);
 
     await expect(
       service.pushProject('planner', 'project'),
     ).rejects.toBeInstanceOf(ForbiddenException);
     await expect(
-      service.previewProject('planner', 'project'),
+      status.previewProject('planner', 'project'),
     ).rejects.toBeInstanceOf(ForbiddenException);
     await expect(
       service.pushAllocation('planner', 'allocation'),

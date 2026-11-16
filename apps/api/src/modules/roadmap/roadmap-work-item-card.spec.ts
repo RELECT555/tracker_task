@@ -1,6 +1,6 @@
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { htmlToText, isPlainHtml, textToHtml } from './azure-html';
-import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import type { RoadmapWriteBackAccessService } from './roadmap-write-back-access.service';
 import {
   AzureDevOpsHttpError,
   type RoadmapIntegrationService,
@@ -104,7 +104,7 @@ function setup({
     importer as unknown as RoadmapWorkItemImportService,
     {
       canManuallyPush: jest.fn().mockResolvedValue(canPush),
-    } as unknown as RoadmapAzureSyncService,
+    } as unknown as RoadmapWriteBackAccessService,
   );
   const patch = () =>
     JSON.parse(

@@ -40,6 +40,9 @@ import {
 } from '../../shared/presentation/decorators/current-user.decorator';
 import { AdminRoleGuard } from '../admin/presentation/guards/admin-role.guard';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import { RoadmapAzureSyncStatusService } from './roadmap-azure-sync-status.service';
+import { RoadmapAzureProcessService } from './roadmap-azure-process.service';
+import { RoadmapAzureFeatureFieldsService } from './roadmap-azure-feature-fields.service';
 import { RoadmapService } from './roadmap.service';
 import { RoadmapProjectImportService } from './roadmap-project-import.service';
 import { RoadmapPeopleService } from './roadmap-people.service';
@@ -184,6 +187,9 @@ export class RoadmapController {
     private readonly peopleService: RoadmapPeopleService,
     private readonly rolesService: RoadmapRolesService,
     private readonly allocations: RoadmapAllocationService,
+    private readonly syncStatus: RoadmapAzureSyncStatusService,
+    private readonly azureProcess: RoadmapAzureProcessService,
+    private readonly featureFields: RoadmapAzureFeatureFieldsService,
   ) {}
 
   @Get('projects/:projectId/work-items/:externalId/azure')
@@ -311,7 +317,7 @@ export class RoadmapController {
     @Param('projectId', ParseUUIDPipe) projectId: string,
   ) {
     await this.access.require(actor, { projectId }, 'edit');
-    return this.azureSync.previewProject(actor.id, projectId);
+    return this.syncStatus.previewProject(actor.id, projectId);
   }
 
   @Get('projects/:projectId/plan')
@@ -338,7 +344,7 @@ export class RoadmapController {
     @Query('quarterKey') quarterKey?: string,
   ) {
     await this.access.require(actor, { projectId }, 'read');
-    return this.azureSync.findQuarterIteration(projectId, quarterKey ?? '');
+    return this.azureProcess.findQuarterIteration(projectId, quarterKey ?? '');
   }
 
   @Get('projects/:projectId/fact')
@@ -467,7 +473,7 @@ export class RoadmapController {
     const { workItemId, roleId, ...result } =
       await this.allocationAzure.deleteAllocation(actor, allocationId);
     // The deleted hours leave the role field of the feature too, as the Task leaves Azure DevOps.
-    await this.azureSync.refreshFeatureField(workItemId, roleId);
+    await this.featureFields.refreshFeatureField(workItemId, roleId);
     return result;
   }
 

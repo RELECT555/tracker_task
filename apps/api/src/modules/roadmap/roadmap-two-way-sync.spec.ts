@@ -2,7 +2,7 @@ import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.se
 import type { IsActiveAdminHandler } from '../identity/application/queries/is-active-admin.handler';
 import { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
 import { decideEstimate, scalePeriods } from './roadmap-allocation-reconcile';
-import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import { createAzureSyncServices } from './roadmap-azure-sync.testing';
 import {
   AzureDevOpsHttpError,
   type RoadmapIntegrationService,
@@ -443,7 +443,7 @@ function syncSetup(
   );
   const request = jest.fn().mockResolvedValue(undefined);
   const applyRemoval = jest.fn().mockResolvedValue('deleted');
-  const service = new RoadmapAzureSyncService(
+  const service = createAzureSyncServices(
     prisma as unknown as PrismaService,
     {
       getWriteBackSettings: jest.fn().mockResolvedValue({
@@ -461,7 +461,7 @@ function syncSetup(
     } as unknown as RoadmapWorkItemImportService,
     {} as IsActiveAdminHandler,
     { applyRemoval } as unknown as RoadmapAllocationAzureService,
-  );
+  ).sync;
   return {
     row,
     request,

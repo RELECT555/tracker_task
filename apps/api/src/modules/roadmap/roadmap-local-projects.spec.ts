@@ -10,6 +10,9 @@ import type { RoadmapProjectImportService } from './roadmap-project-import.servi
 import type { RoadmapPeopleService } from './roadmap-people.service';
 import type { RoadmapRolesService } from './roadmap-roles.service';
 import type { RoadmapAllocationService } from './roadmap-allocation.service';
+import type { RoadmapAzureSyncStatusService } from './roadmap-azure-sync-status.service';
+import type { RoadmapAzureProcessService } from './roadmap-azure-process.service';
+import type { RoadmapAzureFeatureFieldsService } from './roadmap-azure-feature-fields.service';
 
 describe('Local Roadmap projects', () => {
   it.each([
@@ -45,6 +48,9 @@ describe('Local Roadmap projects', () => {
         {} as RoadmapPeopleService,
         {} as RoadmapRolesService,
         {} as RoadmapAllocationService,
+        {} as RoadmapAzureSyncStatusService,
+        {} as RoadmapAzureProcessService,
+        {} as RoadmapAzureFeatureFieldsService,
       );
 
       await expect(

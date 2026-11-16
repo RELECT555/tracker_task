@@ -1,7 +1,7 @@
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import type { IsActiveAdminHandler } from '../identity/application/queries/is-active-admin.handler';
 import type { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
-import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import { createAzureSyncServices } from './roadmap-azure-sync.testing';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import { normalizeWriteBackSettings } from './roadmap-write-back.settings';
@@ -93,7 +93,7 @@ function setup(pushedHours: number) {
     requestJson,
     request,
   };
-  const service = new RoadmapAzureSyncService(
+  const service = createAzureSyncServices(
     prisma as unknown as PrismaService,
     integration as unknown as RoadmapIntegrationService,
     {
@@ -101,7 +101,7 @@ function setup(pushedHours: number) {
     } as unknown as RoadmapWorkItemImportService,
     {} as IsActiveAdminHandler,
     {} as RoadmapAllocationAzureService,
-  );
+  ).sync;
   const patches = () =>
     request.mock.calls.map(
       ([, init]: [string, { body: string }]) =>

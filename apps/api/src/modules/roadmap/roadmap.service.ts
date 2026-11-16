@@ -12,7 +12,7 @@ import {
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { azureWorkItemWebUrl } from './azure-work-item-url';
 import { roadmapProjectReadFilter } from './roadmap-project-access.service';
-import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import { RoadmapWriteBackAccessService } from './roadmap-write-back-access.service';
 import { RoadmapIntegrationService } from './roadmap-integration.service';
 import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import {
@@ -35,7 +35,7 @@ export class RoadmapService {
     private readonly prisma: PrismaService,
     private readonly integration: RoadmapIntegrationService,
     private readonly importer: RoadmapWorkItemImportService,
-    private readonly azureSync: RoadmapAzureSyncService,
+    private readonly writeBackAccess: RoadmapWriteBackAccessService,
     private readonly roles: RoadmapRolesService,
   ) {}
 
@@ -276,7 +276,10 @@ export class RoadmapService {
           settings.writeBackEnabled &&
           (!settings.writeBack.projectIds ||
             settings.writeBack.projectIds.includes(projectId)) &&
-          (await this.azureSync.canManuallyPush(actorId, settings.writeBack)),
+          (await this.writeBackAccess.canManuallyPush(
+            actorId,
+            settings.writeBack,
+          )),
         canCreateWorkItems:
           settings.configured &&
           (!projectOrganization ||
