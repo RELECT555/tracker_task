@@ -1,7 +1,7 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import Link from '@/shared/lib/router/link';
+import { usePathname } from '@/shared/lib/router/navigation';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useTheme } from 'next-themes';
 import { Activity, ChartNoAxesCombined, ChevronDown, CircleHelp, ChevronsUpDown, GitBranch, House, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Settings2, Sun, type LucideIcon } from 'lucide-react';

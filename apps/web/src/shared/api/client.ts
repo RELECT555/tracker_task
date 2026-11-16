@@ -1,6 +1,6 @@
 import { loadAuthProvider } from '@/shared/lib/auth';
 
-export const baseURL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+export const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api/v1';
 
 type ApiFetchOptions = RequestInit & {
   skipAuth?: boolean;

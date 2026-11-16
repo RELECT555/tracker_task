@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
+import Link from '@/shared/lib/router/link';
 import { LoaderCircle, Plus, Search, Settings2 } from 'lucide-react';
 import type { RoadmapRoleTemplate } from '@/entities/roadmap/api/roadmapApi';
 import { routes } from '@/shared/config/routes';

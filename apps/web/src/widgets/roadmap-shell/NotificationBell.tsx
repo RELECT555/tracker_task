@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import Link from '@/shared/lib/router/link';
+import { useRouter } from '@/shared/lib/router/navigation';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Bell, Check, FolderKanban } from 'lucide-react';
 import type { RoadmapNotificationDto } from '@tracker/shared';

@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
+import Link from '@/shared/lib/router/link';
 import { ArrowDownToLine, ArrowRight, ArrowUpFromLine, ChevronDown, LoaderCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { roadmapApi, type RoadmapReadinessCheck, type RoadmapWriteBackOverview } from '@/entities/roadmap/api/roadmapApi';
 import { AzurePushPreview } from '@/entities/roadmap/ui/AzurePushPreview';

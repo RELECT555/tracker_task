@@ -1,8 +1,6 @@
 import { BlobError, BlobNotFoundError, BlobPreconditionFailedError, get, put } from '@vercel/blob';
-import { createInitialDemoState, DEMO_BLOB_PATH, runDemoOperation, type DemoState } from '@/entities/roadmap/api/roadmapDemoStore';
+import { createInitialDemoState, DEMO_BLOB_PATH, runDemoOperation, type DemoState } from '../src/entities/roadmap/api/roadmapDemoStore';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 
 const writesState = new Set([
   'saveIntegrationSettings', 'createRoleTemplate', 'deleteRoleTemplate', 'addRoleFromCatalog', 'createRole',
@@ -28,7 +26,7 @@ async function readState(): Promise<{ state: DemoState; etag?: string }> {
 }
 
 export async function POST(request: Request) {
-  if (process.env.NEXT_PUBLIC_ROADMAP_DEMO !== 'true') return new Response(null, { status: 404 });
+  if ((process.env.ROADMAP_DEMO ?? process.env.VITE_ROADMAP_DEMO) !== 'true') return new Response(null, { status: 404 });
 
   try {
     const authorization = request.headers.get('authorization');

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import dynamic from 'next/dynamic';
+import { dynamic } from '@/shared/lib/router/dynamic';
 import { SlidersHorizontal, X } from 'lucide-react';
 import type { RoadmapTablePreferences } from '@tracker/shared';
 import { Button } from '@/shared/ui/button';

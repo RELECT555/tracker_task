@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useRouter } from '@/shared/lib/router/navigation';
 import { useEffect, useState } from 'react';
 import type { LoginDto } from '@tracker/shared';
 import { authApi } from '@/entities/user/api/authApi';

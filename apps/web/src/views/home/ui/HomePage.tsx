@@ -1,7 +1,7 @@
 'use client';
 
-import Link, { useLinkStatus } from 'next/link';
-import { useRouter } from 'next/navigation';
+import { Link } from '@/shared/lib/router/link';
+import { useRouter } from '@/shared/lib/router/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { ArrowRight, ChartNoAxesCombined, CircleHelp, GitBranch, Layers3 } from 'lucide-react';
@@ -17,8 +17,7 @@ import styles from './home.module.css';
 const EMPTY_PROJECTS: AzureProject[] = [];
 
 function PlanLinkLabel() {
-  const { pending } = useLinkStatus();
-  return <span role="status">{pending ? 'Открываем план…' : 'Открыть план'}</span>;
+  return <span>Открыть план</span>;
 }
 
 export function HomePage() {

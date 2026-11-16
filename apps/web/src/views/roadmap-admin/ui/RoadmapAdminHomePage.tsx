@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/shared/lib/router/link';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { roadmapAdminSections } from '@/shared/config/roadmap-admin-sections';
 import { routes } from '@/shared/config/routes';
