@@ -134,7 +134,13 @@ function CapacityContent({ plan, roles, quarter, projectKey }: AnalyticsContext)
         note={data.estimate > 0 ? `${formatHours(data.distributed)} из ${formatHours(data.estimate)}` : undefined}
       />
       <Metric label="Открытые фичи с назначениями" value={formatNumber(data.features.covered)} unit={`из ${formatNumber(data.features.open)}`} />
-      <Metric label="Команда квартала" value={formatNumber(data.people.length)} unit={plural(data.people.length, 'участник', 'участника', 'участников')} />
+      <Metric
+        label="Загрузка команды"
+        value={data.capacity.team > 0 ? formatPercent(data.distributed, data.capacity.team) : '—'}
+        note={data.capacity.team > 0
+          ? `${formatHours(data.distributed)} из ${formatHours(data.capacity.team)} нормы · ${formatNumber(data.people.length)} ${plural(data.people.length, 'участник', 'участника', 'участников')}${data.capacity.overloaded ? `, ${data.capacity.overloaded} с перегрузом` : ''}`
+          : 'Никто не назначен'}
+      />
     </MetricStrip>
 
     {undistributed >= 0.5 ? <div className="flex flex-col gap-2 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-200" role="status">
@@ -145,7 +151,7 @@ function CapacityContent({ plan, roles, quarter, projectKey }: AnalyticsContext)
     </div> : null}
 
     <div className={styles.columns} key={contextKey}>
-      <TeamLoadCard people={data.people} roles={roles} quarter={quarter} />
+      <TeamLoadCard people={data.people} roles={roles} quarter={quarter} monthNorms={data.capacity.monthNorms} overloaded={data.capacity.overloaded} />
       <div className="min-w-0 space-y-4">
         <AttentionCard items={data.attention} quarter={quarter} />
         <RolesCard roles={data.roles} quarter={quarter} />

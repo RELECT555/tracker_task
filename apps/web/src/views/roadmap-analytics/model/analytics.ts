@@ -59,6 +59,36 @@ export function monthLabel(monthKey: string, long = false) {
   return label.charAt(0).toLocaleUpperCase('ru-RU') + label.slice(1);
 }
 
+/** Норма часов в рабочий день; праздники производственного календаря пока не учитываются. */
+export const workdayHours = 8;
+
+/** Рабочие дни (пн–пт) в месяце вида `2026-11`. */
+export function workingDays(monthKey: string) {
+  const [year, month] = monthKey.split('-').map(Number);
+  const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  let count = 0;
+  for (let day = 1; day <= days; day += 1) {
+    const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+    if (weekday !== 0 && weekday !== 6) count += 1;
+  }
+  return count;
+}
+
+/** Норма часов одного человека на месяц. */
+export const monthCapacity = (monthKey: string) => workingDays(monthKey) * workdayHours;
+
+export type LoadLevel = 'none' | 'normal' | 'high' | 'over';
+/** Порог «высокой» загрузки: выше него план на месяц почти не оставляет запаса. */
+export const highLoadThreshold = 0.85;
+
+export function loadLevel(hours: number, capacity: number): LoadLevel {
+  if (hours <= 0 || capacity <= 0) return 'none';
+  const ratio = hours / capacity;
+  if (ratio > 1.005) return 'over';
+  if (ratio >= highLoadThreshold) return 'high';
+  return 'normal';
+}
+
 function periodMonth(period: RoadmapAllocation['periods'][number]) {
   return period.monthKey ?? period.startsAt?.slice(0, 7) ?? '';
 }
@@ -182,10 +212,22 @@ export function buildCapacity(plan: RoadmapProjectPlan, quarter: QuarterRef) {
   });
   attention.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'unspread' ? -1 : 1));
 
+  const monthNorms = quarter.monthKeys.map(monthCapacity);
+  const personNorm = monthNorms.reduce((sum, hours) => sum + hours, 0);
+  const overloaded = people.filter((person) => person.months.some((hours, index) => loadLevel(hours, monthNorms[index]) === 'over')).length;
+
   return {
     estimate,
     distributed,
     features: { open: openFeatures.length, covered },
+    capacity: {
+      /** Норма одного человека по месяцам квартала. */
+      monthNorms,
+      personNorm,
+      /** Норма всех участников квартала вместе. */
+      team: personNorm * people.length,
+      overloaded,
+    },
     people,
     roles,
     epics,
