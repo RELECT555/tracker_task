@@ -1075,6 +1075,11 @@ describe('Plan change log: estimate adjusted by Azure on push', () => {
       estimatedHours: 20,
       azureSyncClaimId: null,
     });
+    // The replanned months are not scaled down to Azure's old estimate.
+    expect(state.periods).toEqual([
+      { id: 'oct-a1', monthKey: '2026-10', hours: 8 },
+    ]);
+    expect(client.roadmapPeriodAllocation.update).not.toHaveBeenCalled();
     expect(client.roadmapPlanChange.createMany).not.toHaveBeenCalled();
   });
 

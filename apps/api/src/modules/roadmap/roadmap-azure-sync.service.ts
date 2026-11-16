@@ -1203,7 +1203,8 @@ export class RoadmapAzureSyncService {
         azurePushedHours: acceptedHours ?? estimate,
         ...(acceptedHours === null ? {} : { estimatedHours: acceptedHours }),
       });
-      if (acceptedHours !== null)
+      // A plan edit that won the race keeps its own months.
+      if (applied && acceptedHours !== null)
         await this.shrinkPeriods(id, acceptedHours).catch(() => undefined);
       if (applied && before) await this.recordEstimateFromAzure(id, before);
       await refreshFeatureField();
