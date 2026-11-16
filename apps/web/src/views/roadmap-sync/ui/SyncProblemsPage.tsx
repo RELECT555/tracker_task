@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { ArrowRight, Check, ChevronRight } from 'lucide-react';
+import { ArrowRight, Check, ChevronRight, CircleCheck, Clock3, FolderKanban, History } from 'lucide-react';
 import type { SyncProblemDto, SyncProblemEpisodeDto, SyncProblemStatusFilter } from '@tracker/shared';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { ApiError } from '@/shared/api/client';
@@ -53,12 +53,26 @@ export function SyncProblemsPage() {
   const active = firstPage?.counts.active ?? 0;
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5 px-4 py-6 sm:px-6 lg:px-8">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Проблемы синхронизации</h1>
-        <p className="text-sm text-muted-foreground">
-          {firstPage ? (active ? `Активных: ${active}` : 'Активных проблем нет') : 'Что сломано в синхронизации с Azure DevOps сейчас и что было за 90 дней.'}
-        </p>
+    <main className="roadmap-scrollbar relative min-h-0 flex-1 space-y-4 overflow-auto overscroll-none px-4 py-4 sm:px-6 lg:px-8 lg:py-5">
+      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0 space-y-1">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Проблемы синхронизации</h1>
+          <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
+            Что сломано в синхронизации с Azure DevOps сейчас и что было за последние 90 дней.
+          </p>
+        </div>
+        {firstPage ? (
+          <span
+            role="status"
+            className={cn(
+              'inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium',
+              active ? 'bg-destructive/10 text-destructive' : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+            )}
+          >
+            <span aria-hidden="true" className={cn('size-2 rounded-full', active ? 'bg-destructive' : 'bg-emerald-500')} />
+            {active ? `Активных: ${active}` : 'Активных проблем нет'}
+          </span>
+        ) : null}
       </header>
 
       {forbidden ? (
@@ -66,22 +80,43 @@ export function SyncProblemsPage() {
       ) : (
         <>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div role="tablist" aria-label="Статус" className="inline-flex w-full rounded-lg border border-border bg-card p-0.5 sm:w-auto">
-              {STATUS_TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={filter.status === tab.id}
-                  onClick={() => setFilter({ ...filter, status: tab.id })}
-                  className={cn(
-                    'flex-1 rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-ring sm:flex-none',
-                    filter.status === tab.id ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            <div
+              role="tablist"
+              aria-label="Статус"
+              onKeyDown={(event) => {
+                const dir = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+                if (!dir) return;
+                event.preventDefault();
+                const index = STATUS_TABS.findIndex((tab) => tab.id === filter.status);
+                const next = STATUS_TABS[(index + dir + STATUS_TABS.length) % STATUS_TABS.length];
+                setFilter({ ...filter, status: next.id });
+                (event.currentTarget.querySelector(`[data-tab="${next.id}"]`) as HTMLElement | null)?.focus();
+              }}
+              className="inline-flex w-full gap-0.5 rounded-lg border border-border bg-card p-0.5 sm:w-auto"
+            >
+              {STATUS_TABS.map((tab) => {
+                const selected = filter.status === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    data-tab={tab.id}
+                    tabIndex={selected ? 0 : -1}
+                    aria-selected={selected}
+                    onClick={() => setFilter({ ...filter, status: tab.id })}
+                    className={cn(
+                      'inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-ring sm:flex-none',
+                      selected ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {tab.label}
+                    {tab.id === 'active' && active > 0 ? (
+                      <span className="rounded-full bg-destructive px-1.5 text-xs font-medium leading-5 text-white tabular-nums">{active}</span>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
               <span className="shrink-0">Проект</span>
@@ -113,9 +148,17 @@ export function SyncProblemsPage() {
           ) : problems.error && !items.length ? (
             <QueryErrorNotice title="Не удалось загрузить проблемы синхронизации" queries={[problems]} />
           ) : !items.length ? (
-            <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-              {filter.status === 'active' ? 'Всё работает — активных проблем синхронизации нет' : 'За последние 90 дней проблем не было'}
-            </p>
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12 text-center">
+              <span aria-hidden="true" className="flex size-11 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <CircleCheck className="size-5" />
+              </span>
+              <p className="text-sm font-medium">{filter.status === 'active' ? 'Всё работает' : 'Здесь пока пусто'}</p>
+              <p className="max-w-sm text-pretty text-sm text-muted-foreground">
+                {filter.status === 'active'
+                  ? 'Активных проблем синхронизации нет. Если что-то сломается, оно появится здесь.'
+                  : 'За последние 90 дней подходящих проблем не было.'}
+              </p>
+            </div>
           ) : (
             <ul className="space-y-3">
               {items.map((item) => (
@@ -139,7 +182,7 @@ export function SyncProblemsPage() {
           ) : null}
         </>
       )}
-    </div>
+    </main>
   );
 }
 
@@ -157,7 +200,7 @@ function ProblemRow({ item }: { item: SyncProblemDto }) {
     item.peakCount !== null && item.currentCount !== null && item.peakCount > item.currentCount ? `макс. ${item.peakCount}` : null;
 
   return (
-    <li className="rounded-xl border border-border bg-card p-4">
+    <li className={cn('rounded-xl border border-border bg-card p-4', item.status === 'active' && 'border-l-2 border-l-destructive')}>
       <div className="flex gap-3">
         <span aria-hidden="true" className={cn('flex size-9 shrink-0 items-center justify-center rounded-full', meta.bgClass, meta.textClass)}>
           <Icon className="size-4" />
@@ -170,13 +213,21 @@ function ProblemRow({ item }: { item: SyncProblemDto }) {
               {meta.label}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground">
-            {item.projectName ? `${item.projectName} · ` : ''}
-            <time dateTime={item.resolvedAt ?? item.openedAt} title={exactTime(item.resolvedAt ?? item.openedAt)}>
-              {when}
-            </time>
-            {recurrence ? ` · ${recurrence}` : ''}
-            {peak ? ` · ${peak}` : ''}
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            {item.projectName ? (
+              <span className="inline-flex min-w-0 items-center gap-1">
+                <FolderKanban aria-hidden="true" className="size-3.5 shrink-0" />
+                <span className="truncate">{item.projectName}</span>
+              </span>
+            ) : null}
+            <span className="inline-flex items-center gap-1">
+              <Clock3 aria-hidden="true" className="size-3.5 shrink-0" />
+              <time dateTime={item.resolvedAt ?? item.openedAt} title={exactTime(item.resolvedAt ?? item.openedAt)}>
+                {when}
+              </time>
+            </span>
+            {recurrence ? <span>{recurrence}</span> : null}
+            {peak ? <span className="tabular-nums">{peak}</span> : null}
           </p>
           {item.body ? (
             <button
@@ -184,7 +235,7 @@ function ProblemRow({ item }: { item: SyncProblemDto }) {
               onClick={() => setShowBody((value) => !value)}
               aria-expanded={showBody}
               className={cn(
-                'block w-full rounded-md bg-muted px-2 py-1.5 text-left font-mono text-xs leading-4 text-muted-foreground wrap-anywhere',
+                'block w-full cursor-pointer rounded-md bg-muted px-2.5 py-2 text-left font-mono text-xs leading-4 text-muted-foreground transition-colors wrap-anywhere hover:bg-muted/70 focus-visible:outline-2 focus-visible:outline-ring',
                 showBody ? '' : 'line-clamp-2',
               )}
             >
@@ -206,9 +257,10 @@ function ProblemRow({ item }: { item: SyncProblemDto }) {
                 type="button"
                 onClick={() => setShowHistory((value) => !value)}
                 aria-expanded={showHistory}
-                className="inline-flex items-center gap-1 rounded text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                className="inline-flex min-h-7 items-center gap-1 rounded text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
               >
-                <ChevronRight aria-hidden="true" className={cn('size-3.5 transition-transform', showHistory && 'rotate-90')} />
+                <ChevronRight aria-hidden="true" className={cn('size-3.5 transition-transform motion-reduce:transition-none', showHistory && 'rotate-90')} />
+                <History aria-hidden="true" className="size-3.5" />
                 История ({item.historyCount})
               </button>
               {showHistory ? <ProblemHistory alertId={item.alertId} /> : null}
@@ -225,9 +277,13 @@ function ProblemHistory({ alertId }: { alertId: string }) {
   if (history.isPending) return <Skeleton className="mt-2 h-3 w-1/2" />;
   if (history.error) return <QueryErrorNotice title="Не удалось загрузить историю" queries={[history]} className="mt-2" />;
   return (
-    <ul className="mt-2 space-y-1 border-l border-border pl-3">
+    <ul className="mt-2 space-y-2 border-l border-border pl-4">
       {history.data.items.map((episode) => (
-        <li key={episode.episodeId} className="text-xs text-muted-foreground">
+        <li key={episode.episodeId} className="relative text-xs leading-5 text-muted-foreground">
+          <span
+            aria-hidden="true"
+            className={cn('absolute -left-[1.3125rem] top-1.5 size-2 rounded-full ring-2 ring-card', episode.resolvedAt ? 'bg-emerald-500' : 'bg-destructive')}
+          />
           {episodeLine(episode)}
         </li>
       ))}
