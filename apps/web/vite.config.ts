@@ -30,7 +30,9 @@ export default defineConfig(({ mode }) => {
         '/api/v1': { target: apiOrigin, changeOrigin: true },
       },
     },
-    preview: { port: 3000 },
+    // preview используется на демо-стенде (Coder) за прокси с динамическими
+    // доменами вида 3000--main--<ws>--<user>.coder.…, поэтому проверку Host отключаем.
+    preview: { port: 3000, allowedHosts: true },
     build: { outDir: 'dist', sourcemap: false },
   };
 });
