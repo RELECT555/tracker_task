@@ -18,7 +18,7 @@ const fieldClassName =
 
 export function LoginPage() {
   const searchParams = useSearchParams();
-  const { login, loginError, isLoggingIn, provider, signInWithMicrosoft } = useAuth();
+  const { login, loginError, isLoggingIn, provider, configError, signInError, signInWithMicrosoft } = useAuth();
   const [redirecting, setRedirecting] = useState(false);
   const [email, setEmail] = useState('admin@tracker.local');
   const [password, setPassword] = useState('');
@@ -83,17 +83,28 @@ export function LoginPage() {
           <h1 id="login-title" className="text-[30px] leading-tight font-medium tracking-[-0.045em] sm:text-[34px]">Всё начинается здесь.</h1>
           <p id="login-description" className="mt-3 max-w-[320px] text-sm leading-6 text-slate-400">Войдите в аккаунт, чтобы продолжить<br className="hidden sm:block" /> работу над вашими проектами.</p>
 
-          {provider === 'entra' ? (
+          {configError ? (
+            <p role="alert" className="mt-9 rounded-lg border border-rose-300/15 bg-rose-300/5 px-3 py-2.5 text-sm leading-5 text-rose-300">
+              Не удалось подключиться к серверу. Обновите страницу.
+            </p>
+          ) : provider === 'entra' ? (
+            <>
+            {signInError ? (
+              <p role="alert" className="mt-9 rounded-lg border border-rose-300/15 bg-rose-300/5 px-3 py-2.5 text-sm leading-5 text-rose-300">
+                Не удалось войти через Microsoft. Попробуйте ещё раз.
+              </p>
+            ) : null}
             <Button
               type="button"
               onClick={handleMicrosoftSignIn}
               disabled={redirecting}
               aria-describedby="login-description"
-              className="mt-9 h-12 w-full justify-between rounded-lg bg-violet-300 px-4 font-semibold text-[#161122] shadow-none transition-[background-color,transform] hover:bg-violet-200 focus-visible:ring-violet-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e0f16]"
+              className="mt-5 h-12 w-full justify-between rounded-lg bg-violet-300 px-4 font-semibold text-[#161122] shadow-none transition-[background-color,transform] hover:bg-violet-200 focus-visible:ring-violet-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e0f16]"
             >
               <span>{redirecting ? 'Переходим к Microsoft…' : 'Войти через Microsoft'}</span>
               {redirecting ? <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true" /> : <ArrowRight className="size-4" aria-hidden="true" />}
             </Button>
+            </>
           ) : (
           <form onSubmit={handleSubmit} aria-describedby="login-description" aria-busy={isLoggingIn} className="mt-9 space-y-5 scheme-dark">
             <div className="grid gap-2.5">

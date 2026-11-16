@@ -89,6 +89,7 @@ export function useAuth() {
     hasToken,
     provider: provider?.kind ?? null,
     configError,
+    signInError: isEntraProvider(provider) ? provider.signInError : null,
     profileError: meQuery.error,
     isAuthenticated: hasToken === true && Boolean(meQuery.data?.user),
     login: (dto: LoginDto, redirectTo?: string) =>

@@ -2,10 +2,10 @@ import type { AuthClientConfig } from '@tracker/shared';
 import { localAuthProvider } from './local-provider';
 import { createProviderLoader } from './provider-loader';
 import type { AuthProvider } from './types';
-import type { EntraAuthProvider } from './entra-provider';
+import type { EntraAuthProvider } from './entra-session';
 
 export type { AuthProvider, AuthProviderKind } from './types';
-export type { EntraAuthProvider } from './entra-provider';
+export type { EntraAuthProvider } from './entra-session';
 export { AUTH_EXPIRED_EVENT } from '@/shared/lib/auth-session';
 
 const baseURL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
