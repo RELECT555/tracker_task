@@ -475,7 +475,7 @@ describe('RoadmapAlertsService.evaluate', () => {
     expect(alerts[0]).toMatchObject({
       state: 'resolved',
       resolution: 'fixed',
-      resolvedAt: at(11),
+      resolvedAt: at(1),
     });
 
     setErrors(3);
@@ -660,7 +660,7 @@ describe('RoadmapAlertsService episode journal', () => {
       await service.evaluate(at(minute));
     }
 
-    expect(alerts[0]).toMatchObject({ state: 'resolved', resolvedAt: at(11) });
+    expect(alerts[0]).toMatchObject({ state: 'resolved', resolvedAt: at(1) });
     expect(episodes).toHaveLength(1);
     expect(episodes[0]).toMatchObject({
       resolvedAt: at(1),

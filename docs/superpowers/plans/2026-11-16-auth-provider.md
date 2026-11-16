@@ -39,16 +39,16 @@
 **Interfaces:**
 - Produces: `export type AuthProviderKind = 'local' | 'entra'`; `export function authProviderOf(env: Record<string, unknown>): AuthProviderKind` (unset/empty → `'local'`, unknown value → throws `'AUTH_PROVIDER must be local or entra'`). `validateAuthConfig` keeps its signature.
 
-- [ ] **Step 1: Add failing tests** to the existing spec:
+- [x] **Step 1: Add failing tests** to the existing spec:
   - `authProviderOf({})` → `'local'`; `authProviderOf({ AUTH_PROVIDER: 'ENTRA' })` → `'entra'`; `'okta'` throws `AUTH_PROVIDER`.
   - entra mode without `LOCAL_ADMIN_PASSWORD` but with `JWT_SECRET`, `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `ENTRA_API_AUDIENCE` → passes.
   - entra mode missing each of the three `ENTRA_*` vars → throws that var's name.
   - entra mode with a non-GUID `ENTRA_TENANT_ID` (`'contoso'`) → throws `ENTRA_TENANT_ID`.
   - existing local tests unchanged.
-- [ ] **Step 2:** `npm test -w @tracker/api -- auth-config` → FAIL.
-- [ ] **Step 3:** Implement. Tenant must be a GUID (single-tenant app; `common`/`organizations` not supported).
-- [ ] **Step 4:** Same command → PASS.
-- [ ] **Step 5:** Add commented `AUTH_PROVIDER=local` and `ENTRA_*` block to `.env.example`. Commit `feat(api): validate auth provider config`.
+- [x] **Step 2:** `npm test -w @tracker/api -- auth-config` → FAIL.
+- [x] **Step 3:** Implement. Tenant must be a GUID (single-tenant app; `common`/`organizations` not supported).
+- [x] **Step 4:** Same command → PASS.
+- [x] **Step 5:** Add commented `AUTH_PROVIDER=local` and `ENTRA_*` block to `.env.example`. Commit `feat(api): validate auth provider config`.
 
 ### Task 2: Token verifiers
 
@@ -71,12 +71,12 @@
 - Produces (in `entra-token-verifier.ts`):
   `export class EntraTokenVerifier implements AccessTokenVerifier { constructor(options: { tenantId: string; audience: string; keys?: JWTVerifyGetKey }) }` — `keys` defaults to `createRemoteJWKSet(new URL(jwksUrl))`. Email = first string of `preferred_username`, `email`, `upn`, lower-cased, else `null`. Any failure → throws `Error`.
 
-- [ ] **Step 1: Failing tests** with `generateKeyPair('RS256')` + `createLocalJWKSet` + `SignJWT`:
+- [x] **Step 1: Failing tests** with `generateKeyPair('RS256')` + `createLocalJWKSet` + `SignJWT`:
   - valid token (iss, aud, `tid`, `oid`, `preferred_username: 'Ivan@Corp.com'`, exp +5m) → `{ kind: 'entra', oid, tenantId, email: 'ivan@corp.com' }`.
   - rejects: wrong `aud`; wrong `iss`; `tid` ≠ tenant (iss still correct); expired; missing `oid`; signed by another key; HS256 token signed with a secret.
-- [ ] **Step 2:** `npm test -w @tracker/api -- entra-token-verifier` → FAIL.
-- [ ] **Step 3:** Implement with `jwtVerify(token, keys, { issuer, audience, algorithms: ['RS256'] })`. `LocalTokenVerifier` wraps `tokens.verifyAccessToken`.
-- [ ] **Step 4:** Same → PASS. Commit `feat(api): local and Entra access token verifiers`.
+- [x] **Step 2:** `npm test -w @tracker/api -- entra-token-verifier` → FAIL.
+- [x] **Step 3:** Implement with `jwtVerify(token, keys, { issuer, audience, algorithms: ['RS256'] })`. `LocalTokenVerifier` wraps `tokens.verifyAccessToken`.
+- [x] **Step 4:** Same → PASS. Commit `feat(api): local and Entra access token verifiers`.
 
 ### Task 3: External id, user resolver, middleware wiring
 
@@ -92,17 +92,17 @@
 - Consumes: `VerifiedIdentity`, `ACCESS_TOKEN_VERIFIER`, `authProviderOf`.
 - Produces: `export class AuthUserResolver { resolve(identity: VerifiedIdentity): Promise<AuthenticatedUser> }`. Throws `UnauthorizedException({ error: { code: 'UNAUTHORIZED', message: 'Account is inactive' } })` for missing/inactive local user or inactive entra user; `ForbiddenException({ error: { code: 'USER_NOT_PROVISIONED', message: 'Учётная запись не добавлена в Roadmap. Обратитесь к администратору.' } })` for unknown entra user; DB-unavailable → `ServiceUnavailableException` with `DB_UNAVAILABLE` (moved from middleware). IdentityModule provides `ACCESS_TOKEN_VERIFIER` via factory on `AUTH_PROVIDER` and exports it with `AuthUserResolver`.
 
-- [ ] **Step 1: Failing tests** (Prisma mocked as `{ user: { findUnique, findFirst, update } }`):
+- [x] **Step 1: Failing tests** (Prisma mocked as `{ user: { findUnique, findFirst, update } }`):
   - local identity → user by id, `isAdmin` from `admin` role.
   - entra: found by `externalId` → returned, no update.
   - entra: not by `externalId`, found by email (`mode: 'insensitive'`) with `externalId: null` → `update` sets `externalId = oid`, returned.
   - entra: email match already linked to another oid → 403 `USER_NOT_PROVISIONED`, no update.
   - entra: email `null` or no match → 403.
   - entra: inactive → 401.
-- [ ] **Step 2:** `npm test -w @tracker/api -- auth-user-resolver` → FAIL.
-- [ ] **Step 3:** Schema + migration (`ALTER TABLE "users" ADD COLUMN "external_id" VARCHAR(64); CREATE UNIQUE INDEX "users_external_id_key" ON "users"("external_id");`), `npm run db:generate`, implement resolver, middleware = bearer parse → `verifier.verify` (catch → 401 `Invalid or expired access token`) → `resolver.resolve`.
-- [ ] **Step 4:** `npm test -w @tracker/api` → all PASS (incl. existing). `npm run build -w @tracker/api` → OK.
-- [ ] **Step 5:** Commit `feat(api): resolve users by Entra object id`.
+- [x] **Step 2:** `npm test -w @tracker/api -- auth-user-resolver` → FAIL.
+- [x] **Step 3:** Schema + migration (`ALTER TABLE "users" ADD COLUMN "external_id" VARCHAR(64); CREATE UNIQUE INDEX "users_external_id_key" ON "users"("external_id");`), `npm run db:generate`, implement resolver, middleware = bearer parse → `verifier.verify` (catch → 401 `Invalid or expired access token`) → `resolver.resolve`.
+- [x] **Step 4:** `npm test -w @tracker/api` → all PASS (incl. existing). `npm run build -w @tracker/api` → OK.
+- [x] **Step 5:** Commit `feat(api): resolve users by Entra object id`.
 
 ### Task 4: `/auth/config` and disabling local endpoints in Entra mode
 
@@ -116,9 +116,9 @@
 **Interfaces:**
 - Produces: `export type AuthClientConfig = { provider: 'local' } | { provider: 'entra'; tenantId: string; clientId: string; scopes: string[] }` in `@tracker/shared`. `GetAuthConfigHandler.execute(): AuthClientConfig`; `GetAuthConfigHandler.assertLocal(): void` throws `NotFoundException({ error: { code: 'AUTH_PROVIDER_DISABLED', message: 'Вход по паролю отключён' } })` in entra mode. `login`/`refresh` call `assertLocal()` first.
 
-- [ ] **Step 1: Failing tests:** local env → `{ provider: 'local' }`; entra env → tenant, client, `scopes: ['api://x/access_as_user']` for audience `api://x`; explicit `ENTRA_API_SCOPE` wins; `assertLocal` throws in entra, not in local.
-- [ ] **Step 2:** run → FAIL. **Step 3:** implement. **Step 4:** run all API tests + build → PASS.
-- [ ] **Step 5:** Commit `feat(api): expose auth client config`.
+- [x] **Step 1: Failing tests:** local env → `{ provider: 'local' }`; entra env → tenant, client, `scopes: ['api://x/access_as_user']` for audience `api://x`; explicit `ENTRA_API_SCOPE` wins; `assertLocal` throws in entra, not in local.
+- [x] **Step 2:** run → FAIL. **Step 3:** implement. **Step 4:** run all API tests + build → PASS.
+- [x] **Step 5:** Commit `feat(api): expose auth client config`.
 
 ### Task 5: Web auth provider abstraction (local implementation)
 
@@ -142,10 +142,10 @@
 - `useAuth` returns additionally `provider: 'local' | 'entra' | null` and `configError: unknown`; `hasToken` comes from `(await loadAuthProvider()).getSessionId() !== null`. `logout` calls `provider.signOut()`.
 - `AuthGuard`: if `configError` → text `Не удалось подключиться к серверу. Обновите страницу.`, no redirect.
 
-- [ ] **Step 1:** Implement (no unit runner covers React here; behaviour is pinned by the unchanged local flow).
-- [ ] **Step 2:** `npm run lint -w @tracker/web` and `npm run build -w @tracker/web` → OK.
-- [ ] **Step 3:** Run app in local mode, sign in as local admin, open roadmap, reload, sign out → identical to before; stop API → guard shows the connection error, no redirect loop.
-- [ ] **Step 4:** Commit `refactor(web): route auth through a provider abstraction`.
+- [x] **Step 1:** Implement (no unit runner covers React here; behaviour is pinned by the unchanged local flow).
+- [x] **Step 2:** `npm run lint -w @tracker/web` and `npm run build -w @tracker/web` → OK.
+- [x] **Step 3:** Run app in local mode, sign in as local admin, open roadmap, reload, sign out → identical to before; stop API → guard shows the connection error, no redirect loop.
+- [x] **Step 4:** Commit `refactor(web): route auth through a provider abstraction`.
 
 ### Task 6: Entra (MSAL) web provider and login page
 
@@ -163,7 +163,7 @@
 - `LoginPage`: `provider === 'entra'` → instead of the form, one button `Войти через Microsoft` calling `signInRedirect(redirectTo)`; `local` → current form unchanged.
 - `AuthGuard`: `ApiError` with code `USER_NOT_PROVISIONED` → show its message instead of the generic session error.
 
-- [ ] **Step 1:** Install, implement.
-- [ ] **Step 2:** `npm run lint -w @tracker/web` and `npm run build -w @tracker/web` → OK.
-- [ ] **Step 3:** Local mode regression check from Task 5 Step 3 still holds.
-- [ ] **Step 4:** Note in `apps/web/.env.example` that the mode comes from the API's `AUTH_PROVIDER`. Commit `feat(web): Entra ID sign-in provider behind AUTH_PROVIDER`.
+- [x] **Step 1:** Install, implement.
+- [x] **Step 2:** `npm run lint -w @tracker/web` and `npm run build -w @tracker/web` → OK.
+- [x] **Step 3:** Local mode regression check from Task 5 Step 3 still holds.
+- [x] **Step 4:** Note in `apps/web/.env.example` that the mode comes from the API's `AUTH_PROVIDER`. Commit `feat(web): Entra ID sign-in provider behind AUTH_PROVIDER`.
