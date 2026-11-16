@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DEFAULT_ROADMAP_TABLE_PREFERENCES, roadmapTablePreferencesSchema, type RoadmapTablePreferences } from '@tracker/shared';
 import { apiFetch, ApiError } from '@/shared/api/client';
-import { getSessionId } from '@/shared/lib/auth-storage';
+import { getSessionId } from '@/shared/lib/auth';
 import { columnWidthsStorageKey, readColumnWidths, resolveColumnWidth, type ColumnWidthConfig } from './roadmap-column-widths';
 
 type Response = { preferences: RoadmapTablePreferences | null };

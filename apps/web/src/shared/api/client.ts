@@ -1,5 +1,4 @@
-import { getAccessToken, getSessionId } from '@/shared/lib/auth-storage';
-import { handleUnauthorizedResponse } from '@/shared/lib/auth-session';
+import { loadAuthProvider } from '@/shared/lib/auth';
 
 export const baseURL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
 
@@ -37,8 +36,9 @@ export async function apiFetch<T>(
   options?: ApiFetchOptions,
   origin = baseURL,
 ): Promise<T> {
-  const token = options?.skipAuth ? null : getAccessToken();
-  const sessionId = token ? getSessionId() : null;
+  const provider = options?.skipAuth ? null : await loadAuthProvider();
+  const token = provider ? await provider.getAccessToken() : null;
+  const sessionId = token && provider ? provider.getSessionId() : null;
   const response = await fetch(`${origin}${path}`, {
     ...options,
     headers: buildHeaders(options, token),
@@ -47,6 +47,7 @@ export async function apiFetch<T>(
   if (
     response.status === 401 &&
     !options?._retry &&
+    provider &&
     token &&
     sessionId
   ) {
@@ -54,8 +55,8 @@ export async function apiFetch<T>(
     const code = body?.error?.code as string | undefined;
 
     if (code === 'UNAUTHORIZED' || !code) {
-      const outcome = await handleUnauthorizedResponse(sessionId, token);
-      if (outcome === 'refreshed' && getSessionId() === sessionId) {
+      const outcome = await provider.handleUnauthorized(sessionId, token);
+      if (outcome === 'refreshed' && provider.getSessionId() === sessionId) {
         return apiFetch<T>(path, { ...options, _retry: true }, origin);
       }
       if (outcome === 'unavailable') {
@@ -84,7 +85,7 @@ export async function apiFetch<T>(
   }
 
   const data = await response.json() as T;
-  if (!options?.skipAuth && getSessionId() !== sessionId) {
+  if (provider && provider.getSessionId() !== sessionId) {
     throw new ApiError('Session changed', 'SESSION_CHANGED', 401);
   }
   return data;

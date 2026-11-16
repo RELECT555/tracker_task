@@ -8,7 +8,7 @@ import { routes } from '@/shared/config/routes';
 export function AuthGuard({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { hasToken, isAuthenticated, profileError } = useAuth();
+  const { hasToken, isAuthenticated, profileError, configError } = useAuth();
 
   useEffect(() => {
     if (hasToken === false) {
@@ -16,6 +16,14 @@ export function AuthGuard({ children, fallback }: { children: React.ReactNode; f
       router.replace(`${routes.login}?redirect=${redirect}`);
     }
   }, [hasToken, pathname, router]);
+
+  if (configError) {
+    return (
+      <div role="alert" className="flex min-h-screen items-center justify-center px-4 text-center text-sm text-muted-foreground">
+        Не удалось подключиться к серверу. Обновите страницу.
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     // Каркас показываем, пока сессия проверяется; ошибку — по-прежнему текстом.
