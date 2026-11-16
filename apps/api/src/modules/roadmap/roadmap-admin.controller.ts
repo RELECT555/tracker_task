@@ -122,6 +122,11 @@ export class RoadmapAdminController {
     return this.roadmap.createRoleTemplate(dto);
   }
 
+  @Delete('role-catalog/:id')
+  deleteRoleTemplate(@Param('id') id: string) {
+    return this.roadmap.deleteRoleTemplate(id);
+  }
+
   @Post('roles/from-catalog')
   addRoleFromCatalog(@Body() dto: AddRoadmapRoleFromCatalogDto) {
     return this.roadmap.addRoleFromCatalog(dto.projectId, dto.templateId, dto);

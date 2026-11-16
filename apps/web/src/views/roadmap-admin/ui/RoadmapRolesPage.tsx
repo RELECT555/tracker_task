@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useId, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, Plus } from 'lucide-react';
-import { roadmapApi, type RoadmapRole } from '@/entities/roadmap/api/roadmapApi';
+import { roadmapApi, type RoadmapRole, type RoadmapRoleTemplate } from '@/entities/roadmap/api/roadmapApi';
 import { ApiError } from '@/shared/api/client';
 import { routes } from '@/shared/config/routes';
 import { getErrorMessage } from '@/shared/lib/error-message';
@@ -20,6 +20,7 @@ import { RoleEditorDialog } from './roles/RoleEditorDialog';
 import { RolesPageSkeleton } from './roles/RolesPageSkeleton';
 
 const adminRolesQueryKey = ['roadmap', 'admin', 'roles'] as const;
+const catalogQueryKey = ['roadmap', 'admin', 'role-catalog'] as const;
 
 type RoleEditor = { projectId: string; projectName: string; role?: RoadmapRole };
 
@@ -32,7 +33,7 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
   const client = useQueryClient();
   const fieldId = useId();
   const projectsQuery = useQuery({ queryKey: ['roadmap', 'azure-projects'], queryFn: roadmapApi.projects });
-  const catalogQuery = useQuery({ queryKey: ['roadmap', 'admin', 'role-catalog'], queryFn: roadmapApi.roleCatalog });
+  const catalogQuery = useQuery({ queryKey: catalogQueryKey, queryFn: roadmapApi.roleCatalog });
   const rolesQuery = useQuery({ queryKey: adminRolesQueryKey, queryFn: () => roadmapApi.adminRoles() });
   const peopleQuery = useQuery({ queryKey: ['roadmap', 'admin', 'users'], queryFn: roadmapApi.adminPeople });
 
@@ -40,6 +41,7 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
   const [projectId, setProjectId] = useState(initialProjectId ?? '');
   const [editor, setEditor] = useState<RoleEditor>();
   const [removalTarget, setRemovalTarget] = useState<RoadmapRole>();
+  const [templateTarget, setTemplateTarget] = useState<RoadmapRoleTemplate>();
   const [status, setStatus] = useState<{ message: string; autoDismiss: boolean }>();
 
   const projects = new Map<string, string>();
@@ -61,7 +63,7 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
     .sort((left, right) => left.name.localeCompare(right.name, 'ru-RU'));
 
   const refresh = () => Promise.all([
-    client.invalidateQueries({ queryKey: ['roadmap', 'admin', 'role-catalog'] }),
+    client.invalidateQueries({ queryKey: catalogQueryKey }),
     client.invalidateQueries({ queryKey: adminRolesQueryKey }),
     client.invalidateQueries({ queryKey: ['roadmap', 'admin', 'users'] }),
     client.invalidateQueries({ queryKey: ['roadmap', 'roles'] }),
@@ -76,6 +78,23 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
       client.setQueryData<RoadmapRole[]>(adminRolesQueryKey, (current) => current?.filter((entry) => entry.id !== target.id));
       await refresh();
       setRemovalTarget(undefined);
+    },
+  });
+
+  const deleteTemplate = useMutation({
+    mutationFn: (target: RoadmapRoleTemplate) => roadmapApi.deleteRoleTemplate(target.id),
+    onSuccess: async (_, target) => {
+      await client.cancelQueries({ queryKey: catalogQueryKey });
+      client.setQueryData<RoadmapRoleTemplate[]>(catalogQueryKey, (current) => current?.filter((entry) => entry.id !== target.id));
+      await refresh();
+      setTemplateTarget(undefined);
+    },
+    onError: async (error) => {
+      // Someone else already deleted it: the list is stale, so reload it and close the dialog.
+      if (error instanceof ApiError && error.status === 404) {
+        await client.invalidateQueries({ queryKey: catalogQueryKey });
+        setTemplateTarget(undefined);
+      }
     },
   });
 
@@ -98,7 +117,7 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
     },
   });
 
-  const pending = remove.isPending || add.isPending;
+  const pending = remove.isPending || add.isPending || deleteTemplate.isPending;
   const loading = rolesQuery.isLoading || projectsQuery.isLoading;
   const addError = add.error instanceof ApiError && add.error.status === 409
     ? 'В проекте уже есть такая роль.'
@@ -174,6 +193,11 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
             setStatus(undefined);
             setRemovalTarget(target);
           }}
+          onDeleteTemplate={(target) => {
+            deleteTemplate.reset();
+            setStatus(undefined);
+            setTemplateTarget(target);
+          }}
           onAddRole={(templateId, withKeyboard = false) => {
             if (!canAdd || !availableTemplates.some((entry) => entry.id === templateId)) return;
             remove.reset();
@@ -205,6 +229,15 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
           error={remove.error}
           onClose={() => { setRemovalTarget(undefined); remove.reset(); }}
           onRemove={() => remove.mutate(removalTarget)}
+        />
+      )}
+      {templateTarget && (
+        <RemoveRoleDialog
+          roleName={templateTarget.name}
+          pending={deleteTemplate.isPending}
+          error={deleteTemplate.error}
+          onClose={() => { setTemplateTarget(undefined); deleteTemplate.reset(); }}
+          onRemove={() => deleteTemplate.mutate(templateTarget)}
         />
       )}
     </AdminPage>

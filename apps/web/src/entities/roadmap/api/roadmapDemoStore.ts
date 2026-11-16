@@ -284,6 +284,11 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
       }
       state.roleCatalog.push(role); return clone(role);
     }
+    case 'deleteRoleTemplate': {
+      if (!state.roleCatalog.some((item) => item.id === arg0)) throw new Error('Роль не найдена в каталоге.');
+      state.roleCatalog = state.roleCatalog.filter((item) => item.id !== arg0);
+      return { deleted: true };
+    }
     case 'addRoleFromCatalog': {
       const template = state.roleCatalog.find((item) => item.id === arg1);
       if (!template) throw new Error('Шаблон роли не найден.');

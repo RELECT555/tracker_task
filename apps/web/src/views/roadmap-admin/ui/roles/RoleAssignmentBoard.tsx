@@ -1,5 +1,5 @@
 import { type DragEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react';
-import { ArrowDownToLine, ArrowUpFromLine, GripVertical, Info, LoaderCircle, Plus, Search } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, GripVertical, Info, LoaderCircle, Plus, Search, Trash2 } from 'lucide-react';
 import type { RoadmapRole, RoadmapRoleTemplate } from '@/entities/roadmap/api/roadmapApi';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
@@ -74,12 +74,13 @@ type RoleAssignmentBoardProps = {
   onProjectSearchChange: (value: string) => void;
   onEditRole: (role: RoadmapRole) => void;
   onRemoveRole: (role: RoadmapRole) => void;
+  onDeleteTemplate: (template: RoadmapRoleTemplate) => void;
   onAddRole: (roleId: string, withKeyboard?: boolean) => void;
 };
 
 export function RoleAssignmentBoard({
   roles, availableRoles, catalogSize, catalogNotice, addingRoleId, addedRole, focusAddedRole, removedRoleName, status,
-  projectSearch, disabled, canAdd, onProjectSearchChange, onEditRole, onRemoveRole, onAddRole,
+  projectSearch, disabled, canAdd, onProjectSearchChange, onEditRole, onRemoveRole, onDeleteTemplate, onAddRole,
 }: RoleAssignmentBoardProps) {
   const id = useId();
   const projectHeading = useRef<HTMLHeadingElement>(null);
@@ -220,6 +221,18 @@ export function RoleAssignmentBoard({
                 <GripVertical aria-hidden="true" className="size-4 shrink-0 text-muted-foreground/45 group-hover:text-muted-foreground [@media(pointer:coarse)]:hidden" />
                 <RoleMark name={role.name} color={role.color} size="sm" />
                 <span className="min-w-0 flex-1 break-words">{role.name}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Удалить роль «${role.name}» из каталога`}
+                  title="Удалить из каталога"
+                  disabled={disabled}
+                  onClick={() => onDeleteTemplate(role)}
+                  className="size-8 shrink-0 text-muted-foreground hover:text-destructive focus-visible:text-destructive [@media(pointer:fine)]:opacity-0 [@media(pointer:fine)]:group-hover:opacity-100 [@media(pointer:fine)]:focus-visible:opacity-100 [@media(pointer:coarse)]:size-11"
+                >
+                  <Trash2 aria-hidden="true" className="size-4" />
+                </Button>
                 <Button
                   type="button"
                   variant="ghost"

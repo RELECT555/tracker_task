@@ -25,7 +25,7 @@ import { apiFetch } from '@/shared/api/client';
 type DemoMethod =
   | 'connection' | 'integrationSettings' | 'saveIntegrationSettings' | 'testIntegrationConnection'
   | 'projects' | 'projectSummaries' | 'syncProject' | 'plan' | 'people' | 'roles' | 'adminPeople' | 'syncAdminPeople'
-  | 'adminRoles' | 'roleCatalog' | 'createRoleTemplate' | 'addRoleFromCatalog' | 'createRole'
+  | 'adminRoles' | 'roleCatalog' | 'createRoleTemplate' | 'deleteRoleTemplate' | 'addRoleFromCatalog' | 'createRole'
   | 'updateRole' | 'setRoleMembers' | 'setRoleDefaultPerson' | 'deleteRole' | 'saveAllocation'
   | 'saveAllocationQuarter' | 'rebalanceAllocations' | 'saveWriteBackSettings' | 'writeBackOverview' | 'checkWriteBack'
   | 'syncSettingsV2' | 'saveSyncSettingsV2' | 'workItemTypes' | 'azureFields' | 'azureStates'
@@ -78,6 +78,7 @@ export const roadmapDemoApi = {
   adminRoles: (projectId?: string) => call<RoadmapRole[]>('adminRoles', projectId ? [projectId] : []),
   roleCatalog: () => call<RoadmapRoleTemplate[]>('roleCatalog'),
   createRoleTemplate: (name: string, color?: string, assignment?: RoadmapRoleAssignment & { projectId: string }) => call<RoadmapRoleTemplate>('createRoleTemplate', [name, color, assignment]),
+  deleteRoleTemplate: (id: string) => call<{ deleted: boolean }>('deleteRoleTemplate', [id]),
   addRoleFromCatalog: (projectId: string, templateId: string, assignment: RoadmapRoleAssignment = {}) => call<RoadmapRole>('addRoleFromCatalog', [projectId, templateId, assignment]),
   createRole: (projectId: string, name: string, color?: string) => call<RoadmapRole>('createRole', [projectId, name, color]),
   updateRole: (id: string, input: { name?: string; color?: string } & RoadmapRoleAssignment) => call<RoadmapRole>('updateRole', [id, input]),

@@ -341,6 +341,8 @@ const liveRoadmapApi = {
       method: 'POST',
       body: JSON.stringify({ name, color, ...assignment }),
     }),
+  deleteRoleTemplate: (id: string) =>
+    apiFetch<{ deleted: boolean }>(`/roadmap/admin/role-catalog/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   addRoleFromCatalog: (projectId: string, templateId: string, assignment: RoadmapRoleAssignment = {}) =>
     apiFetch<RoadmapRole>('/roadmap/admin/roles/from-catalog', {
       method: 'POST',

@@ -909,6 +909,18 @@ export class RoadmapService {
     });
   }
 
+  /**
+   * Removes a role from the shared catalog. Project roles are independent copies
+   * (matched by name only), so roles already added to projects stay untouched.
+   */
+  async deleteRoleTemplate(id: string) {
+    const { count } = await this.prisma.roadmapRole.deleteMany({
+      where: { id, projectId: null },
+    });
+    if (!count) throw new NotFoundException('Роль не найдена в каталоге.');
+    return { deleted: true };
+  }
+
   async createRoleTemplate(
     dto: { name: string; color?: string; projectId?: string } & RoleAssignment,
   ) {

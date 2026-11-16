@@ -5,7 +5,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const writesState = new Set([
-  'saveIntegrationSettings', 'createRoleTemplate', 'addRoleFromCatalog', 'createRole',
+  'saveIntegrationSettings', 'createRoleTemplate', 'deleteRoleTemplate', 'addRoleFromCatalog', 'createRole',
   'updateRole', 'setRoleMembers', 'setRoleDefaultPerson', 'deleteRole',
   'saveAllocation', 'saveAllocationQuarter', 'rebalanceAllocations',
 ]);
