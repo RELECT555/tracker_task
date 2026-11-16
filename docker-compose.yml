@@ -3,6 +3,17 @@ services:
     image: postgres:16-alpine
     container_name: tracker-postgres
     restart: unless-stopped
+    # Урезанные настройки памяти: для одного разработчика/демо-стенда хватает с запасом
+    # (дефолт Postgres занимает заметно больше на воркспейсах с 2 GiB RAM).
+    command: >
+      postgres
+      -c shared_buffers=48MB
+      -c effective_cache_size=192MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=32MB
+      -c max_connections=30
+      -c autovacuum_max_workers=2
+    mem_limit: 320m
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     environment:

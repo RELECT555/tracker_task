@@ -11,9 +11,33 @@
 | Посмотреть лог приложения | `tail -f ~/roadmap.log` (выход — `Ctrl+C`, приложение продолжит работать) |
 | Проверить, что API и база живы | `curl -s http://localhost:3001/api/v1/health/ready` → должно быть `"db":true` |
 
-Скрипт [`scripts/coder-up.sh`](../scripts/coder-up.sh) делает всё сам: при `--pull` забирает код, затем запускает PostgreSQL в Docker, ставит зависимости, применяет миграции, перезапускает приложение с очищенным кэшем Next.js и ждёт, пока API ответит. В конце он печатает «Готово» или понятную ошибку.
+Скрипт [`scripts/coder-up.sh`](../scripts/coder-up.sh) делает всё сам: при `--pull` забирает код, затем запускает PostgreSQL в Docker, ставит зависимости, применяет миграции, перезапускает приложение (dev-режим с очищенным кэшем Vite или, с флагом `--prod`, production-сборку) и ждёт, пока API ответит. В конце он печатает «Готово» или понятную ошибку.
 
 После запуска откройте порт **3000** через **Open ports** в Coder и перейдите на `/roadmap`. Обновите страницу с `Ctrl+Shift+R`, чтобы браузер не показал старую версию. Логин — `admin@tracker.local`, пароль — значение `LOCAL_ADMIN_PASSWORD` из `apps/api/.env`.
+
+## Режим с минимальным потреблением памяти (`--prod`)
+
+Обычный запуск — dev-режим: `turbo` + `nest start --watch` (компилятор TypeScript живёт в памяти) + Vite dev-сервер. Вместе с PostgreSQL это легко занимает 1,5 GiB и больше, то есть почти весь воркспейс на 2 GiB.
+
+```bash
+cd ~/tracker_task && bash scripts/coder-up.sh --pull --prod
+```
+
+Что меняется:
+
+- приложение собирается один раз (`turbo build --concurrency=1`, куча Node ограничена 1 GiB), дальше работают только `node dist/src/main` (API, лимит кучи 256 MiB) и `vite preview` (статика фронта + прокси `/api/v1`, лимит 128 MiB). Ни watcher'ов, ни компиляции на лету;
+- PostgreSQL в [`docker-compose.yml`](../docker-compose.yml) урезан: `shared_buffers=48MB`, `max_connections=30`, лимит контейнера 320 MiB;
+- порт тот же, **3000**, адрес тот же.
+
+Минус: правки в коде не подхватываются на лету. После каждого изменения (или `git pull`) запускайте команду снова, пересборка занимает около минуты. Для разработки на самом воркспейсе используйте обычный `bash scripts/coder-up.sh`.
+
+Проверить, сколько реально занято:
+
+```bash
+free -m && ps -eo pid,rss,cmd --sort=-rss | head -8
+```
+
+Если сборка упирается в память (в логе `JavaScript heap out of memory` или процесс `Killed`), остановите приложение (`pkill -f "dist/src/main"; pkill -f vite`), запустите сборку ещё раз и затем `--prod`. Ещё лучше — увеличить RAM воркспейса в шаблоне Coder или собирать локально и не собирать на воркспейсе вовсе.
 
 ## Важно: данные не переживают перезапуск воркспейса
 
@@ -76,12 +100,11 @@ bash scripts/coder-up.sh
 | `Exit 254` у `npm run ...` | Команда запущена не из папки проекта | Сначала `cd ~/tracker_task` |
 | Скрипт пишет «есть незакоммиченные изменения» | На воркспейсе правили файлы | `git stash`, затем снова `bash scripts/coder-up.sh --pull` |
 | `Docker не отвечает` | Демон Docker не запущен | `sudo service docker start`, затем снова скрипт |
-| Предупреждение `Cross origin request ... allowedDevOrigins` | Особенность Next.js в dev-режиме за прокси Coder | Ничего, работе не мешает |
 
 ## Остановить приложение
 
 ```bash
-pkill -f "turbo dev"
+pkill -f "turbo dev"; pkill -f "dist/src/main"; pkill -f vite
 ```
 
 ```bash
