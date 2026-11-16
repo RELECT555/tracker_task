@@ -26,10 +26,7 @@ import {
   type AzureDevOpsCredentials,
 } from './roadmap-integration.service';
 import { recordImportOutcome } from './roadmap-import-health';
-import type {
-  AllocationSnapshot,
-  PlanChangeContext,
-} from './roadmap-plan-change';
+import type { PlanChangeContext } from './roadmap-plan-change';
 import { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import {
@@ -1587,7 +1584,7 @@ export class RoadmapService {
               })),
             });
           }
-          await this.recordPlanChanges(tx, context, before, [saved.id]);
+          await this.planChanges.recordAfter(tx, context, before, [saved.id]);
           return saved;
         },
         { isolationLevel: 'Serializable' },
@@ -1606,25 +1603,6 @@ export class RoadmapService {
       });
     if (!skipSync) await this.azureSync.onAllocationSaved(allocation.id);
     return { ...allocation, periods: dto.periods };
-  }
-
-  /** Reads the allocations after a write and logs how they differ from `before`. */
-  private async recordPlanChanges(
-    tx: Prisma.TransactionClient,
-    context: PlanChangeContext,
-    before: Map<string, { snapshot: AllocationSnapshot }>,
-    allocationIds: string[],
-  ) {
-    const after = await this.planChanges.read(tx, allocationIds);
-    await this.planChanges.record(
-      tx,
-      context,
-      [...after.values()].map(({ ref, snapshot }) => ({
-        ref,
-        before: before.get(ref.allocationId)?.snapshot ?? null,
-        after: snapshot,
-      })),
-    );
   }
 
   async rebalanceAllocations(ids: string[], context: PlanChangeContext) {
@@ -1709,7 +1687,7 @@ export class RoadmapService {
               });
             }
           }
-          await this.recordPlanChanges(tx, context, before, ids);
+          await this.planChanges.recordAfter(tx, context, before, ids);
           return balanced.map(({ id }) => id);
         },
         { isolationLevel: 'Serializable' },
@@ -1827,7 +1805,9 @@ export class RoadmapService {
               data: plannedMonths.map((month) => ({ allocationId, ...month })),
             });
           }
-          await this.recordPlanChanges(tx, context, before, [allocationId]);
+          await this.planChanges.recordAfter(tx, context, before, [
+            allocationId,
+          ]);
           return plannedMonths;
         },
         { isolationLevel: 'Serializable' },

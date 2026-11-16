@@ -124,6 +124,7 @@ function setup(type = 'Feature') {
   const planChanges = {
     read: jest.fn().mockResolvedValue(new Map()),
     record: jest.fn().mockResolvedValue(0),
+    recordAfter: jest.fn().mockResolvedValue(0),
   };
   const worker = (createTask = true) => {
     const service = new RoadmapAzureSyncService(

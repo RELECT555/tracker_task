@@ -1919,21 +1919,9 @@ export class RoadmapAzureSyncService {
             data: { hours: period.hours },
           });
       }
-      const after = await this.planChanges.read(tx, ids);
-      const roleHours = {
-        from: Math.round(currentTotal * 100) / 100,
-        to: target,
-      };
-      await this.planChanges.record(
-        tx,
-        context,
-        [...after.values()].map(({ ref, snapshot }) => ({
-          ref,
-          before: before.get(ref.allocationId)?.snapshot ?? null,
-          after: snapshot,
-          details: { roleHours },
-        })),
-      );
+      await this.planChanges.recordAfter(tx, context, before, ids, {
+        roleHours: { from: Math.round(currentTotal * 100) / 100, to: target },
+      });
     });
     const withTask = shares
       .filter(

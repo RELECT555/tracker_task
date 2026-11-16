@@ -70,6 +70,10 @@ function setup() {
       events.push('log change');
       return Promise.resolve(1);
     }),
+    recordAfter: jest.fn(() => {
+      events.push('log change');
+      return Promise.resolve(1);
+    }),
   };
   const service = new RoadmapService(
     { $transaction: transaction } as unknown as PrismaService,

@@ -344,3 +344,77 @@ describe('RoadmapPlanChangeService.read', () => {
     expect(tx.roadmapAllocation.findMany).not.toHaveBeenCalled();
   });
 });
+
+describe('RoadmapPlanChangeService.recordAfter', () => {
+  it('reads the after-state and records created, updated and deleted against before', async () => {
+    const { tx, service } = setup();
+    tx.roadmapAllocation.findMany.mockResolvedValue([
+      allocationRow({
+        estimatedHours: 24,
+        periods: [{ monthKey: '2026-10', hours: 24 }],
+      }),
+      { ...allocationRow({ estimatedHours: 4, periods: [] }), id: 'fresh' },
+    ]);
+    const before = new Map([
+      [
+        'allocation',
+        {
+          ref: { ...ref, azureTaskId: '77' },
+          snapshot: { ...snapshot, personEmail: null },
+        },
+      ],
+      ['gone', { ref: { ...ref, allocationId: 'gone' }, snapshot }],
+    ]);
+
+    const written = await service.recordAfter(
+      tx as never,
+      context,
+      before,
+      ['allocation', 'fresh', 'gone'],
+      { roleHours: { from: 16, to: 24 } },
+    );
+
+    expect(tx.roadmapAllocation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: { in: ['allocation', 'fresh', 'gone'] } },
+      }),
+    );
+    // The mocked createMany reports count 1; what matters is the rows it was given.
+    expect(written).toBe(1);
+    const { data } = tx.roadmapPlanChange.createMany.mock.calls[0][0];
+    expect(
+      data.map((entry: { allocationId: string; action: string }) => [
+        entry.allocationId,
+        entry.action,
+      ]),
+    ).toEqual([
+      ['allocation', 'updated'],
+      ['fresh', 'created'],
+      ['gone', 'deleted'],
+    ]);
+    expect(data[0]).toMatchObject({
+      before: { estimatedHours: 16 },
+      after: {
+        estimatedHours: 24,
+        months: [{ monthKey: '2026-10', hours: 24 }],
+      },
+      details: { roleHours: { from: 16, to: 24 } },
+    });
+    expect(data[2]).toMatchObject({ before: snapshot, after: Prisma.DbNull });
+  });
+
+  it('writes nothing when the after-state equals before', async () => {
+    const { tx, service } = setup();
+    const row = allocationRow({
+      estimatedHours: 8,
+      periods: [{ monthKey: '2026-10', hours: 8 }],
+    });
+    tx.roadmapAllocation.findMany.mockResolvedValue([row]);
+    const before = await service.read(tx as never, ['allocation']);
+
+    expect(
+      await service.recordAfter(tx as never, context, before, ['allocation']),
+    ).toBe(0);
+    expect(tx.roadmapPlanChange.createMany).not.toHaveBeenCalled();
+  });
+});

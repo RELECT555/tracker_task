@@ -83,6 +83,40 @@ export class RoadmapPlanChangeService {
     });
     return result.count;
   }
+
+  /**
+   * Reads `allocationIds` after a write and records how each differs from `before`:
+   * an id missing before was created, an id missing after was deleted.
+   */
+  async recordAfter(
+    tx: Prisma.TransactionClient,
+    context: PlanChangeContext,
+    before: Map<string, { ref: AllocationRef; snapshot: AllocationSnapshot }>,
+    allocationIds: string[],
+    details?: Record<string, unknown>,
+  ): Promise<number> {
+    const after = await this.read(tx, allocationIds);
+    const extra = details ? { details } : {};
+    const changes: PlanChangeInput[] = [...after.values()].map(
+      ({ ref, snapshot }) => ({
+        ref,
+        before: before.get(ref.allocationId)?.snapshot ?? null,
+        after: snapshot,
+        ...extra,
+      }),
+    );
+    for (const id of new Set(allocationIds)) {
+      const gone = before.get(id);
+      if (gone && !after.has(id))
+        changes.push({
+          ref: gone.ref,
+          before: gone.snapshot,
+          after: null,
+          ...extra,
+        });
+    }
+    return this.record(tx, context, changes);
+  }
 }
 
 function toJson(snapshot: AllocationSnapshot | null) {
