@@ -13,6 +13,7 @@ import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { ErrorNotice } from '@/shared/ui/error-notice';
 import { SearchableSelect, type SearchableSelectOption } from '@/shared/ui/searchable-select';
+import { Skeleton, SkeletonStatus } from '@/shared/ui/skeleton';
 import { AllocationAzurePanel } from './AllocationAzurePanel';
 
 type Tab = 'description' | 'plan' | 'children' | 'discussion' | 'history';
@@ -257,11 +258,11 @@ function CardContent({ titleId, projectId, externalId, planItem, taskAllocations
   if (card.isPending) {
     return <div className="flex h-full flex-col">
       {header()}
-      <div role="status" aria-label="Загружаем карточку из Azure DevOps" className="space-y-4 px-6 py-6">
-        <div className="h-7 w-3/4 animate-pulse rounded bg-muted" />
-        <div className="space-y-2.5 pt-2">{[0, 1, 2, 3].map((row) => <div key={row} className="h-5 w-1/2 animate-pulse rounded bg-muted/70" />)}</div>
-        <div className="h-28 animate-pulse rounded bg-muted/50" />
-      </div>
+      <SkeletonStatus label="Загружаем карточку из Azure DevOps" className="space-y-4 px-6 py-6">
+        <Skeleton className="h-7 w-3/4 rounded" />
+        <div className="space-y-2.5 pt-2">{[0, 1, 2, 3].map((row) => <Skeleton key={row} className="h-5 w-1/2 rounded bg-muted/70 dark:bg-foreground/[0.07]" />)}</div>
+        <Skeleton className="h-28 rounded bg-muted/50 dark:bg-foreground/5" />
+      </SkeletonStatus>
     </div>;
   }
   if (card.isError) {

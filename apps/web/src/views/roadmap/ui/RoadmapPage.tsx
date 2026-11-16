@@ -108,8 +108,8 @@ function memberParticipation(role: RoadmapRole, personExternalId: string) {
 }
 
 function AzureSyncMark({ allocation }: { allocation: RoadmapAllocation }) {
-  if (allocation.azureSyncStatus === 'pending') return <RefreshCw className="h-3 w-3 shrink-0 animate-spin text-amber-600 dark:text-amber-300" aria-label="Отправляется в Azure DevOps" />;
-  if (allocation.azureSyncStatus === 'sending') return <RefreshCw className="h-3 w-3 shrink-0 animate-spin text-sky-600 dark:text-sky-300" aria-label="Задача отправляется в Azure DevOps" />;
+  if (allocation.azureSyncStatus === 'pending') return <RefreshCw className="h-3 w-3 shrink-0 motion-safe:animate-spin text-amber-600 dark:text-amber-300" aria-label="Отправляется в Azure DevOps" />;
+  if (allocation.azureSyncStatus === 'sending') return <RefreshCw className="h-3 w-3 shrink-0 motion-safe:animate-spin text-sky-600 dark:text-sky-300" aria-label="Задача отправляется в Azure DevOps" />;
   if (allocation.azureSyncStatus === 'error') return <AlertCircle className="h-3 w-3 shrink-0 text-destructive" aria-label="Ошибка отправки в Azure DevOps" />;
   if (allocation.azureSyncStatus === 'conflict') return <AlertTriangle className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-300" aria-label="Конфликт с изменением в Azure DevOps" />;
   if (allocation.azureSyncStatus === 'synced') return null;
@@ -1070,7 +1070,7 @@ export function RoadmapPage() {
                 disabled={!childCount}
                 onClick={onToggle}
                 data-plan-toggle
-                className="-mt-1 size-7 text-muted-foreground hover:text-foreground focus-visible:ring-ring motion-reduce:transition-none motion-reduce:active:scale-100"
+                className="-mt-1 size-7 text-muted-foreground hover:text-foreground focus-visible:ring-ring motion-reduce:transition-none"
               >
                 {collapsed ? <ChevronRight aria-hidden="true" className="size-4" /> : <ChevronDown aria-hidden="true" className="size-4" />}
               </Button>
@@ -1231,7 +1231,7 @@ export function RoadmapPage() {
               aria-label={`${standaloneExpanded ? 'Свернуть' : 'Развернуть'}: ${label}`}
               onClick={() => setStandaloneExpanded((value) => !value)}
               data-plan-toggle
-              className="-mt-1 size-7 text-muted-foreground hover:text-foreground focus-visible:ring-ring motion-reduce:transition-none motion-reduce:active:scale-100"
+              className="-mt-1 size-7 text-muted-foreground hover:text-foreground focus-visible:ring-ring motion-reduce:transition-none"
             >
               {standaloneExpanded ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronRight aria-hidden="true" className="size-4" />}
             </Button>

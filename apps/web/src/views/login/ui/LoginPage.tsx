@@ -118,7 +118,7 @@ export function LoginPage() {
               </div>
             </div>
             {errorMessage ? <p id="login-error" role="alert" className="rounded-lg border border-rose-300/15 bg-rose-300/5 px-3 py-2.5 text-sm leading-5 text-rose-300">{errorMessage}</p> : null}
-            <Button type="submit" className="mt-2 h-12 w-full justify-between rounded-lg bg-violet-300 px-4 font-semibold text-[#161122] shadow-none transition-[background-color,transform] hover:bg-violet-200 focus-visible:ring-violet-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e0f16] motion-reduce:active:scale-100" disabled={isLoggingIn}>
+            <Button type="submit" className="mt-2 h-12 w-full justify-between rounded-lg bg-violet-300 px-4 font-semibold text-[#161122] shadow-none transition-[background-color,transform] hover:bg-violet-200 focus-visible:ring-violet-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e0f16]" disabled={isLoggingIn}>
               <span>{isLoggingIn ? 'Выполняется вход…' : 'Войти в пространство'}</span>
               {isLoggingIn ? <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true" /> : <ArrowRight className="size-4" aria-hidden="true" />}
             </Button>
