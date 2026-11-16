@@ -1530,7 +1530,7 @@ export function RoadmapPage() {
                       writeEnabled={Boolean(cardPlan?.azure?.writeBackEnabled)}
                     /> : null}
                     {roadmapProjectId && changesLoaded ? <PlanChangesSheet
-                      key={roadmapProjectId}
+                      key={`changes:${roadmapProjectId}`}
                       projectId={roadmapProjectId}
                       open={changesOpen}
                       onClose={() => setChangesOpen(false)}
@@ -1538,7 +1538,7 @@ export function RoadmapPage() {
                       roles={roles}
                     /> : null}
                     {!demoMode && roadmapProjectId ? <AgentPanel
-                      key={roadmapProjectId}
+                      key={`agent:${roadmapProjectId}`}
                       projectId={roadmapProjectId}
                       quarterKey={currentQuarterKey}
                       canEditPlan={canEditPlan}

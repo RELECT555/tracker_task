@@ -77,17 +77,9 @@ export const tourSteps: readonly TourStep[] = [
     description: 'Здесь подключается Azure DevOps, импортируются пользователи, настраиваются роли и выдаётся доступ к проектам. Начните с раздела «Интеграции».',
   },
   {
-    id: 'theme',
-    route: routes.roadmapAnalytics,
-    target: 'theme',
-    title: 'Тема оформления',
-    description: 'Переключает светлую, тёмную и системную тему.',
-  },
-  {
     id: 'done',
     route: routes.roadmapAnalytics,
-    target: 'tour-launcher',
     title: 'Готово',
-    description: 'Тур всегда можно пройти снова: нажмите эту кнопку или «Тур по продукту» на главной.',
+    description: 'Тему оформления и этот тур можно найти в меню профиля. Тур также запускается кнопкой «Тур по продукту» на главной.',
   },
 ];

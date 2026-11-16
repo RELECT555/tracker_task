@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useTheme } from 'next-themes';
-import { Activity, ChartNoAxesCombined, ChevronDown, ChevronsUpDown, GitBranch, House, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Settings2, Sun, type LucideIcon } from 'lucide-react';
+import { Activity, ChartNoAxesCombined, ChevronDown, CircleHelp, ChevronsUpDown, GitBranch, House, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Settings2, Sun, type LucideIcon } from 'lucide-react';
 import { RoadmapProjectSelection } from '@/entities/roadmap/model/roadmap-project-selection';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { ProductTour } from '@/features/product-tour/ui/ProductTour';
-import { TourLauncherIcon } from '@/features/product-tour/ui/TourLauncher';
+import { productTour } from '@/features/product-tour/model/tour-store';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { roadmapAdminSections } from '@/shared/config/roadmap-admin-sections';
 import { routes } from '@/shared/config/routes';
@@ -47,7 +47,17 @@ function ProfileMenu({ auth, mobile = false, collapsed = false }: {
   const menuId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const compact = mobile || collapsed;
+  const { theme, setTheme } = useTheme();
+  const [themeMounted, setThemeMounted] = useState(false);
+  const themeLabel = !themeMounted ? 'Системная' : theme === 'dark' ? 'Тёмная' : theme === 'light' ? 'Светлая' : 'Системная';
+  const ThemeIcon = !themeMounted ? Monitor : theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
+  const cycleTheme = () => {
+    const order = ['light', 'dark', 'system'] as const;
+    const index = order.indexOf((theme as (typeof order)[number]) ?? 'system');
+    setTheme(order[(index + 1) % order.length]);
+  };
 
+  useEffect(() => setThemeMounted(true), []);
   useEffect(() => setMenuOpen(false), [pathname]);
 
   if (!user) return null;
@@ -77,7 +87,13 @@ function ProfileMenu({ auth, mobile = false, collapsed = false }: {
           <p className="truncate text-sm font-medium text-sidebar-foreground">{displayName}</p>
           <p className="truncate text-xs text-sidebar-muted">{displayEmail}</p>
         </div> : null}
-        <button type="button" onClick={() => { setMenuOpen(false); logout(); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50"><LogOut className="h-4 w-4" strokeWidth={1.5} />Выйти</button>
+        <button type="button" onClick={() => { setMenuOpen(false); productTour.start(); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50"><CircleHelp className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />Тур по продукту</button>
+        <button type="button" onClick={cycleTheme} title="Переключить тему" aria-label={`Тема: ${themeLabel}. Нажмите, чтобы переключить`} className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50">
+          <ThemeIcon className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+          <span>Тема</span>
+          <span className="ml-auto text-xs text-sidebar-muted">{themeLabel}</span>
+        </button>
+        <button type="button" onClick={() => { setMenuOpen(false); logout(); }} className="flex w-full items-center gap-2 border-t border-sidebar-border/40 px-3 py-2.5 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50"><LogOut className="h-4 w-4" strokeWidth={1.5} />Выйти</button>
       </div> : null}
     </div>
   );
@@ -125,8 +141,6 @@ function NavSectionLabel({ label, collapsed, first = false }: { label: string; c
 export function RoadmapFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const auth = useAuth();
-  const { theme, setTheme } = useTheme();
-  const [themeMounted, setThemeMounted] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const pageContent = useRef<HTMLDivElement>(null);
   const navList = useRef<HTMLDivElement>(null);
@@ -214,7 +228,6 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
     return () => observer.disconnect();
   }, [navPath, sidebarCollapsed, adminMenuOpen, isAdmin]);
 
-  useEffect(() => setThemeMounted(true), []);
   useEffect(() => {
     try {
       setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true');
@@ -236,13 +249,6 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
   };
   const sidebarToggleLabel = sidebarCollapsed ? 'Развернуть боковую панель' : 'Свернуть боковую панель';
   const SidebarToggleIcon = sidebarCollapsed ? PanelLeftOpen : PanelLeftClose;
-  const themeLabel = !themeMounted ? 'Системная' : theme === 'dark' ? 'Тёмная' : theme === 'light' ? 'Светлая' : 'Системная';
-  const ThemeIcon = !themeMounted ? Monitor : theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
-  const cycleTheme = () => {
-    const order = ['light', 'dark', 'system'] as const;
-    const index = order.indexOf((theme as (typeof order)[number]) ?? 'system');
-    setTheme(order[(index + 1) % order.length]);
-  };
   const breadcrumbs = [
     { label: 'Главная', href: routes.home },
     ...(isPlanPage ? [{ label: 'План проекта' }] : []),
@@ -384,10 +390,6 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
               </Link>
             ) : null}
             <NotificationBell />
-            <TourLauncherIcon />
-            <button type="button" data-tour="theme" onClick={cycleTheme} title={`Тема: ${themeLabel}`} aria-label={`Тема: ${themeLabel}. Нажмите, чтобы переключить`} className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
-              <ThemeIcon className="size-4" aria-hidden="true" />
-            </button>
             <ProfileMenu auth={auth} mobile />
           </div>
           {pendingPath ? <span aria-hidden="true" className="roadmap-nav-progress pointer-events-none absolute inset-x-0 -bottom-px h-0.5 bg-primary" /> : null}
