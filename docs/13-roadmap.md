@@ -79,6 +79,14 @@ The PAT needs **Work Items: Read & Write** for write-back.
 
 Webhook events are batched per project and re-read from Azure DevOps (the payload is not trusted for field values). Deleted work items without assignments are removed locally; deleted work items with assignments are kept with state `Deleted`. Roadmap's own Task writes also arrive as webhook events and only refresh local data, so there is no write loop.
 
+## Журнал изменений
+
+Roadmap records every change to an assignment together with the change itself: creating or deleting an assignment, and changing its hours, assignee, quarter or monthly split. Each entry shows who changed it, when, and the values before → after. The source is the plan, the AI assistant (the entry names the user who applied the suggestion) or Azure DevOps. Entries that came from Azure DevOps have no author: they are signed **Azure DevOps** and link to the Task, where Azure shows who made the change.
+
+Open the **История** tab of a Feature or Epic card to see the entries for that work item, or click **Журнал изменений** on the plan page for the whole project. The project feed can be filtered by person and period; entries from one action (for example a rebalance) are grouped. The same data is available at `GET /roadmap/projects/:projectId/changes` for anyone with read access to the project.
+
+The log does not record sync statuses, time logging, role hours entered on a Feature that has no assignments for that role, or changes to roles, role members and settings. Saving without a change and an import that changes nothing leave no entries. There is no undo yet.
+
 ## Local demo data
 
 For local testing without an Azure DevOps connection, run `npm run db:seed:roadmap-mocks --workspace @tracker/api` to add five demo people and four demo roles to the `OKR` project when available (otherwise the most recently synced project). Pass a project name after `--` to choose a different target, for example `npm run db:seed:roadmap-mocks --workspace @tracker/api -- CRM 2.0`. Demo rows are marked in the UI and are excluded from Azure sync deactivation.
