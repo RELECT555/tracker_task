@@ -25,6 +25,7 @@ import {
   RoadmapIntegrationService,
   type AzureDevOpsCredentials,
 } from './roadmap-integration.service';
+import { recordImportOutcome } from './roadmap-import-health';
 import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import {
   azureOrganizationName,
@@ -230,17 +231,41 @@ export class RoadmapService {
     }
   }
 
-  syncProject(externalId: string) {
-    return this.runProjectImport(externalId, async () => {
-      const credentials = await this.integration.getCredentials();
-      const catalog = await this.catalog.syncProject(externalId, credentials);
-      this.importer.invalidateFieldCatalog();
-      const importedWorkItems = await this.importProjectWorkItems(
-        { id: catalog.projectId, externalId },
-        credentials,
-      );
-      return { ...catalog, importedWorkItems };
-    });
+  async syncProject(externalId: string) {
+    let projectId: string | undefined;
+    try {
+      const result = await this.runProjectImport(externalId, async () => {
+        const credentials = await this.integration.getCredentials();
+        const catalog = await this.catalog.syncProject(externalId, credentials);
+        projectId = catalog.projectId;
+        this.importer.invalidateFieldCatalog();
+        const importedWorkItems = await this.importProjectWorkItems(
+          { id: catalog.projectId, externalId },
+          credentials,
+        );
+        return { ...catalog, importedWorkItems };
+      });
+      await recordImportOutcome(this.prisma, result.projectId, {
+        ok: true,
+        changed: result.importedWorkItems > 0,
+        source: 'poll',
+      });
+      return result;
+    } catch (error) {
+      // The failure may come before the project is known (catalog sync).
+      projectId ??= (
+        await this.prisma.roadmapProject.findUnique({
+          where: { externalId },
+          select: { id: true },
+        })
+      )?.id;
+      if (projectId)
+        await recordImportOutcome(this.prisma, projectId, {
+          ok: false,
+          error,
+        });
+      throw error;
+    }
   }
 
   @Cron('*/5 * * * *', { waitForCompletion: true })
@@ -265,10 +290,20 @@ export class RoadmapService {
       )
         continue;
       try {
-        await this.runProjectImport(project.externalId, () =>
-          this.importProjectWorkItems(project, credentials),
+        const importedWorkItems = await this.runProjectImport(
+          project.externalId,
+          () => this.importProjectWorkItems(project, credentials),
         );
+        await recordImportOutcome(this.prisma, project.id, {
+          ok: true,
+          changed: importedWorkItems > 0,
+          source: 'poll',
+        });
       } catch (error) {
+        await recordImportOutcome(this.prisma, project.id, {
+          ok: false,
+          error,
+        });
         const status =
           error instanceof AzureDevOpsHttpError
             ? ` (HTTP ${error.httpStatus})`

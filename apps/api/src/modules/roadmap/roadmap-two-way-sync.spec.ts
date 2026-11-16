@@ -395,6 +395,10 @@ function syncSetup(
     ...rowOverrides,
   };
   const prisma = {
+    roadmapAzureProjectState: {
+      upsert: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     roadmapAllocation: {
       findUnique: jest.fn().mockImplementation(() => ({ ...row })),
       updateMany: jest.fn(

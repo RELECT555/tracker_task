@@ -55,6 +55,10 @@ function setup(pushedHours: number) {
   }
   const request = jest.fn().mockResolvedValue(undefined);
   const prisma = {
+    roadmapAzureProjectState: {
+      upsert: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     roadmapAllocation: {
       findUnique: jest.fn().mockImplementation(() => ({ ...row })),
       updateMany: jest

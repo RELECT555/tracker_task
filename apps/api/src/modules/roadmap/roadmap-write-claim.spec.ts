@@ -38,6 +38,10 @@ function setup(type = 'Feature') {
   const importer = { importWorkItems: jest.fn().mockResolvedValue([]) };
   const self: { client?: unknown } = {};
   const prisma = {
+    roadmapAzureProjectState: {
+      upsert: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     roadmapAllocation: {
       findUnique: jest.fn().mockImplementation(() => ({ ...row })),
       updateMany: jest

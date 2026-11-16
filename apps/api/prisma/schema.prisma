@@ -102,6 +102,8 @@ model User {
 
   notifications Notification[] @ignore
 
+  roadmapNotifications RoadmapNotification[]
+
   @@index([orgUnitId])
   @@index([managerId])
   @@index([email])
@@ -391,6 +393,7 @@ model RoadmapProject {
   roles      RoadmapRole[]
   azureState RoadmapAzureProjectState?
   access     RoadmapProjectAccess[]
+  alerts     RoadmapAlert[]
 
   @@map("roadmap_projects")
 }
@@ -417,10 +420,53 @@ model RoadmapAzureProjectState {
   lastCheckResult  Json?          @map("last_check_result")
   lastWebhookAt    DateTime?      @map("last_webhook_at") @db.Timestamptz()
   settingsOverride Json?          @map("settings_override")
+  importFailingSince  DateTime?   @map("import_failing_since") @db.Timestamptz()
+  lastImportError     String?     @map("last_import_error") @db.VarChar(500)
+  lastImportFailedAt  DateTime?   @map("last_import_failed_at") @db.Timestamptz()
+  lastImportOkAt      DateTime?   @map("last_import_ok_at") @db.Timestamptz()
+  lastImportChangedAt DateTime?   @map("last_import_changed_at") @db.Timestamptz()
   updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz()
   project          RoadmapProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("roadmap_azure_project_state")
+}
+
+model RoadmapAlert {
+  id            String                @id @default(uuid()) @db.Uuid
+  key           String                @unique @db.VarChar(150)
+  kind          String                @db.VarChar(50)
+  projectId     String?               @map("project_id") @db.Uuid
+  state         String                @db.VarChar(20)
+  generation    Int                   @default(0)
+  openedAt      DateTime?             @map("opened_at") @db.Timestamptz()
+  resolvedAt    DateTime?             @map("resolved_at") @db.Timestamptz()
+  resolution    String?               @db.VarChar(20)
+  clearSince    DateTime?             @map("clear_since") @db.Timestamptz()
+  details       Json
+  updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamptz()
+  project       RoadmapProject?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  notifications RoadmapNotification[]
+
+  @@map("roadmap_alerts")
+}
+
+model RoadmapNotification {
+  id         String       @id @default(uuid()) @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  alertId    String       @map("alert_id") @db.Uuid
+  generation Int
+  kind       String       @db.VarChar(50)
+  projectId  String?      @map("project_id") @db.Uuid
+  title      String       @db.VarChar(200)
+  body       String?      @db.VarChar(1000)
+  readAt     DateTime?    @map("read_at") @db.Timestamptz()
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alert      RoadmapAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@unique([alertId, generation, userId])
+  @@index([userId, readAt, createdAt(sort: Desc)])
+  @@map("roadmap_notifications")
 }
 
 model RoadmapWorkItem {

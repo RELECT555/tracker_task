@@ -22,6 +22,7 @@ import {
   RoadmapWorkItemImportService,
 } from './roadmap-work-item-import.service';
 import { azureOrganizationName } from './roadmap-work-item-create.service';
+import { recordImportOutcome } from './roadmap-import-health';
 import { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
 import {
   decideEstimate,
@@ -1177,11 +1178,7 @@ export class RoadmapAzureSyncService {
           return;
         }
       }
-      await this.importer.importWorkItems(
-        project,
-        [Number(taskId)],
-        credentials,
-      );
+      await this.importRecorded(project.id, [Number(taskId)], credentials);
       await finish({
         azureSyncStatus: 'synced',
         azureSyncError: null,
@@ -2002,11 +1999,7 @@ export class RoadmapAzureSyncService {
         );
         if (quick) await this.mergeStoredFields(item, written);
         else
-          await this.importer.importWorkItems(
-            { id: item.projectId },
-            [feature.id],
-            credentials,
-          );
+          await this.importRecorded(item.projectId, [feature.id], credentials);
         return;
       } catch (error) {
         // Someone edited the feature at the same moment: read it again and write on top.
@@ -2148,17 +2141,41 @@ export class RoadmapAzureSyncService {
     for (const [projectId, ids] of batches) {
       try {
         const credentials = await this.integration.getCredentials();
-        await this.importer.importWorkItems(
-          { id: projectId },
-          [...ids],
-          credentials,
-        );
+        await this.importRecorded(projectId, [...ids], credentials);
       } catch (error) {
         this.logger.error(
           `Azure DevOps webhook import failed for project ${projectId}`,
           error instanceof Error ? error.stack : error,
         );
       }
+    }
+  }
+
+  /**
+   * Imports specific work items and records the outcome for import health.
+   * Only the failure matters here: these imports re-read items we just wrote or
+   * were told about, so a success never counts as a poll that found changes.
+   */
+  private async importRecorded(
+    projectId: string,
+    ids: number[],
+    credentials: AzureDevOpsCredentials,
+  ) {
+    try {
+      const imported = await this.importer.importWorkItems(
+        { id: projectId },
+        ids,
+        credentials,
+      );
+      await recordImportOutcome(this.prisma, projectId, {
+        ok: true,
+        changed: false,
+        source: 'webhook',
+      });
+      return imported;
+    } catch (error) {
+      await recordImportOutcome(this.prisma, projectId, { ok: false, error });
+      throw error;
     }
   }
 

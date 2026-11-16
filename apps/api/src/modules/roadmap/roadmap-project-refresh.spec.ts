@@ -21,11 +21,16 @@ const credentials = {
 
 function setup(projects = [project]) {
   const prisma = {
+    roadmapAzureProjectState: {
+      upsert: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     $transaction: jest.fn(),
     roadmapRole: { findMany: jest.fn().mockResolvedValue([]) },
     roadmapWorkItem: { findMany: jest.fn().mockResolvedValue([]) },
     roadmapProject: {
       findMany: jest.fn().mockResolvedValue(projects),
+      findUnique: jest.fn().mockResolvedValue({ id: project.id }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
   };
@@ -209,5 +214,92 @@ describe('Scheduled Roadmap project refresh', () => {
       { requestTimeoutMs: expect.any(Number) },
     );
     expect(prisma.roadmapProject.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('records a poll that imported changes as import health', async () => {
+    const { service, prisma, integration, importer } = setup();
+    integration.requestJson.mockResolvedValueOnce({ workItems: [{ id: 7 }] });
+    importer.importWorkItems.mockResolvedValueOnce([{ id: 7 }]);
+
+    await service.refreshImportedProjects();
+
+    expect(prisma.roadmapAzureProjectState.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { projectId: project.id },
+        update: {
+          importFailingSince: null,
+          lastImportOkAt: now,
+          lastImportChangedAt: now,
+        },
+      }),
+    );
+  });
+
+  it('records a quiet poll without touching lastImportChangedAt', async () => {
+    const { service, prisma } = setup();
+
+    await service.refreshImportedProjects();
+
+    const [call] = prisma.roadmapAzureProjectState.upsert.mock.calls;
+    expect(call[0].update).toEqual({
+      importFailingSince: null,
+      lastImportOkAt: now,
+    });
+  });
+
+  it('records a failed scheduled import against its project', async () => {
+    const { service, prisma, integration, importer } = setup();
+    integration.requestJson.mockResolvedValueOnce({ workItems: [{ id: 7 }] });
+    importer.importWorkItems.mockRejectedValueOnce(
+      new Error('failed to save work item'),
+    );
+
+    await service.refreshImportedProjects();
+
+    expect(prisma.roadmapAzureProjectState.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { projectId: project.id },
+        update: {
+          lastImportFailedAt: now,
+          lastImportError: 'failed to save work item',
+        },
+      }),
+    );
+  });
+
+  it('records a failed manual import even when the catalog fails first', async () => {
+    const { service, prisma, catalog } = setup();
+    catalog.syncProject.mockRejectedValueOnce(new Error('catalog unavailable'));
+
+    await expect(service.syncProject(project.externalId)).rejects.toThrow(
+      'catalog unavailable',
+    );
+
+    expect(prisma.roadmapProject.findUnique).toHaveBeenCalledWith({
+      where: { externalId: project.externalId },
+      select: { id: true },
+    });
+    expect(prisma.roadmapAzureProjectState.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { projectId: project.id },
+        update: expect.objectContaining({
+          lastImportError: 'catalog unavailable',
+        }),
+      }),
+    );
+  });
+
+  it('records a successful manual import as a poll', async () => {
+    const { service, prisma, integration, importer } = setup();
+    integration.requestJson.mockResolvedValueOnce({ workItems: [{ id: 7 }] });
+    importer.importWorkItems.mockResolvedValueOnce([{ id: 7 }]);
+
+    await service.syncProject(project.externalId);
+
+    expect(prisma.roadmapAzureProjectState.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ lastImportChangedAt: now }),
+      }),
+    );
   });
 });
