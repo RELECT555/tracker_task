@@ -31,6 +31,7 @@ export class AppModule implements NestModule {
     consumer
       .apply(AuthMiddleware)
       .exclude(
+        { path: 'auth/config', method: RequestMethod.GET },
         { path: 'auth/login', method: RequestMethod.POST },
         { path: 'auth/refresh', method: RequestMethod.POST },
         // Azure DevOps service hooks authenticate with the shared webhook secret instead.

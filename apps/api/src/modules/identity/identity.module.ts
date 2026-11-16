@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoginHandler } from './application/commands/login.handler';
 import { RefreshTokenHandler } from './application/commands/refresh-token.handler';
+import { GetAuthConfigHandler } from './application/queries/get-auth-config.handler';
 import { GetMeHandler } from './application/queries/get-me.handler';
 import { IsActiveAdminHandler } from './application/queries/is-active-admin.handler';
 import { authProviderOf } from '../../shared/infrastructure/config/auth-config';
@@ -33,6 +34,7 @@ import { AuthController } from './presentation/auth.controller';
     LoginHandler,
     RefreshTokenHandler,
     GetMeHandler,
+    GetAuthConfigHandler,
     IsActiveAdminHandler,
     AuthUserResolver,
     {

@@ -143,6 +143,12 @@ describe('Roadmap authentication and project scope (e2e)', () => {
       .expect(401);
   });
 
+  it('serves the sign-in provider without a session', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/auth/config')
+      .expect(200, { provider: 'local' });
+  });
+
   it('issues a session only for the local administrator using the configured password', async () => {
     const server = app.getHttpServer();
     await request(server)
