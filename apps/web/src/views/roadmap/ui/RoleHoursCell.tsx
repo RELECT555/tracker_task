@@ -3,6 +3,7 @@
 import { useState, type KeyboardEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { LoaderCircle } from 'lucide-react';
+import { invalidatePlanChanges } from '@/entities/roadmap/api/planChangesApi';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { cn } from '@/shared/lib/utils';
 
@@ -27,7 +28,10 @@ export function RoleHoursCell({ workItemId, roleId, roleName, quarterKey, hours,
   const save = useMutation({
     mutationFn: (value: number) => roadmapApi.setRoleHours(workItemId, roleId, value, quarterKey),
     // Returned, so the typed value stays on screen until the refreshed plan has arrived.
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan'] }),
+    onSuccess: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan'] }),
+      invalidatePlanChanges(queryClient),
+    ]),
   });
   const shown = save.isPending && typeof save.variables === 'number' ? save.variables : hours;
 

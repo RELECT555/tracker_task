@@ -4,6 +4,7 @@ import type { IsActiveAdminHandler } from '../identity/application/queries/is-ac
 import type { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
 import { createAzureSyncServices } from './roadmap-azure-sync.testing';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
+import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 
 function setup() {
@@ -25,6 +26,7 @@ function setup() {
     importer as unknown as RoadmapWorkItemImportService,
     {} as IsActiveAdminHandler,
     {} as RoadmapAllocationAzureService,
+    {} as RoadmapPlanChangeService,
   ).webhooks;
   service['pendingImports'].set('project-1', new Set([7]));
   return { prisma, importer, service };

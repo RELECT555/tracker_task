@@ -27,6 +27,7 @@ import { RoadmapProjectAccessController } from './roadmap-project-access.control
 import { RoadmapProjectAccessService } from './roadmap-project-access.service';
 import { RoadmapTablePreferencesController } from './roadmap-table-preferences.controller';
 import { RoadmapTablePreferencesService } from './roadmap-table-preferences.service';
+import { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import { RoadmapAlertsService } from './roadmap-alerts.service';
 import { RoadmapNotificationsController } from './roadmap-notifications.controller';
 import { RoadmapNotificationsService } from './roadmap-notifications.service';
@@ -69,12 +70,14 @@ import { RoadmapSyncProblemsService } from './roadmap-sync-problems.service';
     RoadmapAlertsService,
     RoadmapNotificationsService,
     RoadmapSyncProblemsService,
+    RoadmapPlanChangeService,
     AdminRoleGuard,
   ],
   exports: [
     RoadmapService,
     RoadmapAllocationService,
     RoadmapProjectAccessService,
+    RoadmapPlanChangeService,
   ],
 })
 export class RoadmapModule {}

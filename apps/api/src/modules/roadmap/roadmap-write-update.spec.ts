@@ -3,6 +3,7 @@ import type { IsActiveAdminHandler } from '../identity/application/queries/is-ac
 import type { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
 import { createAzureSyncServices } from './roadmap-azure-sync.testing';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
+import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import { normalizeWriteBackSettings } from './roadmap-write-back.settings';
 
@@ -101,6 +102,7 @@ function setup(pushedHours: number) {
     } as unknown as RoadmapWorkItemImportService,
     {} as IsActiveAdminHandler,
     {} as RoadmapAllocationAzureService,
+    {} as RoadmapPlanChangeService,
   ).sync;
   const patches = () =>
     request.mock.calls.map(

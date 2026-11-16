@@ -7,6 +7,8 @@ import {
   AzureDevOpsHttpError,
   type RoadmapIntegrationService,
 } from './roadmap-integration.service';
+import { planChangeContext } from './roadmap-plan-change';
+import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import type {
   AzureWorkItem,
   RoadmapWorkItemImportService,
@@ -97,6 +99,7 @@ function allocationService(
         updates.push(data);
         return Promise.resolve({ count: 1 });
       }),
+      delete: jest.fn().mockResolvedValue(row),
     },
     roadmapPeriodAllocation: {
       update: jest.fn((input: unknown) => {
@@ -116,7 +119,6 @@ function allocationService(
       findMany: jest.fn().mockResolvedValue([row]),
       findUnique: jest.fn().mockResolvedValue(row),
       findFirst: jest.fn().mockResolvedValue(null),
-      delete: jest.fn().mockResolvedValue(row),
     },
     roadmapPerson: { findFirst: jest.fn().mockResolvedValue(null) },
     roadmapRoleMember: { findFirst: jest.fn().mockResolvedValue(null) },
@@ -158,6 +160,12 @@ function allocationService(
     onImported: jest.fn(),
     importWorkItems: jest.fn().mockResolvedValue([]),
   };
+  // The log itself is covered in roadmap-plan-change-paths.spec.ts.
+  const planChanges = {
+    read: jest.fn().mockResolvedValue(new Map()),
+    record: jest.fn().mockResolvedValue(0),
+    recordAfter: jest.fn().mockResolvedValue(0),
+  };
   const service = new RoadmapAllocationAzureService(
     prisma as unknown as PrismaService,
     integration as unknown as RoadmapIntegrationService,
@@ -165,6 +173,7 @@ function allocationService(
     {
       execute: jest.fn().mockResolvedValue(false),
     } as unknown as IsActiveAdminHandler,
+    planChanges as unknown as RoadmapPlanChangeService,
   );
   const body = (call = 0) =>
     JSON.parse(
@@ -340,9 +349,11 @@ describe('removing an allocation', () => {
       removalPolicy: { action: 'delete' },
     });
 
+    const actor = { id: 'u', email: 'u@example.test' };
     const result = await service.deleteAllocation(
-      { id: 'u', email: 'u@example.test' },
+      actor,
       'allocation',
+      planChangeContext(actor, 'plan'),
     );
 
     const [url, init] = request.mock.calls[0] as [string, { method: string }];
@@ -361,9 +372,11 @@ describe('removing an allocation', () => {
   it('keeps the Task by default', async () => {
     const { service, request } = allocationService();
 
+    const actor = { id: 'u', email: 'u@example.test' };
     const result = await service.deleteAllocation(
-      { id: 'u', email: 'u@example.test' },
+      actor,
       'allocation',
+      planChangeContext(actor, 'plan'),
     );
 
     expect(request).not.toHaveBeenCalled();
@@ -461,6 +474,7 @@ function syncSetup(
     } as unknown as RoadmapWorkItemImportService,
     {} as IsActiveAdminHandler,
     { applyRemoval } as unknown as RoadmapAllocationAzureService,
+    {} as RoadmapPlanChangeService,
   ).sync;
   return {
     row,

@@ -406,6 +406,12 @@ describe('AgentService', () => {
         estimatedHours: 60,
         periods: [expect.objectContaining({ monthKey: '2026-10', hours: 10 })],
       }),
+      undefined,
+      expect.objectContaining({
+        source: 'ai',
+        actor: { id: actor.id, email: actor.email },
+        batchId: expect.any(String),
+      }),
     );
   });
 });

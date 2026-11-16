@@ -7,6 +7,7 @@ import { RoadmapAzureSyncStatusService } from './roadmap-azure-sync-status.servi
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import { RoadmapAzureTaskService } from './roadmap-azure-task.service';
 import { RoadmapAzureWebhookService } from './roadmap-azure-webhook.service';
+import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import { RoadmapWriteBackAccessService } from './roadmap-write-back-access.service';
@@ -21,6 +22,7 @@ export function createAzureSyncServices(
   importer: RoadmapWorkItemImportService,
   isActiveAdmin: IsActiveAdminHandler,
   allocationAzure: RoadmapAllocationAzureService,
+  planChanges = {} as RoadmapPlanChangeService,
 ) {
   const access = new RoadmapWriteBackAccessService(integration, isActiveAdmin);
   const azureProcess = new RoadmapAzureProcessService(prisma, integration);
@@ -40,6 +42,7 @@ export function createAzureSyncServices(
       azureProcess,
       tasks,
       featureFields,
+      planChanges,
     ),
     status: new RoadmapAzureSyncStatusService(
       prisma,

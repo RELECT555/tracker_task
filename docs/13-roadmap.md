@@ -79,6 +79,13 @@ The PAT needs **Work Items: Read & Write** for write-back.
 
 Webhook events are batched per project and re-read from Azure DevOps (the payload is not trusted for field values). Deleted work items without assignments are removed locally; deleted work items with assignments are kept with state `Deleted`. Roadmap's own Task writes also arrive as webhook events and only refresh local data, so there is no write loop.
 
+## Журнал изменений
+
+Roadmap records every change to an assignment together with the change itself: creating or deleting an assignment, and changing its hours, assignee, quarter or monthly split. Each entry shows who changed it, when, and the values before → after. The source is the plan, the AI assistant (the entry names the user who applied the suggestion) or Azure DevOps. Entries that came from Azure DevOps link to the Task, where Azure shows who made the change. Changes pulled from Azure on their own have no author and are signed **Azure DevOps**; changes taken with **Принять из Azure** show the user who clicked it. When Azure adjusts an estimate during a push, the adjusted value is journaled right after the send, in a separate step; if that write fails it is only logged on the server and the send is not failed.
+
+Open the **История** tab of a Feature or Epic card to see the entries for that work item, or click **Журнал изменений** on the plan page for the whole project. The project feed can be filtered by person and period; entries from one action (for example a rebalance) are grouped. The same data is available at `GET /roadmap/projects/:projectId/changes` for anyone with read access to the project.
+
+The log does not record sync statuses, time logging, role hours entered on a Feature that has no assignments for that role, or changes to roles, role members and settings. Saving without a change and an import that changes nothing leave no entries. There is no undo yet.
 ## Notifications
 
 The bell in the Roadmap header (**Уведомления**) tells the people responsible for an Azure DevOps integration that synchronization has a problem, once per problem, with a link to the place where it is fixed. Delivery is in-app only: there is no email, Telegram or browser push. The bell polls the unread counter every minute and when the window regains focus; the list loads when the popover opens. The badge counts unread notifications whose problem is still open; if only unread resolved ones remain, it shows a dot without a number.

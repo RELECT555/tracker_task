@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Clock3, ExternalLink, Trash2 } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { allocationAzureApi } from '@/entities/roadmap/api/allocationAzureApi';
+import { invalidatePlanChanges } from '@/entities/roadmap/api/planChangesApi';
 import type { RoadmapAllocation, RoadmapProjectPlan } from '@/entities/roadmap/api/roadmapApi';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
@@ -53,7 +54,11 @@ export function AllocationAzurePanel({ allocation, canEditPlan, writeEnabled = t
   const [logging, setLogging] = useState(false);
   const [logHours, setLogHours] = useState('');
   const [comment, setComment] = useState('');
-  const refreshPlan = () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan'] });
+  // "Accept from Azure" rewrites the allocation, so the change log is refreshed with the plan.
+  const refreshPlan = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan'] }),
+    invalidatePlanChanges(queryClient),
+  ]);
 
   const logTime = useMutation({
     mutationFn: () => allocationAzureApi.logTime(allocation.id, Number(logHours), comment),
@@ -182,7 +187,10 @@ export function DeleteAllocationButton({ allocation, removal, onDeleted, onConfi
     mutationFn: () => allocationAzureApi.remove(allocation.id),
     onSuccess: async () => {
       setConfirming(false);
-      await queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan'] }),
+        invalidatePlanChanges(queryClient),
+      ]);
       onDeleted?.();
     },
   });

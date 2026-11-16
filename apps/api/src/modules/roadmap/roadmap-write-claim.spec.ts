@@ -3,6 +3,8 @@ import type { IsActiveAdminHandler } from '../identity/application/queries/is-ac
 import type { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
 import { createAzureSyncServices } from './roadmap-azure-sync.testing';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
+import { planChangeContext } from './roadmap-plan-change';
+import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import { DEFAULT_WRITE_BACK_SETTINGS } from './roadmap-write-back.settings';
 
@@ -118,6 +120,12 @@ function setup(type = 'Feature') {
     requestJson,
     request: jest.fn().mockResolvedValue({}),
   };
+  // The log itself is covered in roadmap-plan-change-paths.spec.ts.
+  const planChanges = {
+    read: jest.fn().mockResolvedValue(new Map()),
+    record: jest.fn().mockResolvedValue(0),
+    recordAfter: jest.fn().mockResolvedValue(0),
+  };
   const worker = (createTask = true) => {
     const service = createAzureSyncServices(
       prisma as unknown as PrismaService,
@@ -125,6 +133,7 @@ function setup(type = 'Feature') {
       importer as unknown as RoadmapWorkItemImportService,
       {} as IsActiveAdminHandler,
       {} as RoadmapAllocationAzureService,
+      planChanges as unknown as RoadmapPlanChangeService,
     ).sync;
     return () => service['syncAllocation']('allocation', createTask);
   };
@@ -135,9 +144,17 @@ function setup(type = 'Feature') {
       importer as unknown as RoadmapWorkItemImportService,
       {} as IsActiveAdminHandler,
       {} as RoadmapAllocationAzureService,
+      planChanges as unknown as RoadmapPlanChangeService,
     ).sync;
     return (hours: number, quarterKey?: string) =>
-      service.setRoleHours('user', 'feature-id', 'role', hours, quarterKey);
+      service.setRoleHours(
+        'user',
+        'feature-id',
+        'role',
+        hours,
+        quarterKey,
+        planChangeContext({ id: 'user', email: 'user@example.test' }, 'plan'),
+      );
   };
   const refreshField = () => {
     const service = createAzureSyncServices(
@@ -146,6 +163,7 @@ function setup(type = 'Feature') {
       importer as unknown as RoadmapWorkItemImportService,
       {} as IsActiveAdminHandler,
       {} as RoadmapAllocationAzureService,
+      planChanges as unknown as RoadmapPlanChangeService,
     ).featureFields;
     return () => service.refreshFeatureField('feature-id', 'role');
   };

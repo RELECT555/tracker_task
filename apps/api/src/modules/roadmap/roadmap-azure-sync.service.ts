@@ -30,6 +30,13 @@ import { RoadmapAzureTaskService } from './roadmap-azure-task.service';
 import { RoadmapAzureFeatureFieldsService } from './roadmap-azure-feature-fields.service';
 import { RoadmapWriteBackAccessService } from './roadmap-write-back-access.service';
 import {
+  planChangeContext,
+  type AllocationRef,
+  type AllocationSnapshot,
+  type PlanChangeContext,
+} from './roadmap-plan-change';
+import { RoadmapPlanChangeService } from './roadmap-plan-change.service';
+import {
   allocationContext,
   azureErrorMessage,
   CREATE_REJECTIONS,
@@ -62,6 +69,7 @@ export class RoadmapAzureSyncService {
     private readonly azureProcess: RoadmapAzureProcessService,
     private readonly tasks: RoadmapAzureTaskService,
     private readonly featureFields: RoadmapAzureFeatureFieldsService,
+    private readonly planChanges: RoadmapPlanChangeService,
   ) {}
 
   /** Status written by plan edits: the allocation must be sent to Azure DevOps again. */
@@ -237,6 +245,7 @@ export class RoadmapAzureSyncService {
         });
         if (released.count) this.enqueue([id]);
       }
+      return result.count;
     };
 
     try {
@@ -532,15 +541,19 @@ export class RoadmapAzureSyncService {
         [Number(taskId)],
         credentials,
       );
-      await finish({
+      // Azure's estimate replaces the plan's: what the plan held is read before it is overwritten.
+      const before = acceptedHours === null ? null : await this.readForLog(id);
+      const applied = await finish({
         azureSyncStatus: 'synced',
         azureSyncError: null,
         azureSyncedAt: new Date(),
         azurePushedHours: acceptedHours ?? estimate,
         ...(acceptedHours === null ? {} : { estimatedHours: acceptedHours }),
       });
-      if (acceptedHours !== null)
+      // A plan edit that won the race keeps its own months.
+      if (applied && acceptedHours !== null)
         await this.shrinkPeriods(id, acceptedHours).catch(() => undefined);
+      if (applied && before) await this.recordEstimateFromAzure(id, before);
       await refreshFeatureField();
     } catch (error) {
       await finish({
@@ -601,7 +614,8 @@ export class RoadmapAzureSyncService {
     workItemId: string,
     roleId: string,
     hours: number,
-    quarterKey?: string,
+    quarterKey: string | undefined,
+    context: PlanChangeContext,
   ) {
     const settings = await this.access.assertWriteBackEnabled(actorId);
     const item = await this.prisma.roadmapWorkItem.findUnique({
@@ -700,7 +714,9 @@ export class RoadmapAzureSyncService {
       rest = Math.round((rest - share) * 100) / 100;
       return { allocation, hours: Math.max(0, share) };
     });
+    const ids = shares.map(({ allocation }) => allocation.id);
     await this.prisma.$transaction(async (tx) => {
+      const before = await this.planChanges.read(tx, ids);
       for (const { allocation, hours: share } of shares) {
         const hasTask = Boolean(
           allocation.azureTaskId || allocation.azureCreateAttemptId,
@@ -731,6 +747,9 @@ export class RoadmapAzureSyncService {
             data: { hours: period.hours },
           });
       }
+      await this.planChanges.recordAfter(tx, context, before, ids, {
+        roleHours: { from: Math.round(currentTotal * 100) / 100, to: target },
+      });
     });
     const withTask = shares
       .filter(
@@ -780,6 +799,44 @@ export class RoadmapAzureSyncService {
     });
     if (withTask.length) this.enqueue(withTask);
     return { field, hours };
+  }
+
+  /** The plan state before a push takes Azure's estimate; null when it cannot be read. */
+  private async readForLog(allocationId: string) {
+    try {
+      return await this.planChanges.read(this.prisma, [allocationId]);
+    } catch (error) {
+      this.logger.warn(
+        `Could not read allocation ${allocationId} for the plan change log: ${azureErrorMessage(error)}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Logs the estimate a push took from Azure, with the months `shrinkPeriods` actually stored.
+   * The Task is already written, so a failure here is logged and does not fail the send.
+   */
+  private async recordEstimateFromAzure(
+    allocationId: string,
+    before: Map<string, { ref: AllocationRef; snapshot: AllocationSnapshot }>,
+  ) {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const after = await this.planChanges.read(tx, [allocationId]);
+        const was = before.get(allocationId);
+        const now = after.get(allocationId);
+        // A row deleted meanwhile is logged by its deletion, not here.
+        if (!was || !now) return;
+        await this.planChanges.record(tx, planChangeContext(null, 'azure'), [
+          { ref: now.ref, before: was.snapshot, after: now.snapshot },
+        ]);
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Could not log the Azure DevOps estimate for allocation ${allocationId}: ${azureErrorMessage(error)}`,
+      );
+    }
   }
 
   /** Keeps the monthly split within an estimate that Azure lowered. */

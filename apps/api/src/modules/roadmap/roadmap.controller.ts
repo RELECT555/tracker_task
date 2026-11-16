@@ -21,6 +21,7 @@ import {
   IsBoolean,
   IsDateString,
   IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -40,6 +41,8 @@ import {
 } from '../../shared/presentation/decorators/current-user.decorator';
 import { AdminRoleGuard } from '../admin/presentation/guards/admin-role.guard';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import { planChangeContext, type PlanChangeQuery } from './roadmap-plan-change';
+import { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import { RoadmapAzureSyncStatusService } from './roadmap-azure-sync-status.service';
 import { RoadmapAzureProcessService } from './roadmap-azure-process.service';
 import { RoadmapAzureFeatureFieldsService } from './roadmap-azure-feature-fields.service';
@@ -174,6 +177,16 @@ class LogTimeDto {
   @IsOptional() @IsString() @MaxLength(500) comment?: string;
 }
 
+class PlanChangesQueryDto implements PlanChangeQuery {
+  @IsOptional() @IsString() @MaxLength(100) workItemExternalId?: string;
+  @IsOptional() @IsString() @MaxLength(255) personExternalId?: string;
+  @IsOptional() @IsDateString() from?: string;
+  @IsOptional() @IsDateString() to?: string;
+  @IsOptional() @IsString() @MaxLength(200) cursor?: string;
+  /** Not capped here: the service clamps it to 200. */
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) limit?: number;
+}
+
 @Controller('roadmap')
 export class RoadmapController {
   constructor(
@@ -190,7 +203,18 @@ export class RoadmapController {
     private readonly syncStatus: RoadmapAzureSyncStatusService,
     private readonly azureProcess: RoadmapAzureProcessService,
     private readonly featureFields: RoadmapAzureFeatureFieldsService,
+    private readonly planChanges: RoadmapPlanChangeService,
   ) {}
+
+  @Get('projects/:projectId/changes')
+  async projectChanges(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Query() query: PlanChangesQueryDto,
+  ) {
+    await this.access.require(actor, { projectId }, 'read');
+    return this.planChanges.list(projectId, query);
+  }
 
   @Get('projects/:projectId/work-items/:externalId/azure')
   async workItemCardView(
@@ -383,9 +407,11 @@ export class RoadmapController {
     @Body() dto: SaveAllocationDto,
   ) {
     await this.access.require(actor, { workItemId: dto.workItemId }, 'edit');
-    const saved = await this.allocations.saveAllocation(dto, {
-      skipSync: dto.createTask,
-    });
+    const saved = await this.allocations.saveAllocation(
+      dto,
+      { skipSync: dto.createTask },
+      planChangeContext({ id: actor.id, email: actor.email }, 'plan'),
+    );
     if (!dto.createTask) return saved;
     // An allocation that already has a Task is simply updated; otherwise its Task is created now.
     if (saved.azureTaskId) await this.azureSync.onAllocationSaved(saved.id);
@@ -408,6 +434,7 @@ export class RoadmapController {
       roleId,
       dto.hours,
       dto.quarterKey,
+      planChangeContext({ id: actor.id, email: actor.email }, 'plan'),
     );
   }
 
@@ -421,7 +448,10 @@ export class RoadmapController {
       { allocationIds: dto.allocationIds },
       'edit',
     );
-    return this.allocations.rebalanceAllocations(dto.allocationIds);
+    return this.allocations.rebalanceAllocations(
+      dto.allocationIds,
+      planChangeContext({ id: actor.id, email: actor.email }, 'plan'),
+    );
   }
 
   @Post('allocations/:allocationId/azure-push')
@@ -461,7 +491,10 @@ export class RoadmapController {
     @Param('allocationId', ParseUUIDPipe) allocationId: string,
   ) {
     await this.access.require(actor, { allocationIds: [allocationId] }, 'edit');
-    return this.allocationAzure.acceptFromAzure(allocationId);
+    return this.allocationAzure.acceptFromAzure(
+      allocationId,
+      planChangeContext({ id: actor.id, email: actor.email }, 'azure'),
+    );
   }
 
   @Delete('allocations/:allocationId')
@@ -471,7 +504,11 @@ export class RoadmapController {
   ) {
     await this.access.require(actor, { allocationIds: [allocationId] }, 'edit');
     const { workItemId, roleId, ...result } =
-      await this.allocationAzure.deleteAllocation(actor, allocationId);
+      await this.allocationAzure.deleteAllocation(
+        actor,
+        allocationId,
+        planChangeContext({ id: actor.id, email: actor.email }, 'plan'),
+      );
     // The deleted hours leave the role field of the feature too, as the Task leaves Azure DevOps.
     await this.featureFields.refreshFeatureField(workItemId, roleId);
     return result;
@@ -499,6 +536,7 @@ export class RoadmapController {
       allocationId,
       quarterKey,
       dto.months,
+      planChangeContext({ id: actor.id, email: actor.email }, 'plan'),
     );
   }
 }

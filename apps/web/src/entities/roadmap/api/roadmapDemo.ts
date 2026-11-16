@@ -83,6 +83,8 @@ export const roadmapDemoApi = {
   previewAzurePush: (projectId: string) => call<RoadmapAzurePushPreview>('previewAzurePush', [projectId]),
   pushProjectToAzure: (projectId: string, allocationIds?: string[]) => call<{ queued: number }>('pushProjectToAzure', [projectId, allocationIds]),
   pushAllocationToAzure: (allocationId: string) => call<{ queued: number }>('pushAllocationToAzure', [allocationId]),
+  /** The demo plan has no change log: edits made in the demo are not recorded. */
+  planChanges: (): Promise<{ items: never[]; nextCursor: null }> => Promise.resolve({ items: [], nextCursor: null }),
   people: () => call<{ data: RoadmapPerson[] }>('people'),
   roles: (projectId: string) => call<RoadmapRole[]>('roles', [projectId]),
   adminPeople: () => call<RoadmapPerson[]>('adminPeople'),

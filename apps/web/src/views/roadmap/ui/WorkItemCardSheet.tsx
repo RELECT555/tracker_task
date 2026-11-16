@@ -1,11 +1,14 @@
 'use client';
 
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { AlertCircle, ArrowLeft, ChevronRight, ExternalLink, FileText, History, Lock, MessageSquare, Pencil, Plus, RefreshCw, X, type LucideIcon } from 'lucide-react';
 import type { RoadmapAllocation, RoadmapWorkItem } from '@/entities/roadmap/api/roadmapApi';
+import { planChangesApi, planChangesQueryKey, type PlanChangePage } from '@/entities/roadmap/api/planChangesApi';
+import { groupByBatch } from '@/entities/roadmap/lib/plan-change-text';
 import { workItemCardApi, workItemCardQueryKey, type WorkItemCard, type WorkItemCardPerson, type WorkItemCardUpdate } from '@/entities/roadmap/api/workItemCardApi';
 import { AzureWorkItemIcon } from '@/entities/roadmap/ui/AzureWorkItemIcon';
+import { PlanChangeEntry } from '@/entities/roadmap/ui/PlanChangeEntry';
 import { SafeAzureHtml } from '@/entities/roadmap/ui/SafeAzureHtml';
 import { WorkItemStateBadge } from '@/entities/roadmap/ui/WorkItemStateBadge';
 import { ApiError } from '@/shared/api/client';
@@ -19,6 +22,8 @@ import { AllocationAzurePanel } from './AllocationAzurePanel';
 type Tab = 'description' | 'plan' | 'children' | 'discussion' | 'history';
 
 const UNASSIGNED = '__unassigned__';
+/** The item's history loads one page of plan changes (the API's maximum). */
+const PLAN_CHANGES_LIMIT = 200;
 const dateFormat = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
 const dateTimeFormat = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const hoursFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
@@ -216,6 +221,17 @@ function CardContent({ titleId, projectId, externalId, planItem, taskAllocations
     staleTime: 15_000,
     retry: (count, error) => !(error instanceof ApiError && (error.status ?? 500) < 500) && count < 2,
   });
+  // Allocations live on Features and Epics, so only they have plan changes. Asked separately from the
+  // Azure card, which can fail on its own: each side of the history shows without the other.
+  const cardType = card.data?.type ?? planItem?.type;
+  const hasPlanChanges = cardType === 'Feature' || cardType === 'Epic';
+  const planChanges = useQuery({
+    queryKey: planChangesQueryKey(projectId, externalId),
+    queryFn: ({ signal }) => planChangesApi.list(projectId, { workItemExternalId: externalId, limit: PLAN_CHANGES_LIMIT }, signal),
+    enabled: hasPlanChanges,
+    staleTime: 15_000,
+    retry: (count, error) => !(error instanceof ApiError && (error.status ?? 500) < 500) && count < 2,
+  });
   const allocations = planItem?.allocations.length ? planItem.allocations : taskAllocations;
   // Picked once the card loads: open on the first tab that has something to show.
   const [chosenTab, setTab] = useState<Tab | null>(allocations.length ? 'plan' : null);
@@ -271,6 +287,10 @@ function CardContent({ titleId, projectId, externalId, planItem, taskAllocations
       <div className="px-6 py-4">
         <ErrorNotice title="Не удалось открыть элемент из Azure DevOps" errors={[card.error]} onRetry={() => card.refetch()} retrying={card.isFetching} />
         {planItem?.url ? <a href={planItem.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-sm text-primary hover:underline">Открыть в Azure DevOps<ExternalLink aria-hidden="true" className="size-3.5" /></a> : null}
+        {hasPlanChanges && planChanges.data?.items.length ? <section aria-label="Изменения плана" className="mt-6">
+          <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">Изменения плана</h2>
+          <HistoryTab item={null} planChanges={planChanges} onOpenTask={onOpen} />
+        </section> : null}
       </div>
     </div>;
   }
@@ -387,7 +407,7 @@ function CardContent({ titleId, projectId, externalId, planItem, taskAllocations
         {tab === 'plan' ? <PlanTab allocations={allocations} currentTaskId={externalId} canEditPlan={canEditPlan} writeEnabled={writeEnabled} onOpen={onOpen} onRetry={onRetryAllocation} retrying={retrying} /> : null}
         {tab === 'children' ? <ChildrenTab item={item} onOpen={onOpen} /> : null}
         {tab === 'discussion' ? <DiscussionTab item={item} projectId={projectId} /> : null}
-        {tab === 'history' ? <HistoryTab item={item} /> : null}
+        {tab === 'history' ? <HistoryTab item={item} planChanges={hasPlanChanges ? planChanges : undefined} onOpenTask={onOpen} /> : null}
       </div>
     </div>
   </div>;
@@ -640,26 +660,50 @@ function groupHistory(history: WorkItemCard['history']) {
   return grouped;
 }
 
-function HistoryTab({ item }: { item: WorkItemCard }) {
-  if (!item.history.length) return <EmptyState icon={History} text="Изменений пока нет" />;
-  return <ol className="relative space-y-5 before:absolute before:top-2 before:bottom-2 before:left-[5px] before:w-px before:bg-border">
-    {groupHistory(item.history).map((entry) => <li key={entry.id} className="relative pl-6">
-      <span aria-hidden="true" className="absolute top-1.5 left-0 size-[11px] rounded-full border-2 border-card bg-muted-foreground/40" />
-      <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">{entry.author?.name ?? '—'}</span> · {formatDate(entry.changedAt, true)}</p>
-      <dl className="mt-1.5 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
-        {entry.created ? <dt className="col-span-2 font-medium">Создан элемент</dt> : null}
-        {entry.changes.map((change, index) => <Fragment key={`${change.field}:${index}`}>
-          <dt className="text-muted-foreground">{change.field}</dt>
-          <dd className="[overflow-wrap:anywhere]">
-            {change.from === null && change.to === null ? <span className="text-muted-foreground">изменено</span>
-              : <>{change.from && !entry.created ? <><span className="text-muted-foreground line-through decoration-muted-foreground/50">{change.from}</span><span aria-hidden="true" className="text-muted-foreground"> → </span></> : null}{change.to ?? <span className="text-muted-foreground">пусто</span>}</>}
-          </dd>
-        </Fragment>)}
-        {entry.linksAdded || entry.linksRemoved ? <><dt className="text-muted-foreground">Связи</dt><dd>{[
-          entry.linksAdded ? `добавлено ${entry.linksAdded}` : null,
-          entry.linksRemoved ? `удалено ${entry.linksRemoved}` : null,
-        ].filter(Boolean).join(', ')}</dd></> : null}
-      </dl>
-    </li>)}
-  </ol>;
+/** The Azure history and the plan changes (Roadmap) of one item, newest first. */
+function HistoryTab({ item, planChanges, onOpenTask }: { item: WorkItemCard | null; planChanges?: UseQueryResult<PlanChangePage>; onOpenTask: (azureTaskId: string) => void }) {
+  const azureEntries = item ? groupHistory(item.history) : [];
+  const planGroups = groupByBatch(planChanges?.data?.items ?? []);
+  const timeOf = (value: string | null) => {
+    const time = value ? Date.parse(value) : Number.NaN;
+    return Number.isNaN(time) ? 0 : time;
+  };
+  const entries = [
+    ...azureEntries.map((entry) => ({ key: `azure:${entry.id}`, time: timeOf(entry.changedAt), entry, group: null })),
+    ...planGroups.map((group) => ({ key: `plan:${group.items[0].id}`, time: timeOf(group.items[0].createdAt), entry: null, group })),
+  ].sort((a, b) => b.time - a.time);
+  const planPending = Boolean(planChanges?.isPending && planChanges.fetchStatus !== 'idle');
+
+  if (!entries.length && !planPending && !planChanges?.isError) return <EmptyState icon={History} text="Изменений пока нет" />;
+  return <div className="space-y-4">
+    {planChanges?.isError ? <ErrorNotice title="Не удалось загрузить изменения плана" errors={[planChanges.error]} onRetry={() => planChanges.refetch()} retrying={planChanges.isFetching} /> : null}
+    {planPending ? <p role="status" className="text-xs text-muted-foreground">Загружаем изменения плана…</p> : null}
+    {entries.length ? <ol className="relative space-y-5 before:absolute before:top-2 before:bottom-2 before:left-[5px] before:w-px before:bg-border">
+      {entries.map(({ key, entry, group }) => <li key={key} className="relative pl-6">
+        <span aria-hidden="true" className={cn('absolute top-1.5 left-0 size-[11px] rounded-full border-2 border-card', group ? 'bg-primary/60' : 'bg-muted-foreground/40')} />
+        {group ? <PlanChangeEntry group={group} onOpenTask={onOpenTask} /> : entry ? <AzureHistoryEntry entry={entry} /> : null}
+      </li>)}
+    </ol> : null}
+    {planChanges?.data?.nextCursor ? <p className="text-xs text-muted-foreground">Показаны последние {PLAN_CHANGES_LIMIT} изменений</p> : null}
+  </div>;
+}
+
+function AzureHistoryEntry({ entry }: { entry: WorkItemCard['history'][number] }) {
+  return <>
+    <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">{entry.author?.name ?? '—'}</span> · {formatDate(entry.changedAt, true)}</p>
+    <dl className="mt-1.5 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+      {entry.created ? <dt className="col-span-2 font-medium">Создан элемент</dt> : null}
+      {entry.changes.map((change, index) => <Fragment key={`${change.field}:${index}`}>
+        <dt className="text-muted-foreground">{change.field}</dt>
+        <dd className="[overflow-wrap:anywhere]">
+          {change.from === null && change.to === null ? <span className="text-muted-foreground">изменено</span>
+            : <>{change.from && !entry.created ? <><span className="text-muted-foreground line-through decoration-muted-foreground/50">{change.from}</span><span aria-hidden="true" className="text-muted-foreground"> → </span></> : null}{change.to ?? <span className="text-muted-foreground">пусто</span>}</>}
+        </dd>
+      </Fragment>)}
+      {entry.linksAdded || entry.linksRemoved ? <><dt className="text-muted-foreground">Связи</dt><dd>{[
+        entry.linksAdded ? `добавлено ${entry.linksAdded}` : null,
+        entry.linksRemoved ? `удалено ${entry.linksRemoved}` : null,
+      ].filter(Boolean).join(', ')}</dd></> : null}
+    </dl>
+  </>;
 }

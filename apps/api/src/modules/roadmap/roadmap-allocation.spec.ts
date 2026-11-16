@@ -3,6 +3,8 @@ import { rebalanceAllocations } from '@tracker/shared';
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import { RoadmapAllocationService } from './roadmap-allocation.service';
+import { planChangeContext } from './roadmap-plan-change';
+import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 
 const input = {
   workItemId: 'work-item',
@@ -36,6 +38,7 @@ function setup() {
         .mockResolvedValue({ person: { name: 'Person', email: null } }),
     },
     roadmapAllocation: {
+      findUnique: jest.fn().mockResolvedValue(null),
       upsert: jest.fn().mockImplementation(() => {
         events.push('save allocation');
         return { id: 'allocation' };
@@ -59,15 +62,32 @@ function setup() {
   const onAllocationSaved = jest.fn(() => {
     events.push('queue sync');
   });
+  const planChanges = {
+    read: jest.fn().mockResolvedValue(new Map()),
+    record: jest.fn(() => {
+      events.push('log change');
+      return Promise.resolve(1);
+    }),
+    recordAfter: jest.fn(() => {
+      events.push('log change');
+      return Promise.resolve(1);
+    }),
+  };
   const service = new RoadmapAllocationService(
     { $transaction: transaction } as unknown as PrismaService,
     {
       pendingUpdate: { azureSyncStatus: 'pending' },
       onAllocationSaved,
     } as unknown as RoadmapAzureSyncService,
+    planChanges as unknown as RoadmapPlanChangeService,
   );
   return { service, tx, transaction, onAllocationSaved, events };
 }
+
+const context = planChangeContext(
+  { id: 'user', email: 'user@example.com' },
+  'plan',
+);
 
 describe('Allocation transaction', () => {
   it('rejects an Epic allocation before checking membership or queueing sync', async () => {
@@ -77,9 +97,9 @@ describe('Allocation transaction', () => {
       type: 'EPIC',
     });
 
-    await expect(service.saveAllocation(input)).rejects.toThrow(
-      'На эпики нельзя назначать исполнителей.',
-    );
+    await expect(
+      service.saveAllocation(input, undefined, context),
+    ).rejects.toThrow('На эпики нельзя назначать исполнителей.');
     expect(tx.roadmapRoleMember.findFirst).not.toHaveBeenCalled();
     expect(onAllocationSaved).not.toHaveBeenCalled();
   });
@@ -100,7 +120,12 @@ describe('Allocation transaction', () => {
     }));
 
     await expect(
-      service.saveAllocationQuarter('allocation', input.quarterKey, months),
+      service.saveAllocationQuarter(
+        'allocation',
+        input.quarterKey,
+        months,
+        context,
+      ),
     ).rejects.toThrow('На эпики нельзя назначать исполнителей.');
     expect(tx.roadmapPeriodAllocation.deleteMany).not.toHaveBeenCalled();
   });
@@ -108,7 +133,9 @@ describe('Allocation transaction', () => {
   it('writes the allocation and months together, then queues Azure sync', async () => {
     const { service, tx, transaction, onAllocationSaved, events } = setup();
 
-    await expect(service.saveAllocation(input)).resolves.toMatchObject({
+    await expect(
+      service.saveAllocation(input, undefined, context),
+    ).resolves.toMatchObject({
       id: 'allocation',
       periods: input.periods,
     });
@@ -124,6 +151,7 @@ describe('Allocation transaction', () => {
     expect(events).toEqual([
       'save allocation',
       'save months',
+      'log change',
       'commit',
       'queue sync',
     ]);
@@ -140,7 +168,11 @@ describe('Allocation transaction', () => {
     };
 
     await expect(
-      service.saveAllocation({ ...input, periods: [august] }),
+      service.saveAllocation(
+        { ...input, periods: [august] },
+        undefined,
+        context,
+      ),
     ).rejects.toThrow('A monthly plan must fall within the allocation quarter');
     expect(transaction).not.toHaveBeenCalled();
   });
@@ -155,7 +187,11 @@ describe('Allocation transaction', () => {
     };
 
     await expect(
-      service.saveAllocation({ ...input, periods: [reversed] }),
+      service.saveAllocation(
+        { ...input, periods: [reversed] },
+        undefined,
+        context,
+      ),
     ).rejects.toThrow('start before they end');
     expect(transaction).not.toHaveBeenCalled();
   });
@@ -170,7 +206,11 @@ describe('Allocation transaction', () => {
     };
 
     await expect(
-      service.saveAllocation({ ...input, periods: [legacy] }),
+      service.saveAllocation(
+        { ...input, periods: [legacy] },
+        undefined,
+        context,
+      ),
     ).resolves.toMatchObject({ id: 'allocation' });
   });
 
@@ -180,7 +220,9 @@ describe('Allocation transaction', () => {
       new Error('write failed'),
     );
 
-    await expect(service.saveAllocation(input)).rejects.toThrow('write failed');
+    await expect(
+      service.saveAllocation(input, undefined, context),
+    ).rejects.toThrow('write failed');
 
     expect(events).toEqual(['save allocation']);
     expect(onAllocationSaved).not.toHaveBeenCalled();
@@ -238,7 +280,10 @@ describe('Even allocation', () => {
     );
 
     await expect(
-      service.rebalanceAllocations(rows.map(({ id }) => id)),
+      service.rebalanceAllocations(
+        rows.map(({ id }) => id),
+        context,
+      ),
     ).rejects.toThrow('second assignment failed');
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(events).not.toContain('commit');

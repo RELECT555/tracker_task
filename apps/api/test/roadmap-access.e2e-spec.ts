@@ -5,6 +5,7 @@ import type { Server } from 'node:http';
 import type { AuthTokens } from '../src/modules/identity/domain/user.dto';
 import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/identity/infrastructure/token.service';
+import { RoadmapPlanChangeService } from '../src/modules/roadmap/roadmap-plan-change.service';
 import { RoadmapService } from '../src/modules/roadmap/roadmap.service';
 import { RoadmapAllocationService } from '../src/modules/roadmap/roadmap-allocation.service';
 import { PrismaService } from '../src/shared/infrastructure/prisma/prisma.service';
@@ -52,6 +53,9 @@ describe('Roadmap authentication and project scope (e2e)', () => {
   ]);
   const saveAllocation = jest.fn().mockResolvedValue({ saved: true });
   const getProjectPlan = jest.fn().mockResolvedValue({ workItems: [] });
+  const listChanges = jest
+    .fn()
+    .mockResolvedValue({ items: [], nextCursor: null });
 
   beforeAll(async () => {
     const fixture = await Test.createTestingModule({ imports: [AppModule] })
@@ -120,6 +124,8 @@ describe('Roadmap authentication and project scope (e2e)', () => {
       .useValue({ getProjectPlan })
       .overrideProvider(RoadmapAllocationService)
       .useValue({ saveAllocation })
+      .overrideProvider(RoadmapPlanChangeService)
+      .useValue({ list: listChanges })
       .compile();
     app = fixture.createNestApplication<INestApplication<Server>>();
     app.setGlobalPrefix('api/v1');
@@ -236,6 +242,34 @@ describe('Roadmap authentication and project scope (e2e)', () => {
       .set('Authorization', auth)
       .send({ email: employeeEmail, role: 'planner' })
       .expect(403);
+  });
+
+  it('shows the plan change log of a viewed project and hides unassigned projects', async () => {
+    const auth = `Bearer ${tokens.issueTokens(employeeId).accessToken}`;
+    const server = app.getHttpServer();
+    await request(server)
+      .get(`/api/v1/roadmap/projects/${viewerProject}/changes`)
+      .query({ limit: 500, workItemExternalId: '1001' })
+      .set('Authorization', auth)
+      .expect(200)
+      .expect((res) =>
+        expect(res.body).toEqual({ items: [], nextCursor: null }),
+      );
+    expect(listChanges).toHaveBeenCalledWith(viewerProject, {
+      limit: 500,
+      workItemExternalId: '1001',
+    });
+    listChanges.mockClear();
+    await request(server)
+      .get(`/api/v1/roadmap/projects/${privateProject}/changes`)
+      .set('Authorization', auth)
+      .expect(403);
+    await request(server)
+      .get(`/api/v1/roadmap/projects/${viewerProject}/changes`)
+      .query({ from: 'yesterday' })
+      .set('Authorization', auth)
+      .expect(400);
+    expect(listChanges).not.toHaveBeenCalled();
   });
 
   it('rejects access and refresh when the account is disabled', async () => {

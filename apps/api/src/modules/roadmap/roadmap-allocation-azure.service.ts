@@ -28,6 +28,11 @@ import {
   AzureWorkItem,
   RoadmapWorkItemImportService,
 } from './roadmap-work-item-import.service';
+import {
+  planChangeContext,
+  type PlanChangeContext,
+} from './roadmap-plan-change';
+import { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import type { WriteBackSettings } from './roadmap-write-back.settings';
 
 const API = '7.1';
@@ -68,6 +73,7 @@ export class RoadmapAllocationAzureService implements OnModuleInit {
     private readonly integration: RoadmapIntegrationService,
     private readonly importer: RoadmapWorkItemImportService,
     private readonly isActiveAdmin: IsActiveAdminHandler,
+    private readonly planChanges: RoadmapPlanChangeService,
   ) {}
 
   onModuleInit() {
@@ -94,12 +100,15 @@ export class RoadmapAllocationAzureService implements OnModuleInit {
     });
     if (!allocations.length) return;
     const settings = await this.integration.getWriteBackSettings();
+    // One import is one batch; no author — the Task history in Azure names who changed it.
+    const context = planChangeContext(null, 'azure');
     for (const allocation of allocations) {
       await this.applyAzure(
         allocation,
         tasks.get(allocation.azureTaskId!)!,
         settings.conflictPolicy ?? 'overwrite',
         false,
+        context,
       ).catch((error: unknown) =>
         this.logger.error(
           `Could not take Azure DevOps changes into allocation ${allocation.id}`,
@@ -110,13 +119,19 @@ export class RoadmapAllocationAzureService implements OnModuleInit {
   }
 
   /** "Принять из Azure": the Task's estimate and assignee replace the plan's values. */
-  async acceptFromAzure(allocationId: string) {
+  async acceptFromAzure(allocationId: string, context: PlanChangeContext) {
     const allocation = await this.allocation(allocationId);
     if (!allocation.azureTaskId)
       throw new ConflictException('Задача в Azure DevOps ещё не создана.');
     const credentials = await this.integration.getCredentials();
     const task = await this.fetchTask(allocation.azureTaskId, credentials);
-    const result = await this.applyAzure(allocation, task, 'skip-field', true);
+    const result = await this.applyAzure(
+      allocation,
+      task,
+      'skip-field',
+      true,
+      context,
+    );
     if (result.conflicts.length)
       throw new ConflictException(result.conflicts.join(' '));
     return { accepted: true };
@@ -220,12 +235,21 @@ export class RoadmapAllocationAzureService implements OnModuleInit {
   }
 
   /** Deletes an allocation; its Task is kept, moved to a state, or deleted as the policy says. */
-  async deleteAllocation(actor: Actor, allocationId: string) {
+  async deleteAllocation(
+    actor: Actor,
+    allocationId: string,
+    context: PlanChangeContext,
+  ) {
     const allocation = await this.allocation(allocationId);
     if (allocation.azureSyncClaimId)
       throw new ConflictException(
         'Назначение сейчас отправляется в Azure DevOps. Повторите через минуту.',
       );
+    // Read before the Task is touched, as a fallback; the transaction below reads again
+    // so an edit made while Azure was being called is not lost from the log.
+    const early = (
+      await this.planChanges.read(this.prisma, [allocationId])
+    ).get(allocationId);
     const settings = await this.integration.getWriteBackSettings();
     let task: 'kept' | 'state' | 'deleted' | null = null;
     if (allocation.azureTaskId && settings.mode !== 'off') {
@@ -237,7 +261,23 @@ export class RoadmapAllocationAzureService implements OnModuleInit {
         await this.actorName(actor),
       );
     }
-    await this.prisma.roadmapAllocation.delete({ where: { id: allocationId } });
+    // The Task in Azure has already been handled; the row and its log entry go together.
+    await this.prisma.$transaction(async (tx) => {
+      const before =
+        (await this.planChanges.read(tx, [allocationId])).get(allocationId) ??
+        early;
+      await tx.roadmapAllocation.delete({ where: { id: allocationId } });
+      // `allocation()` above found the row, so the early read has it unless it vanished in between.
+      if (!before) return;
+      await this.planChanges.record(tx, context, [
+        {
+          ref: before.ref,
+          before: before.snapshot,
+          after: null,
+          details: { task },
+        },
+      ]);
+    });
     return {
       deleted: true,
       task,
@@ -302,6 +342,7 @@ export class RoadmapAllocationAzureService implements OnModuleInit {
     task: AzureWorkItem,
     policy: ConflictPolicy,
     force: boolean,
+    context: PlanChangeContext,
   ): Promise<{ changed: boolean; conflicts: string[] }> {
     const data: Prisma.RoadmapAllocationUncheckedUpdateManyInput = {};
     const conflicts: string[] = [];
@@ -377,6 +418,7 @@ export class RoadmapAllocationAzureService implements OnModuleInit {
       data.azureSyncedAt = new Date();
 
     await this.prisma.$transaction(async (tx) => {
+      const before = await this.planChanges.read(tx, [allocation.id]);
       // Skip if a plan edit or a push touched the row since it was read.
       const updated = await tx.roadmapAllocation.updateMany({
         where: {
@@ -392,6 +434,8 @@ export class RoadmapAllocationAzureService implements OnModuleInit {
           where: { id: period.id },
           data: { hours: period.hours },
         });
+      // A change of sync fields only gives equal snapshots and no entry.
+      await this.planChanges.recordAfter(tx, context, before, [allocation.id]);
     });
     return { changed: true, conflicts };
   }
