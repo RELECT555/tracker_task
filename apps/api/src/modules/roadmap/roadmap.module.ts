@@ -17,6 +17,9 @@ import { RoadmapProjectAccessController } from './roadmap-project-access.control
 import { RoadmapProjectAccessService } from './roadmap-project-access.service';
 import { RoadmapTablePreferencesController } from './roadmap-table-preferences.controller';
 import { RoadmapTablePreferencesService } from './roadmap-table-preferences.service';
+import { RoadmapAlertsService } from './roadmap-alerts.service';
+import { RoadmapNotificationsController } from './roadmap-notifications.controller';
+import { RoadmapNotificationsService } from './roadmap-notifications.service';
 
 @Module({
   imports: [IdentityModule],
@@ -27,6 +30,7 @@ import { RoadmapTablePreferencesService } from './roadmap-table-preferences.serv
     RoadmapWebhookController,
     RoadmapProjectAccessController,
     RoadmapTablePreferencesController,
+    RoadmapNotificationsController,
   ],
   providers: [
     RoadmapService,
@@ -39,6 +43,8 @@ import { RoadmapTablePreferencesService } from './roadmap-table-preferences.serv
     RoadmapAllocationAzureService,
     RoadmapProjectAccessService,
     RoadmapTablePreferencesService,
+    RoadmapAlertsService,
+    RoadmapNotificationsService,
     AdminRoleGuard,
   ],
   exports: [RoadmapService, RoadmapProjectAccessService],
