@@ -37,10 +37,12 @@ export function NotificationBell() {
     enabled: open,
   });
 
-  const refresh = () => Promise.all([
-    queryClient.invalidateQueries({ queryKey: SUMMARY_KEY }),
-    queryClient.invalidateQueries({ queryKey: LIST_KEY }),
-  ]);
+  // Fire and forget: returning the invalidation promise from onSettled would hold the mutation
+  // (and the navigation that awaits it) until the summary and list refetches finish.
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: SUMMARY_KEY });
+    void queryClient.invalidateQueries({ queryKey: LIST_KEY });
+  };
   const markRead = useMutation({ mutationFn: roadmapApi.markNotificationRead, onSettled: refresh });
   const markAllRead = useMutation({ mutationFn: roadmapApi.markAllNotificationsRead, onSettled: refresh });
 
