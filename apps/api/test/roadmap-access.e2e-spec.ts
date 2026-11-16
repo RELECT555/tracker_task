@@ -6,6 +6,7 @@ import type { AuthTokens } from '../src/modules/identity/domain/user.dto';
 import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/identity/infrastructure/token.service';
 import { RoadmapService } from '../src/modules/roadmap/roadmap.service';
+import { RoadmapAllocationService } from '../src/modules/roadmap/roadmap-allocation.service';
 import { PrismaService } from '../src/shared/infrastructure/prisma/prisma.service';
 import { DomainExceptionFilter } from '../src/shared/presentation/filters/domain-exception.filter';
 
@@ -116,7 +117,9 @@ describe('Roadmap authentication and project scope (e2e)', () => {
         },
       })
       .overrideProvider(RoadmapService)
-      .useValue({ getProjectPlan, saveAllocation })
+      .useValue({ getProjectPlan })
+      .overrideProvider(RoadmapAllocationService)
+      .useValue({ saveAllocation })
       .compile();
     app = fixture.createNestApplication<INestApplication<Server>>();
     app.setGlobalPrefix('api/v1');

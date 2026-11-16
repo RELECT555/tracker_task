@@ -6,6 +6,10 @@ import type { RoadmapWorkItemCardService } from './roadmap-work-item-card.servic
 import type { RoadmapWorkItemCreateService } from './roadmap-work-item-create.service';
 import { RoadmapController } from './roadmap.controller';
 import type { RoadmapService } from './roadmap.service';
+import type { RoadmapProjectImportService } from './roadmap-project-import.service';
+import type { RoadmapPeopleService } from './roadmap-people.service';
+import type { RoadmapRolesService } from './roadmap-roles.service';
+import type { RoadmapAllocationService } from './roadmap-allocation.service';
 
 describe('Local Roadmap projects', () => {
   it.each([
@@ -31,12 +35,16 @@ describe('Local Roadmap projects', () => {
       } as unknown as PrismaService);
       const listAzureProjects = jest.fn();
       const controller = new RoadmapController(
-        { listAzureProjects } as unknown as RoadmapService,
+        {} as RoadmapService,
         {} as RoadmapAzureSyncService,
         {} as RoadmapWorkItemCreateService,
         access,
         {} as RoadmapWorkItemCardService,
         {} as RoadmapAllocationAzureService,
+        { listAzureProjects } as unknown as RoadmapProjectImportService,
+        {} as RoadmapPeopleService,
+        {} as RoadmapRolesService,
+        {} as RoadmapAllocationService,
       );
 
       await expect(

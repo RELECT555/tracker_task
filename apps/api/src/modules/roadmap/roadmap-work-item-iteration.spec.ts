@@ -1,10 +1,9 @@
 import { normalizeSyncSettings } from '@tracker/shared';
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import type { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
-import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
-import { RoadmapService } from './roadmap.service';
+import { RoadmapProjectImportService } from './roadmap-project-import.service';
 
 const credentials = {
   organizationUrl: 'https://dev.azure.com/example',
@@ -102,11 +101,10 @@ describe('Work item iteration', () => {
       importWorkItems: jest.fn().mockResolvedValue([{ id: 7 }]),
       invalidateFieldCatalog: jest.fn(),
     };
-    const service = new RoadmapService(
+    const service = new RoadmapProjectImportService(
       prisma as unknown as PrismaService,
       integration as unknown as RoadmapIntegrationService,
       importer as unknown as RoadmapWorkItemImportService,
-      {} as RoadmapAzureSyncService,
       {} as RoadmapAzureCatalogService,
     );
 
@@ -132,26 +130,37 @@ describe('Work item iteration', () => {
     };
     prisma.roadmapProject.findMany.mockResolvedValue([project]);
     prisma.roadmapWorkItem.findMany.mockResolvedValueOnce([
-      { externalId: '7', azureCustomFields: { 'System.AssignedTo': null }, iterationPath: null },
-      { externalId: '9', azureCustomFields: { 'System.AssignedTo': null }, iterationPath: null },
+      {
+        externalId: '7',
+        azureCustomFields: { 'System.AssignedTo': null },
+        iterationPath: null,
+      },
+      {
+        externalId: '9',
+        azureCustomFields: { 'System.AssignedTo': null },
+        iterationPath: null,
+      },
     ]);
     integration.requestJson.mockResolvedValue({ workItems: [] });
     const importer = {
       importWorkItems: jest.fn().mockResolvedValue([{ id: 7 }]),
       invalidateFieldCatalog: jest.fn(),
     };
-    const service = new RoadmapService(
+    const service = new RoadmapProjectImportService(
       prisma as unknown as PrismaService,
       integration as unknown as RoadmapIntegrationService,
       importer as unknown as RoadmapWorkItemImportService,
-      {} as RoadmapAzureSyncService,
       {} as RoadmapAzureCatalogService,
     );
 
     await service.refreshImportedProjects();
 
     expect(prisma.roadmapWorkItem.updateMany).toHaveBeenCalledWith({
-      where: { projectId: project.id, externalId: { in: ['9'] }, iterationPath: null },
+      where: {
+        projectId: project.id,
+        externalId: { in: ['9'] },
+        iterationPath: null,
+      },
       data: { iterationPath: '' },
     });
   });

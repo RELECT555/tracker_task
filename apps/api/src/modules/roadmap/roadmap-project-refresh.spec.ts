@@ -1,10 +1,9 @@
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { normalizeSyncSettings } from '@tracker/shared';
 import type { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
-import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
-import { RoadmapService } from './roadmap.service';
+import { RoadmapProjectImportService } from './roadmap-project-import.service';
 
 const now = new Date('2026-11-13T15:00:00.000Z');
 const project = {
@@ -52,11 +51,10 @@ function setup(projects = [project]) {
       .mockResolvedValue({ projectId: project.id, importedRoles: 1 }),
   };
   const createService = (workItemImporter: RoadmapWorkItemImportService) =>
-    new RoadmapService(
+    new RoadmapProjectImportService(
       prisma as unknown as PrismaService,
       integration as unknown as RoadmapIntegrationService,
       workItemImporter,
-      {} as RoadmapAzureSyncService,
       catalog as unknown as RoadmapAzureCatalogService,
     );
   return {

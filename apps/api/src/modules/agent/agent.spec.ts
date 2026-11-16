@@ -1,5 +1,6 @@
 import type { RoadmapProjectAccessService } from '../roadmap/roadmap-project-access.service';
 import type { RoadmapService } from '../roadmap/roadmap.service';
+import type { RoadmapAllocationService } from '../roadmap/roadmap-allocation.service';
 import { AgentService } from './agent.service';
 import {
   buildPlanSnapshot,
@@ -296,6 +297,7 @@ describe('AgentService', () => {
     const service = new AgentService(
       roadmap as unknown as RoadmapService,
       access as unknown as RoadmapProjectAccessService,
+      roadmap as unknown as RoadmapAllocationService,
     );
     return { service, roadmap, access };
   }

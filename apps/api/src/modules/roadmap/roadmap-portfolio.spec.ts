@@ -1,5 +1,5 @@
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
-import type { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
+import type { RoadmapRolesService } from './roadmap-roles.service';
 import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import { RoadmapService } from './roadmap.service';
@@ -48,7 +48,7 @@ function setup(projects: ReturnType<typeof project>[]) {
     {} as RoadmapIntegrationService,
     { getCompletedWorkChanges } as unknown as RoadmapWorkItemImportService,
     {} as RoadmapAzureSyncService,
-    {} as RoadmapAzureCatalogService,
+    {} as RoadmapRolesService,
   );
   return { service, findMany, getCompletedWorkChanges };
 }

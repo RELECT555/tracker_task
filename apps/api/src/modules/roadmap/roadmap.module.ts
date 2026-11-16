@@ -6,6 +6,10 @@ import { AdminRoleGuard } from '../admin/presentation/guards/admin-role.guard';
 import { IdentityModule } from '../identity/identity.module';
 import { RoadmapIntegrationService } from './roadmap-integration.service';
 import { RoadmapService } from './roadmap.service';
+import { RoadmapProjectImportService } from './roadmap-project-import.service';
+import { RoadmapPeopleService } from './roadmap-people.service';
+import { RoadmapRolesService } from './roadmap-roles.service';
+import { RoadmapAllocationService } from './roadmap-allocation.service';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import { RoadmapWebhookController } from './roadmap-webhook.controller';
 import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
@@ -34,6 +38,10 @@ import { RoadmapNotificationsService } from './roadmap-notifications.service';
   ],
   providers: [
     RoadmapService,
+    RoadmapProjectImportService,
+    RoadmapPeopleService,
+    RoadmapRolesService,
+    RoadmapAllocationService,
     RoadmapIntegrationService,
     RoadmapWorkItemImportService,
     RoadmapAzureSyncService,
@@ -47,6 +55,10 @@ import { RoadmapNotificationsService } from './roadmap-notifications.service';
     RoadmapNotificationsService,
     AdminRoleGuard,
   ],
-  exports: [RoadmapService, RoadmapProjectAccessService],
+  exports: [
+    RoadmapService,
+    RoadmapAllocationService,
+    RoadmapProjectAccessService,
+  ],
 })
 export class RoadmapModule {}

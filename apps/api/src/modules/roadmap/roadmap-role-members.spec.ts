@@ -1,10 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
-import type { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
-import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
-import type { RoadmapIntegrationService } from './roadmap-integration.service';
-import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
-import { RoadmapService } from './roadmap.service';
+import { RoadmapRolesService } from './roadmap-roles.service';
 
 function setup() {
   const people = ['a', 'b', 'c'].map((id) => ({
@@ -35,17 +31,11 @@ function setup() {
         ),
     },
   };
-  const service = new RoadmapService(
-    {
-      $transaction: (
-        run: (client: Prisma.TransactionClient) => Promise<unknown>,
-      ) => run(tx as unknown as Prisma.TransactionClient),
-    } as unknown as PrismaService,
-    {} as RoadmapIntegrationService,
-    {} as RoadmapWorkItemImportService,
-    {} as RoadmapAzureSyncService,
-    {} as RoadmapAzureCatalogService,
-  );
+  const service = new RoadmapRolesService({
+    $transaction: (
+      run: (client: Prisma.TransactionClient) => Promise<unknown>,
+    ) => run(tx as unknown as Prisma.TransactionClient),
+  } as unknown as PrismaService);
   return { service, tx, people };
 }
 

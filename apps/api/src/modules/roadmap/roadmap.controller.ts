@@ -41,6 +41,10 @@ import {
 import { AdminRoleGuard } from '../admin/presentation/guards/admin-role.guard';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import { RoadmapService } from './roadmap.service';
+import { RoadmapProjectImportService } from './roadmap-project-import.service';
+import { RoadmapPeopleService } from './roadmap-people.service';
+import { RoadmapRolesService } from './roadmap-roles.service';
+import { RoadmapAllocationService } from './roadmap-allocation.service';
 import {
   ROADMAP_CREATE_WORK_ITEM_TYPES,
   RoadmapWorkItemCreateService,
@@ -176,6 +180,10 @@ export class RoadmapController {
     private readonly access: RoadmapProjectAccessService,
     private readonly workItemCard: RoadmapWorkItemCardService,
     private readonly allocationAzure: RoadmapAllocationAzureService,
+    private readonly projectImport: RoadmapProjectImportService,
+    private readonly peopleService: RoadmapPeopleService,
+    private readonly rolesService: RoadmapRolesService,
+    private readonly allocations: RoadmapAllocationService,
   ) {}
 
   @Get('projects/:projectId/work-items/:externalId/azure')
@@ -242,7 +250,7 @@ export class RoadmapController {
   @Get('projects')
   projects(@CurrentUser() actor: AuthenticatedUser) {
     return actor.isAdmin
-      ? this.roadmap.listAzureProjects()
+      ? this.projectImport.listAzureProjects()
       : this.access.localProjects(actor.email);
   }
 
@@ -266,7 +274,7 @@ export class RoadmapController {
   @Post('projects/:externalId/sync')
   @UseGuards(AdminRoleGuard)
   syncProject(@Param('externalId') externalId: string) {
-    return this.roadmap.syncProject(externalId);
+    return this.projectImport.syncProject(externalId);
   }
 
   @Post('projects/:projectId/azure-push')
@@ -351,7 +359,7 @@ export class RoadmapController {
   @Get('people')
   @UseGuards(AdminRoleGuard)
   people() {
-    return this.roadmap.listAzurePeople();
+    return this.peopleService.listAzurePeople();
   }
 
   @Get('roles')
@@ -360,7 +368,7 @@ export class RoadmapController {
     @Query('projectId', ParseUUIDPipe) projectId: string,
   ) {
     await this.access.require(actor, { projectId }, 'read');
-    return this.roadmap.listRoles(projectId);
+    return this.rolesService.listRoles(projectId);
   }
 
   @Put('allocations')
@@ -369,7 +377,7 @@ export class RoadmapController {
     @Body() dto: SaveAllocationDto,
   ) {
     await this.access.require(actor, { workItemId: dto.workItemId }, 'edit');
-    const saved = await this.roadmap.saveAllocation(dto, {
+    const saved = await this.allocations.saveAllocation(dto, {
       skipSync: dto.createTask,
     });
     if (!dto.createTask) return saved;
@@ -407,7 +415,7 @@ export class RoadmapController {
       { allocationIds: dto.allocationIds },
       'edit',
     );
-    return this.roadmap.rebalanceAllocations(dto.allocationIds);
+    return this.allocations.rebalanceAllocations(dto.allocationIds);
   }
 
   @Post('allocations/:allocationId/azure-push')
@@ -481,7 +489,7 @@ export class RoadmapController {
     @Body() dto: SaveQuarterAllocationDto,
   ) {
     await this.access.require(actor, { allocationIds: [allocationId] }, 'edit');
-    return this.roadmap.saveAllocationQuarter(
+    return this.allocations.saveAllocationQuarter(
       allocationId,
       quarterKey,
       dto.months,

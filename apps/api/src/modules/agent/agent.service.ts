@@ -13,6 +13,7 @@ import {
 import type { AuthenticatedUser } from '../../shared/presentation/decorators/current-user.decorator';
 import { RoadmapProjectAccessService } from '../roadmap/roadmap-project-access.service';
 import { RoadmapService } from '../roadmap/roadmap.service';
+import { RoadmapAllocationService } from '../roadmap/roadmap-allocation.service';
 import {
   buildPlanSnapshot,
   checkChange,
@@ -53,6 +54,7 @@ export class AgentService {
   constructor(
     private readonly roadmap: RoadmapService,
     private readonly access: RoadmapProjectAccessService,
+    private readonly allocations: RoadmapAllocationService,
   ) {}
 
   isConfigured() {
@@ -129,7 +131,7 @@ export class AgentService {
             personExternalId === proposal.personExternalId,
         );
       try {
-        await this.roadmap.saveAllocation({
+        await this.allocations.saveAllocation({
           allocationId: existing?.id,
           workItemId: proposal.workItemId,
           roleId: proposal.roleId,
