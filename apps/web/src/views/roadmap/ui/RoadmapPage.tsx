@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { aggregateRoadmapSummaries, azureRoleEstimate, getRoadmapFactRoots, getRoadmapRolePlan, getRoadmapSummary } from '@tracker/shared';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Cloud, Equal, ListChecks, Maximize2, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Cloud, Equal, Layers, ListChecks, Maximize2, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
@@ -723,6 +723,7 @@ export function RoadmapPage() {
   });
   const [selectedMonthKey, setSelectedMonthKey] = useState('');
   const [expandedEpics, setExpandedEpics] = useState<Set<string>>(() => new Set());
+  const [standaloneExpanded, setStandaloneExpanded] = useState(false);
   const [stateFilter, setStateFilter] = useState<Set<string>>(() => new Set());
   const [rolePickerOpen, setRolePickerOpen] = useState(false);
   const createEpicTrigger = useRef<HTMLButtonElement>(null);
@@ -985,7 +986,13 @@ export function RoadmapPage() {
     ...(showUnattributedFact ? [planColumn(columnWidths, 'fact:unattributed', 'Факт · Без роли', FACT_COLUMN)] : []),
   ];
   const pinnedColumnIds = pinnedColumns === 'none' ? [] : pinnedColumns === 'name' ? ['name'] : ['name', 'summary:plan', ...(preferences.showFact ? ['summary:fact'] : [])];
-  const allEpicsExpanded = epics.length > 0 && epics.every((epic) => expandedEpics.has(epic.id));
+  const allEpicsExpanded = (epics.length > 0 || standaloneFeatures.length > 0)
+    && epics.every((epic) => expandedEpics.has(epic.id))
+    && (standaloneFeatures.length === 0 || standaloneExpanded);
+  const expandEverything = (expanded: boolean) => {
+    setExpandedEpics(expanded ? new Set(epics.map((epic) => epic.id)) : new Set());
+    setStandaloneExpanded(expanded);
+  };
   const quarterTotalHours = plannedItems
     .filter((item) => item.type.toLowerCase() === 'feature' || item.type.toLowerCase() === 'epic')
     .flatMap((item) => item.allocations)
@@ -1196,6 +1203,62 @@ export function RoadmapPage() {
           );
         })}
         {showUnattributedFact ? renderFactCell(actualHours === null ? null : unattributedFact(Number(actualHours), actualByRole), 'unattributed') : null}
+      </tr>
+    );
+  }
+
+  // Features without an epic would otherwise run on as a flat list under every epic. They sit in one collapsible row
+  // that sums them the way an epic row sums its children, so the table stays short and the project totals still add up.
+  function renderStandaloneGroup() {
+    const itemPlan = (item: RoadmapWorkItem) => Array.from(rolePlan.byItem.get(item.id)?.values() ?? []).reduce((sum, hours) => sum + hours, 0);
+    const planHours = standaloneFeatures.reduce((sum, item) => sum + itemPlan(item), 0);
+    const hasFact = !selectedMonth || standaloneFeatures.some((item) => item.actualHours !== null);
+    const factHours = hasFact ? standaloneFeatures.reduce((sum, item) => sum + Number(item.actualHours ?? 0), 0) : null;
+    const planByRole = (roleId: string) => standaloneFeatures.reduce((sum, item) => sum + (rolePlan.byItem.get(item.id)?.get(roleId) ?? 0), 0);
+    const factByRole = (roleId: string) => standaloneFeatures.reduce((sum, item) => sum + (roleFact?.byItem.get(item.id)?.get(roleId) ?? 0), 0);
+    const unattributed = standaloneFeatures.reduce((sum, item) => item.actualHours === null && selectedMonth ? sum : sum + unattributedFact(Number(item.actualHours ?? 0), roleFact?.byItem.get(item.id)), 0);
+    const countForm = FEATURE_COUNT_PLURALS.select(standaloneFeatures.length);
+    const label = 'Фичи без эпика';
+    return (
+      <tr key="standalone-group" data-row-kind="epic" data-standalone-group className="group/row align-top transition-colors border-t border-border bg-[color-mix(in_srgb,var(--color-muted)_30%,var(--color-card))] hover:bg-[color-mix(in_srgb,var(--color-muted)_45%,var(--color-card))]">
+        <th scope="row" style={pinnedCellStyle('name')} className={cn('px-3 py-2 pr-5 text-left font-normal inset-shadow-[2px_0_0] inset-shadow-muted-foreground/40 sm:px-4 sm:pr-5', pinnedCellClass('name'))}>
+          <div className="-ml-1 grid grid-cols-[1.75rem_1rem_minmax(0,1fr)] items-start gap-x-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-expanded={standaloneExpanded}
+              aria-label={`${standaloneExpanded ? 'Свернуть' : 'Развернуть'}: ${label}`}
+              onClick={() => setStandaloneExpanded((value) => !value)}
+              data-plan-toggle
+              className="-mt-1 size-7 text-muted-foreground hover:text-foreground focus-visible:ring-ring motion-reduce:transition-none motion-reduce:active:scale-100"
+            >
+              {standaloneExpanded ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronRight aria-hidden="true" className="size-4" />}
+            </Button>
+            <Layers aria-hidden="true" className="mt-0.5 size-4 text-muted-foreground" />
+            <div data-plan-name className="col-start-3 min-w-0">
+              <div data-plan-title className="text-sm leading-5 font-semibold text-foreground">{label}</div>
+              <div data-plan-meta className="mt-1.5 text-xs leading-4 text-muted-foreground">
+                <span className="rounded-full px-2 py-px text-[10.5px] leading-4 whitespace-nowrap tabular-nums ring-1 ring-inset ring-border">
+                  {standaloneFeatures.length} {countForm === 'one' ? 'фича' : countForm === 'few' ? 'фичи' : 'фич'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </th>
+        <td data-tone="plan" style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:plan'), planHours ? 'font-semibold text-foreground' : EMPTY_VALUE_CLASS)}>{cellHours(planHours)}</td>
+        {preferences.showFact ? <td data-tone="fact" style={pinnedCellStyle('summary:fact')} className={cn('relative whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums', pinnedCellClass('summary:fact'), factHours ? 'font-semibold text-foreground' : EMPTY_VALUE_CLASS)}>
+          {cellHours(factHours)}
+          {preferences.showFactProgress ? <FactProgress planned={planHours} actual={factHours ?? 0} /> : null}
+        </td> : null}
+        {detailRoles.map((role) => {
+          const planned = planByRole(role.id);
+          return <Fragment key={role.id}>
+            <td className={cn('border-l border-border/60 px-3 py-2.5 text-right text-sm tabular-nums', planned ? 'font-medium text-foreground' : EMPTY_VALUE_CLASS)}>{cellHours(planned)}</td>
+            {renderRoleMetrics(role.id, planned, factHours === null ? null : factByRole(role.id))}
+          </Fragment>;
+        })}
+        {showUnattributedFact ? renderFactCell(factHours === null ? null : Number(unattributed.toFixed(2)), 'unattributed') : null}
       </tr>
     );
   }
@@ -1442,7 +1505,7 @@ export function RoadmapPage() {
                     /> : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    {view === 'periods' && focusMode ? <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setExpandedEpics(allEpicsExpanded ? new Set() : new Set(epics.map((epic) => epic.id)))}>{allEpicsExpanded ? 'Свернуть всё' : 'Развернуть всё'}</Button> : null}
+                    {view === 'periods' && focusMode ? <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => expandEverything(!allEpicsExpanded)}>{allEpicsExpanded ? 'Свернуть всё' : 'Развернуть всё'}</Button> : null}
                     {view === 'periods' ? <Button type="button" variant={showUnassignedPeriods ? 'secondary' : 'outline'} size="sm" className="h-8" onClick={() => setShowUnassignedPeriods((value) => !value)}>{showUnassignedPeriods ? 'Скрыть без назначений' : 'Показать без назначений'}</Button> : null}
                     {periodControls}
                     {appearanceSettings}
@@ -1467,7 +1530,7 @@ export function RoadmapPage() {
                       variant={focusMode ? 'secondary' : 'outline'}
                       align="end"
                       onClick={() => {
-                        if (!focusMode && view === 'periods') setExpandedEpics(new Set(epics.map((epic) => epic.id)));
+                        if (!focusMode && view === 'periods') expandEverything(true);
                         setFocusMode((current) => !current);
                       }}
                       label={focusMode ? 'Выйти из режима фокуса' : 'Включить режим фокуса'}
@@ -1644,7 +1707,10 @@ export function RoadmapPage() {
                             {!collapsed ? children.map((feature, index) => renderItemRow(feature, false, 0, false, undefined, true, index === children.length - 1)) : null}
                           </Fragment>;
                         })}
-                        {standaloneFeatures.map((feature) => renderItemRow(feature))}
+                        {standaloneFeatures.length ? <>
+                          {renderStandaloneGroup()}
+                          {standaloneExpanded ? standaloneFeatures.map((feature, index) => renderItemRow(feature, false, 0, false, undefined, true, index === standaloneFeatures.length - 1)) : null}
+                        </> : null}
                         {unattachedPlanHours > 0 ? <tr className="border-t border-border/50 bg-card text-sm">
                           <th scope="row" style={pinnedCellStyle('name')} className={cn('px-4 py-3 text-left font-normal', pinnedCellClass('name'))}>
                             План без эпика / фичи<span className="mt-0.5 block text-xs text-muted-foreground">Назначения на карточках без связи с эпиком или фичей</span>
@@ -1670,7 +1736,11 @@ export function RoadmapPage() {
                   initialType={createTarget.type}
                   parentExternalId={createTarget.parentExternalId}
                   onCreated={(item, parentExternalId) => {
-                    if (item.type !== 'Feature' || !parentExternalId) return;
+                    if (item.type !== 'Feature') return;
+                    if (!parentExternalId) {
+                      setStandaloneExpanded(true);
+                      return;
+                    }
                     const parent = epics.find((epic) => epic.externalId === parentExternalId);
                     if (parent) setExpandedEpics((current) => new Set(current).add(parent.id));
                   }}

@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRoadmapSummary, type RoadmapProjectOverview, type RoadmapSummary, type RoadmapSummaryMetrics, type RoadmapTablePreferences } from '@tracker/shared';
-import { ArrowDown, ArrowUp, ArrowUpRight, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Download, FolderOpen, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpRight, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Download, FolderOpen, Layers, Search } from 'lucide-react';
 import { getRoadmapMonthlyFact, roadmapApi, roadmapMonthlyFactQueryKey, roadmapPlanQueryKey, type AzureProject, type RoadmapRole, type RoadmapWorkItem } from '@/entities/roadmap/api/roadmapApi';
 import { isRoadmapDemoMode } from '@/entities/roadmap/api/roadmapDemo';
 import { AzureWorkItemIcon } from '@/entities/roadmap/ui/AzureWorkItemIcon';
@@ -240,6 +240,26 @@ function itemSummary(item: RoadmapWorkItem, summary: ProjectSummary, includeChil
   };
 }
 
+/** Sums the features that have no epic, the way an epic row sums its children. */
+function standaloneSummary(features: RoadmapWorkItem[], summary: ProjectSummary) {
+  const byRole = new Map<string, number>();
+  let planHours = 0;
+  for (const feature of features) {
+    for (const [roleId, hours] of summary.rolePlan.byItem.get(feature.id) ?? []) {
+      byRole.set(roleId, (byRole.get(roleId) ?? 0) + hours);
+      planHours += hours;
+    }
+  }
+  const facts = features.filter((feature) => feature.actualHours !== null);
+  return {
+    epics: 0,
+    features: features.length,
+    planHours,
+    actualHours: facts.length ? facts.reduce((sum, feature) => sum + Number(feature.actualHours), 0) : null,
+    ...assignmentCounts(features, summary.visibleRoles, byRole),
+  };
+}
+
 function unattachedSummary(summary: ProjectSummary, planHours: number) {
   const byExternalId = new Map(summary.items.map((item) => [item.externalId, item]));
   const items = summary.items.filter((item) => {
@@ -396,12 +416,46 @@ function ProjectPlanDetails({
     <Metrics summary={itemSummary(item, summary, includeChildEpics)} showFact={showFact} level="feature" pin={pin} />
   </tr>;
 
+  const renderStandaloneGroup = (features: RoadmapWorkItem[]) => {
+    const key = `${projectId}:standalone`;
+    const expanded = expandedEpics.has(key);
+    return <Fragment key={key}>
+      <tr data-row-kind="epic" data-standalone-group className={ROW_CLASS.epic}>
+        <th scope="row" style={pin('name').style} className={cn('py-2 pl-[40px] pr-5 text-left font-normal sm:pl-[44px]', pin('name').className)}>
+          <div className="-ml-1 grid grid-cols-[1.75rem_1rem_minmax(0,1fr)] items-start gap-x-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`${expanded ? 'Свернуть' : 'Развернуть'} фичи без эпика`}
+              aria-expanded={expanded}
+              data-plan-toggle
+              onClick={() => onToggleEpic(key)}
+              className="-mt-1 size-7 text-muted-foreground hover:text-foreground motion-reduce:transition-none motion-reduce:active:scale-100"
+            >{expanded ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronRight aria-hidden="true" className="size-4" />}</Button>
+            <Layers aria-hidden="true" className="mt-0.5 size-4 text-muted-foreground" />
+            <div data-plan-name className="min-w-0">
+              <p data-plan-title className="text-sm leading-5 font-medium text-foreground">Фичи без эпика</p>
+              <div data-plan-meta className="mt-1.5 text-xs leading-4 text-muted-foreground">
+                <span className="rounded-full px-2 py-px text-[10.5px] leading-4 whitespace-nowrap tabular-nums text-muted-foreground ring-1 ring-inset ring-border">
+                  {plural(features.length, 'фича', 'фичи', 'фич')}
+                </span>
+              </div>
+            </div>
+          </div>
+        </th>
+        <Metrics summary={standaloneSummary(features, summary)} showFact={showFact} level="epic" pin={pin} />
+      </tr>
+      {expanded ? features.map((feature, index) => renderFeature(feature, true, index === features.length - 1)) : null}
+    </Fragment>;
+  };
+
   const groups = groupItems(summary);
   const unattachedPlanHours = [...summary.rolePlan.byUnattached.values()].reduce((sum, value) => sum + value, 0);
   return <>
     {factQuery.isError ? messageRow(<QueryErrorNotice title="Не удалось загрузить факт за месяц" queries={[factQuery]} />) : null}
     {groups.epics.map((epic) => renderEpic(epic, groups.featuresByEpic.get(epic.id) ?? []))}
-    {groups.standaloneFeatures.map((feature) => renderFeature(feature))}
+    {groups.standaloneFeatures.length ? renderStandaloneGroup(groups.standaloneFeatures) : null}
     {unattachedPlanHours > 0 ? <tr data-row-kind="feature" className={ROW_CLASS.feature}>
       <th scope="row" style={pin('name').style} className={cn('py-2.5 text-left text-sm font-normal', NESTED_NAME_CLASS, pin('name').className)}>
         План без эпика / фичи
