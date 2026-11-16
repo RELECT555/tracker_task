@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { aggregateRoadmapSummaries, azureRoleEstimate, getRoadmapFactRoots, getRoadmapRolePlan, getRoadmapSummary } from '@tracker/shared';
+import { aggregateRoadmapSummaries, azureRoleEstimate, getRoadmapFactRoots, getRoadmapIterationVisibility, getRoadmapRolePlan, getRoadmapSummary } from '@tracker/shared';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Cloud, Equal, Layers, ListChecks, Maximize2, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
@@ -933,8 +933,24 @@ export function RoadmapPage() {
     !overviewLoading && !projectsQuery.isError && !overviewProjects.length ? EMPTY_OVERVIEW : undefined
   );
   const plannedItems = useMemo(() => summary?.items ?? [], [summary]);
-  const epics = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'epic'), [plannedItems]);
-  const features = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'feature'), [plannedItems]);
+  // Rows follow the quarter's Azure iteration. Until it loads, or when Azure has none, every card is shown.
+  const quarterIterationQuery = useQuery({
+    queryKey: ['roadmap', 'iteration', roadmapProjectId, currentQuarterKey],
+    queryFn: ({ signal }) => roadmapApi.quarterIteration(roadmapProjectId, currentQuarterKey, signal),
+    enabled: Boolean(plan && !isAllProjects),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const quarterIterationPath = quarterIterationQuery.data?.iterationPath ?? null;
+  const iteration = useMemo(
+    () => getRoadmapIterationVisibility(plannedItems, quarterIterationPath, summary?.activeItemIds ?? new Set<string>()),
+    [plannedItems, quarterIterationPath, summary],
+  );
+  const epics = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'epic' && iteration.visibleIds.has(item.id)), [plannedItems, iteration]);
+  const features = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'feature' && iteration.visibleIds.has(item.id)), [plannedItems, iteration]);
+  const outsideIterationBadge = (item: RoadmapWorkItem, className?: string) => iteration.outsideIds.has(item.id)
+    ? <span data-plan-outside-iteration title={item.iterationPath ? `Итерация: ${item.iterationPath}` : 'Итерация не задана'} className={cn('justify-self-start rounded-full bg-amber-500/10 px-2 py-px text-[10.5px] leading-4 whitespace-nowrap text-amber-800 ring-1 ring-inset ring-amber-500/30 dark:text-amber-200', className)}>вне итерации</span>
+    : null;
   const stateOptions = useMemo(() => Array.from(new Set([...epics, ...features].map((item) => item.state?.trim()).filter((state): state is string => Boolean(state)))).sort((a, b) => a.localeCompare(b, 'ru')), [epics, features]);
   const stateCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1085,6 +1101,7 @@ export function RoadmapPage() {
                   <span className="justify-self-start rounded-full px-2 py-px text-[10.5px] leading-4 whitespace-nowrap tabular-nums text-muted-foreground ring-1 ring-inset ring-border">
                     {childCount} {featureCountForm === 'one' ? 'фича' : featureCountForm === 'few' ? 'фичи' : 'фич'}
                   </span>
+                  {outsideIterationBadge(item, 'col-span-3')}
                 </div>
               </div>
               {canCreateWorkItem ? <IconButton
@@ -1111,6 +1128,7 @@ export function RoadmapPage() {
               <div data-plan-meta className="mt-1 grid grid-cols-[3.25rem_auto] items-center justify-start gap-x-1.5 gap-y-1 pl-6 text-[11px] text-muted-foreground">
                 <span className="whitespace-nowrap tabular-nums" title={`Feature #${item.externalId}`}><span className="sr-only">Feature </span>#{item.externalId}</span>
                 <WorkItemStateBadge state={item.state} variant="dot" className="justify-self-start" />
+                {outsideIterationBadge(item, 'col-span-2')}
               </div>
             </div>
           )}
@@ -1543,6 +1561,10 @@ export function RoadmapPage() {
                 {selectedMonth ? <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-2 text-xs text-muted-foreground">
                   <p role="status">{demoMode ? 'Факт за месяц доступен в проектах Azure DevOps.' : monthlyFactQuery.isError ? (monthlyFact ? 'Не удалось обновить факт за месяц. Показаны последние загруженные данные.' : 'Не удалось загрузить факт за месяц.') : monthlyFactQuery.isFetching ? 'Загружаем факт за месяц…' : 'План по месяцам доступен для просмотра.'}</p>
                   {!demoMode && monthlyFactQuery.isError ? <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => void monthlyFactQuery.refetch()}>Повторить</Button> : null}
+                </div> : null}
+
+                {!demoMode && configured && quarterIterationQuery.isSuccess && quarterIterationPath === null ? <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+                  <p role="status">Итерация квартала в Azure не найдена — показаны все карточки</p>
                 </div> : null}
 
                 {roles.length > 0 && needsPeopleSync && (configured || (canEditPlan && !selectedMonth)) ? (
