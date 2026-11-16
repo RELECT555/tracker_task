@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { LoginDto } from '@tracker/shared';
 import { authApi } from '@/entities/user/api/authApi';
-import { AUTH_EXPIRED_EVENT, loadAuthProvider, type AuthProvider } from '@/shared/lib/auth';
+import { AUTH_EXPIRED_EVENT, isEntraProvider, loadAuthProvider, type AuthProvider } from '@/shared/lib/auth';
 import { setTokens } from '@/shared/lib/auth-storage';
 import { ApiError } from '@/shared/api/client';
 import { routes } from '@/shared/config/routes';
@@ -95,6 +95,8 @@ export function useAuth() {
       loginMutation.mutateAsync({ dto, redirectTo }),
     loginError: loginMutation.error,
     isLoggingIn: loginMutation.isPending,
+    signInWithMicrosoft: (redirectTo: string) =>
+      isEntraProvider(provider) ? provider.signInRedirect(redirectTo) : Promise.resolve(),
     logout,
   };
 }

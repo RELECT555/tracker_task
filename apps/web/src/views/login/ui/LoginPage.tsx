@@ -18,7 +18,8 @@ const fieldClassName =
 
 export function LoginPage() {
   const searchParams = useSearchParams();
-  const { login, loginError, isLoggingIn } = useAuth();
+  const { login, loginError, isLoggingIn, provider, signInWithMicrosoft } = useAuth();
+  const [redirecting, setRedirecting] = useState(false);
   const [email, setEmail] = useState('admin@tracker.local');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -30,6 +31,15 @@ export function LoginPage() {
       await login({ email, password }, redirectTo);
     } catch {
       // The mutation exposes the error below; do not leak a rejected event promise.
+    }
+  }
+
+  async function handleMicrosoftSignIn() {
+    setRedirecting(true);
+    try {
+      await signInWithMicrosoft(redirectTo);
+    } catch {
+      setRedirecting(false);
     }
   }
 
@@ -73,6 +83,18 @@ export function LoginPage() {
           <h1 id="login-title" className="text-[30px] leading-tight font-medium tracking-[-0.045em] sm:text-[34px]">Всё начинается здесь.</h1>
           <p id="login-description" className="mt-3 max-w-[320px] text-sm leading-6 text-slate-400">Войдите в аккаунт, чтобы продолжить<br className="hidden sm:block" /> работу над вашими проектами.</p>
 
+          {provider === 'entra' ? (
+            <Button
+              type="button"
+              onClick={handleMicrosoftSignIn}
+              disabled={redirecting}
+              aria-describedby="login-description"
+              className="mt-9 h-12 w-full justify-between rounded-lg bg-violet-300 px-4 font-semibold text-[#161122] shadow-none transition-[background-color,transform] hover:bg-violet-200 focus-visible:ring-violet-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e0f16]"
+            >
+              <span>{redirecting ? 'Переходим к Microsoft…' : 'Войти через Microsoft'}</span>
+              {redirecting ? <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true" /> : <ArrowRight className="size-4" aria-hidden="true" />}
+            </Button>
+          ) : (
           <form onSubmit={handleSubmit} aria-describedby="login-description" aria-busy={isLoggingIn} className="mt-9 space-y-5 scheme-dark">
             <div className="grid gap-2.5">
               <Label htmlFor="email" className="text-[13px] font-normal text-slate-300">Рабочая почта</Label>
@@ -123,6 +145,7 @@ export function LoginPage() {
               {isLoggingIn ? <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true" /> : <ArrowRight className="size-4" aria-hidden="true" />}
             </Button>
           </form>
+          )}
         </div>
         <footer className="mt-12 text-center font-mono text-[10px] tracking-[0.06em] text-slate-400 lg:mt-0">Меньше хаоса. Больше движения вперёд.</footer>
       </section>

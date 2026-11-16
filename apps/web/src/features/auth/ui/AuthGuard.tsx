@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { routes } from '@/shared/config/routes';
+import { ApiError } from '@/shared/api/client';
 
 export function AuthGuard({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) {
   const router = useRouter();
@@ -30,7 +31,11 @@ export function AuthGuard({ children, fallback }: { children: React.ReactNode; f
     if (fallback && !(hasToken && profileError)) return fallback;
     return (
       <div role="status" className="flex min-h-screen items-center justify-center px-4 text-center text-sm text-muted-foreground">
-        {hasToken && profileError ? 'Не удалось проверить сессию. Обновите страницу и попробуйте снова.' : 'Проверка авторизации…'}
+        {hasToken && profileError
+          ? profileError instanceof ApiError && profileError.code === 'USER_NOT_PROVISIONED'
+            ? profileError.message
+            : 'Не удалось проверить сессию. Обновите страницу и попробуйте снова.'
+          : 'Проверка авторизации…'}
       </div>
     );
   }
