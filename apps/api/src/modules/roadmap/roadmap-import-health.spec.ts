@@ -1,6 +1,11 @@
 import { Logger } from '@nestjs/common';
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
-import { recordImportOutcome } from './roadmap-import-health';
+import type { AzureDevOpsCredentials } from './roadmap-integration.service';
+import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
+import {
+  importWorkItemsRecorded,
+  recordImportOutcome,
+} from './roadmap-import-health';
 
 type State = {
   projectId: string;
@@ -227,5 +232,48 @@ describe('recordImportOutcome', () => {
     ).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe('importWorkItemsRecorded', () => {
+  const credentials = {
+    organizationUrl: 'https://x',
+  } as AzureDevOpsCredentials;
+
+  it('returns the imported items and records a success that is not a poll', async () => {
+    const { rows, prisma } = setup();
+    const importWorkItems = jest.fn().mockResolvedValue([{ id: 7 }]);
+    const importer = {
+      importWorkItems,
+    } as unknown as RoadmapWorkItemImportService;
+
+    await expect(
+      importWorkItemsRecorded(prisma, importer, 'project-1', [7], credentials),
+    ).resolves.toEqual([{ id: 7 }]);
+
+    expect(importWorkItems).toHaveBeenCalledWith(
+      { id: 'project-1' },
+      [7],
+      credentials,
+    );
+    const state = rows.get('project-1');
+    expect(state?.lastImportOkAt).toBeInstanceOf(Date);
+    expect(state?.lastImportChangedAt).toBeNull();
+  });
+
+  it('records the failure and rethrows the original error', async () => {
+    const { rows, prisma } = setup();
+    const failure = new Error('Azure DevOps returned 503');
+    const importer = {
+      importWorkItems: jest.fn().mockRejectedValue(failure),
+    } as unknown as RoadmapWorkItemImportService;
+
+    await expect(
+      importWorkItemsRecorded(prisma, importer, 'project-1', [7], credentials),
+    ).rejects.toBe(failure);
+
+    const state = rows.get('project-1');
+    expect(state?.importFailingSince).toBeInstanceOf(Date);
+    expect(state?.lastImportError).toBe('Azure DevOps returned 503');
   });
 });

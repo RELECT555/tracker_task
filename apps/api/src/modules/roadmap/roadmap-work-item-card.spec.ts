@@ -89,6 +89,10 @@ function setup({
       findUnique: jest.fn().mockResolvedValue({ id: 'local' }),
     },
     roadmapRoleMember: { findMany: jest.fn().mockResolvedValue([]) },
+    roadmapAzureProjectState: {
+      upsert: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     user: {
       findUnique: jest.fn().mockResolvedValue({ fullName: 'Мария Петрова' }),
     },
@@ -110,7 +114,7 @@ function setup({
       path: string;
       value: unknown;
     }[];
-  return { service, request, importer, patch };
+  return { service, request, importer, prisma, patch };
 }
 
 const actor = { id: 'user', email: 'maria@example.test' };
@@ -163,6 +167,51 @@ describe('Azure work item card', () => {
       { id: 'project' },
       [101],
       expect.anything(),
+    );
+  });
+
+  it('records the local re-read after an edit as import health', async () => {
+    const { service, prisma } = setup();
+
+    await service.update(
+      'project',
+      '101',
+      { rev: 7, title: 'Новое название' },
+      actor,
+      true,
+    );
+
+    expect(prisma.roadmapAzureProjectState.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { projectId: 'project' },
+        update: { importFailingSince: null, lastImportOkAt: expect.any(Date) },
+      }),
+    );
+  });
+
+  it('keeps swallowing a failed local re-read but records the failure', async () => {
+    const { service, prisma, importer } = setup();
+    importer.importWorkItems.mockRejectedValueOnce(
+      new Error('Azure DevOps returned 503'),
+    );
+
+    await expect(
+      service.update(
+        'project',
+        '101',
+        { rev: 7, title: 'Новое название' },
+        actor,
+        true,
+      ),
+    ).resolves.toBeDefined();
+
+    expect(prisma.roadmapAzureProjectState.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { projectId: 'project' },
+        update: expect.objectContaining({
+          lastImportError: 'Azure DevOps returned 503',
+        }),
+      }),
     );
   });
 

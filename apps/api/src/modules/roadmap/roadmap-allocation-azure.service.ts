@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { IsActiveAdminHandler } from '../identity/application/queries/is-active-admin.handler';
 import { escapeHtml } from './azure-html';
+import { importWorkItemsRecorded } from './roadmap-import-health';
 import {
   decideEstimate,
   hoursField,
@@ -196,8 +197,10 @@ export class RoadmapAllocationAzureService implements OnModuleInit {
         throw error;
       }
     }
-    await this.importer.importWorkItems(
-      { id: allocation.workItem.projectId },
+    await importWorkItemsRecorded(
+      this.prisma,
+      this.importer,
+      allocation.workItem.projectId,
       [Number(allocation.azureTaskId)],
       credentials,
     );

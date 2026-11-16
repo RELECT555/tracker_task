@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { escapeHtml, htmlToText, isPlainHtml, textToHtml } from './azure-html';
+import { importWorkItemsRecorded } from './roadmap-import-health';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import {
   AzureDevOpsCredentials,
@@ -593,9 +594,13 @@ export class RoadmapWorkItemCardService {
     id: number,
     credentials: AzureDevOpsCredentials,
   ) {
-    await this.importer
-      .importWorkItems({ id: projectId }, [id], credentials)
-      .catch(() => undefined);
+    await importWorkItemsRecorded(
+      this.prisma,
+      this.importer,
+      projectId,
+      [id],
+      credentials,
+    ).catch(() => undefined);
   }
 
   private writeError(error: unknown) {

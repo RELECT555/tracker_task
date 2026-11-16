@@ -107,6 +107,10 @@ function allocationService(
   };
   const prisma = {
     ...tx,
+    roadmapAzureProjectState: {
+      upsert: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     roadmapAllocation: {
       ...tx.roadmapAllocation,
       findMany: jest.fn().mockResolvedValue([row]),

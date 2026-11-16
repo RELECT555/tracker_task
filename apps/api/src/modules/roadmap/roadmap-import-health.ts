@@ -1,6 +1,8 @@
 import { Logger } from '@nestjs/common';
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { redactSecrets } from './roadmap-alert-format';
+import type { AzureDevOpsCredentials } from './roadmap-integration.service';
+import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 
 export type ImportOutcome =
   | { ok: true; changed: boolean; source: 'poll' | 'webhook' }
@@ -64,5 +66,35 @@ export async function recordImportOutcome(
     logger.warn(
       `Could not record Azure import outcome for project ${projectId}: ${redactSecrets(errorText(error), MAX_ERROR_LENGTH)}`,
     );
+  }
+}
+
+/**
+ * Re-reads specific work items and records the outcome for import health.
+ * These are targeted reads (after a write or a webhook), not polls, so a
+ * success never counts as a poll that found changes. Errors are rethrown.
+ */
+export async function importWorkItemsRecorded(
+  prisma: PrismaService,
+  importer: RoadmapWorkItemImportService,
+  projectId: string,
+  ids: number[],
+  credentials: AzureDevOpsCredentials,
+) {
+  try {
+    const imported = await importer.importWorkItems(
+      { id: projectId },
+      ids,
+      credentials,
+    );
+    await recordImportOutcome(prisma, projectId, {
+      ok: true,
+      changed: false,
+      source: 'webhook',
+    });
+    return imported;
+  } catch (error) {
+    await recordImportOutcome(prisma, projectId, { ok: false, error });
+    throw error;
   }
 }
