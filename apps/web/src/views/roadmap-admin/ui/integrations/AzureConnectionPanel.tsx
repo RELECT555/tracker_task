@@ -4,11 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Cloud, Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { roadmapApi, type RoadmapIntegrationSettings } from '@/entities/roadmap/api/roadmapApi';
+import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { AdminAlert, StatusPill } from '../AdminLayout';
-import { errorText } from './parts';
+import { errorText, FLAT_INPUT, FLAT_OUTLINE, FLAT_PRIMARY } from './parts';
 
 export function AzureConnectionPanel({ settings, openFromLink, onFirstConnect }: {
   settings: RoadmapIntegrationSettings;
@@ -87,6 +88,7 @@ export function AzureConnectionPanel({ settings, openFromLink, onFirstConnect }:
             type="button"
             variant="outline"
             size="sm"
+            className={FLAT_OUTLINE}
             aria-label="Настройки подключения"
             aria-expanded={editing}
             aria-controls="azure-connection-form"
@@ -132,6 +134,7 @@ export function AzureConnectionPanel({ settings, openFromLink, onFirstConnect }:
               spellCheck={false}
               onChange={(event) => { setOrganizationDraft(event.target.value); clearFeedback(); }}
               placeholder="https://dev.azure.com/your-organization"
+              className={FLAT_INPUT}
             />
           </div>
           <div className="min-w-0 space-y-2">
@@ -149,14 +152,14 @@ export function AzureConnectionPanel({ settings, openFromLink, onFirstConnect }:
                 onChange={(event) => { setPat(event.target.value); clearFeedback(); }}
                 placeholder={settings.patConfigured ? '••••••••' : 'Вставьте токен из Azure DevOps'}
                 aria-describedby={settings.patConfigured ? 'azure-pat-help' : undefined}
-                className="pr-11"
+                className={cn(FLAT_INPUT, 'pr-10')}
               />
               <button
                 type="button"
                 onClick={() => setShowPat((visible) => !visible)}
                 aria-label={showPat ? 'Скрыть токен' : 'Показать токен'}
                 aria-controls="azure-pat"
-                className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                className="absolute right-1 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
               >
                 {showPat ? <EyeOff aria-hidden="true" className="size-4" /> : <Eye aria-hidden="true" className="size-4" />}
               </button>
@@ -169,13 +172,16 @@ export function AzureConnectionPanel({ settings, openFromLink, onFirstConnect }:
           </div>
         </div>
 
-        <details className="rounded-lg border border-border bg-muted/25 px-3.5 text-sm">
-          <summary className="cursor-pointer rounded py-2.5 font-medium focus-visible:outline-2 focus-visible:outline-ring">Какие права нужны токену</summary>
-          <ul className="grid gap-1 pb-3 text-xs leading-relaxed text-muted-foreground sm:grid-cols-2">
-            <li>Project and Team: Read — проекты</li>
-            <li>Graph: Read — участники организации</li>
-            <li>Work Items: Read — задачи и роли</li>
-            <li>Work Items: Read &amp; Write — отправка плана</li>
+        <details className="group">
+          <summary className="inline-flex min-h-6 cursor-pointer list-none items-center gap-1.5 rounded text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+            <ChevronDown aria-hidden="true" className="size-3.5 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+            Какие права нужны токену
+          </summary>
+          <ul className="mt-2 grid gap-x-6 gap-y-1.5 rounded-lg border border-border bg-muted/30 p-3.5 text-xs leading-relaxed text-muted-foreground sm:grid-cols-2">
+            <li><span className="font-medium text-foreground">Project and Team: Read</span> — проекты</li>
+            <li><span className="font-medium text-foreground">Graph: Read</span> — участники организации</li>
+            <li><span className="font-medium text-foreground">Work Items: Read</span> — задачи и роли</li>
+            <li><span className="font-medium text-foreground">Work Items: Read &amp; Write</span> — отправка плана</li>
           </ul>
         </details>
 
@@ -194,6 +200,8 @@ export function AzureConnectionPanel({ settings, openFromLink, onFirstConnect }:
           <Button
             type="button"
             variant="outline"
+            size="sm"
+            className={FLAT_OUTLINE}
             disabled={busy}
             onClick={() => {
               if (!form.current?.reportValidity()) return;
@@ -204,7 +212,7 @@ export function AzureConnectionPanel({ settings, openFromLink, onFirstConnect }:
             {testMutation.isPending ? <LoaderCircle aria-hidden="true" className="size-4 motion-safe:animate-spin" /> : null}
             {testMutation.isPending ? 'Проверяем…' : 'Проверить доступ'}
           </Button>
-          <Button type="submit" disabled={busy || !settings.encryptionKeyConfigured}>
+          <Button type="submit" size="sm" className={FLAT_PRIMARY} disabled={busy || !settings.encryptionKeyConfigured}>
             {saveMutation.isPending ? <LoaderCircle aria-hidden="true" className="size-4 motion-safe:animate-spin" /> : null}
             {saveMutation.isPending ? 'Сохраняем…' : settings.configured ? 'Сохранить изменения' : 'Подключить Azure DevOps'}
           </Button>

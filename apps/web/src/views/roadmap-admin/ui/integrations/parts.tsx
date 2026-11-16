@@ -6,6 +6,12 @@ import { AdminCard } from '../AdminLayout';
 
 export const integrationColors = '[html:not(.dark)_&]:[--primary:239_75%_56%] [html:not(.dark)_&]:[--destructive:0_72%_44%] dark:[--destructive:0_80%_72%] dark:[--destructive-foreground:0_0%_5%]';
 
+/** Flat controls: no drop shadow or press-scale, soft border, so they sit on the card instead of floating above it. */
+export const FLAT_OUTLINE = 'h-8 rounded-lg border-border bg-transparent shadow-none hover:bg-accent active:scale-100 dark:bg-transparent';
+export const FLAT_PRIMARY = 'h-8 rounded-lg shadow-none active:scale-100';
+export const FLAT_INPUT = 'h-9 rounded-lg border-border bg-transparent shadow-none dark:bg-transparent';
+export const FLAT_SELECT = 'min-h-9 border-border bg-transparent shadow-none dark:bg-transparent';
+
 export const MODE_LABEL: Record<RoadmapWriteBackMode, string> = {
   off: 'Выключено',
   manual: 'По кнопке',
@@ -41,15 +47,24 @@ export function CheckStatusIcon({ status }: { status: 'ok' | 'warning' | 'error'
   return <AlertCircle role="img" className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-label="Ошибка" />;
 }
 
-export function Chip({ tone = 'muted', children, title }: { tone?: 'muted' | 'ok' | 'warn' | 'error' | 'info'; children: ReactNode; title?: string }) {
-  const tones = {
-    muted: 'bg-muted text-muted-foreground',
-    ok: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-    warn: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
-    error: 'bg-destructive/10 text-destructive',
-    info: 'bg-sky-500/10 text-sky-700 dark:text-sky-300',
-  };
-  return <span title={title} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium tabular-nums ${tones[tone]}`}>{children}</span>;
+const CHIP_TONES = {
+  muted: { chip: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground/50' },
+  ok: { chip: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
+  warn: { chip: 'bg-amber-500/10 text-amber-700 dark:text-amber-300', dot: 'bg-amber-500' },
+  error: { chip: 'bg-destructive/10 text-destructive', dot: 'bg-destructive' },
+  info: { chip: 'bg-sky-500/10 text-sky-700 dark:text-sky-300', dot: 'bg-sky-500' },
+};
+
+/** Compact status counter: coloured dot, label and a bold count. */
+export function Chip({ tone = 'muted', label, count, title }: { tone?: keyof typeof CHIP_TONES; label: string; count: number; title?: string }) {
+  const { chip, dot } = CHIP_TONES[tone];
+  return (
+    <span title={title} className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${chip}`}>
+      <span aria-hidden="true" className={`size-1.5 rounded-full ${dot}`} />
+      {label}
+      <span className="font-semibold tabular-nums">{count}</span>
+    </span>
+  );
 }
 
 export function errorText(error: unknown) {
