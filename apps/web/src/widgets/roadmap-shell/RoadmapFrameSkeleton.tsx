@@ -9,24 +9,25 @@ export function RoadmapFrameSkeleton() {
   return (
     <div className="roadmap-frame relative flex h-dvh overflow-clip bg-sidebar dark:bg-background">
       <aside aria-hidden="true" className="hidden h-full w-64 shrink-0 flex-col border-r border-sidebar-border/60 bg-sidebar md:flex">
-        <div className="flex h-16 shrink-0 items-center gap-3 pl-5 pr-3">
-          <span className="flex size-9 items-center justify-center rounded-lg border border-sidebar-border/60 bg-sidebar-accent text-sidebar-primary">
+        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border/60 pl-4 pr-2.5">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-sidebar-primary/15 text-sidebar-primary ring-1 ring-sidebar-primary/25">
             <GitBranch className="size-5" strokeWidth={1.7} />
           </span>
-          <span>
+          <span className="leading-tight">
             <span className="block text-sm font-semibold tracking-tight text-sidebar-foreground">Roadmap</span>
-            <span className="block text-[10px] uppercase tracking-[0.13em] text-sidebar-muted">Планирование</span>
+            <span className="mt-0.5 block text-[10px] uppercase tracking-[0.13em] text-sidebar-muted">Планирование</span>
           </span>
         </div>
-        <div className="flex-1 space-y-1 px-3 py-5">
-          {['w-20', 'w-28', 'w-24', 'w-36'].map((width, index) => <div key={index} className="flex h-10 items-center gap-3 px-3">
+        <div className="flex-1 space-y-0.5 px-3 py-5">
+          <Skeleton className="mx-3 mb-3 h-2.5 w-28 bg-sidebar-accent dark:bg-sidebar-accent opacity-60" />
+          {['w-20', 'w-28', 'w-24'].map((width, index) => <div key={index} className="flex h-9 items-center gap-3 px-3">
             <Skeleton className="size-[18px] shrink-0 rounded bg-sidebar-accent dark:bg-sidebar-accent" />
             <Skeleton className={`h-3 bg-sidebar-accent dark:bg-sidebar-accent ${width}`} />
           </div>)}
         </div>
-        <div className="shrink-0 border-t border-sidebar-border/60 px-3 py-3">
-          <div className="flex items-center gap-3 rounded-lg border border-sidebar-border/50 bg-sidebar-accent/30 px-3 py-2.5">
-            <Skeleton className="size-9 shrink-0 bg-sidebar-accent dark:bg-sidebar-accent" />
+        <div className="shrink-0 border-t border-sidebar-border/60 px-2.5 py-2.5">
+          <div className="flex items-center gap-2.5 px-2 py-2">
+            <Skeleton className="size-8 shrink-0 rounded-full bg-sidebar-accent dark:bg-sidebar-accent" />
             <div className="flex-1 space-y-2">
               <Skeleton className="h-3 w-28 bg-sidebar-accent dark:bg-sidebar-accent" />
               <Skeleton className="h-2.5 w-36 bg-sidebar-accent dark:bg-sidebar-accent opacity-60" />
