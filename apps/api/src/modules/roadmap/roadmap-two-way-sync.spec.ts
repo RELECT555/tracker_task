@@ -164,6 +164,7 @@ function allocationService(
   const planChanges = {
     read: jest.fn().mockResolvedValue(new Map()),
     record: jest.fn().mockResolvedValue(0),
+    recordAfter: jest.fn().mockResolvedValue(0),
   };
   const service = new RoadmapAllocationAzureService(
     prisma as unknown as PrismaService,

@@ -443,7 +443,10 @@ export class RoadmapController {
     @Param('allocationId', ParseUUIDPipe) allocationId: string,
   ) {
     await this.access.require(actor, { allocationIds: [allocationId] }, 'edit');
-    return this.allocationAzure.acceptFromAzure(allocationId);
+    return this.allocationAzure.acceptFromAzure(
+      allocationId,
+      planChangeContext({ id: actor.id, email: actor.email }, 'azure'),
+    );
   }
 
   @Delete('allocations/:allocationId')

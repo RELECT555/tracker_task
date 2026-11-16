@@ -271,12 +271,10 @@ function setup(initial: Row[] = []) {
   const prisma = {
     ...tx,
     roadmapRole: {
-      findFirst: jest
-        .fn()
-        .mockResolvedValue({
-          name: role.name,
-          azureEstimateField: 'Custom.Dev',
-        }),
+      findFirst: jest.fn().mockResolvedValue({
+        name: role.name,
+        azureEstimateField: 'Custom.Dev',
+      }),
     },
     roadmapPerson: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn(
@@ -316,6 +314,7 @@ function azureSetup(initial: Row[], settings: Record<string, unknown> = {}) {
       .fn()
       .mockResolvedValue({ organizationUrl: 'https://dev.azure.com/org' }),
     request: jest.fn().mockResolvedValue(undefined),
+    requestJson: jest.fn(),
   };
   const sync = new RoadmapAzureSyncService(
     env.prisma as unknown as PrismaService,
@@ -757,5 +756,361 @@ describe('Plan change log: delete allocation', () => {
     expect(rows.has('a1')).toBe(true);
     expect(tx.roadmapAllocation.delete).not.toHaveBeenCalled();
     expect(tx.roadmapPlanChange.createMany).not.toHaveBeenCalled();
+  });
+});
+
+const ORIGINAL_ESTIMATE = 'Microsoft.VSTS.Scheduling.OriginalEstimate';
+const azureTask = (id: number, estimate: number) =>
+  ({ id, rev: 1, url: '', fields: { [ORIGINAL_ESTIMATE]: estimate } }) as never;
+
+describe('Plan change log: changes from Azure DevOps', () => {
+  const linked = (id: string, taskId: string, overrides: Partial<Row> = {}) =>
+    row(id, {
+      azureTaskId: taskId,
+      periods: [{ ...october(8), id: `oct-${id}` }],
+      ...overrides,
+    });
+  /** What `reconcile` reads: the row plus the sync fields it compares. */
+  const synced = (r: Row, overrides: Record<string, unknown> = {}) => ({
+    ...r,
+    workItem,
+    role,
+    periods: r.periods.map((p) => ({ ...p })),
+    azurePushedHours: r.estimatedHours,
+    azureSyncStatus: 'synced',
+    azureSyncClaimId: null,
+    updatedAt: new Date('2026-11-01T00:00:00Z'),
+    ...overrides,
+  });
+
+  it('acceptFromAzure пишет updated с source azure и автором — нажавшим пользователем', async () => {
+    const { allocations, integration, journal } = azureSetup([
+      linked('a1', '42'),
+    ]);
+    integration.requestJson.mockResolvedValue(azureTask(42, 6));
+    const context = planChangeContext(actor, 'azure');
+
+    await expect(allocations.acceptFromAzure('a1', context)).resolves.toEqual({
+      accepted: true,
+    });
+
+    expect(journal()).toEqual([
+      expect.objectContaining({
+        action: 'updated',
+        source: 'azure',
+        batchId: context.batchId,
+        actorUserId: actor.id,
+        actorEmail: actor.email,
+        actorName: 'Иван Петров',
+        allocationId: 'a1',
+        azureTaskId: '42',
+        before: expect.objectContaining({
+          estimatedHours: 8,
+          months: [{ monthKey: '2026-10', hours: 8 }],
+        }),
+        after: expect.objectContaining({
+          estimatedHours: 6,
+          months: [{ monthKey: '2026-10', hours: 6 }],
+        }),
+      }),
+    ]);
+  });
+
+  it('reconcile пишет updated без автора при смене оценки в Task', async () => {
+    const first = linked('a1', '42');
+    const second = linked('a2', '43', { personExternalId: 'p2' });
+    const { allocations, tx, journal } = azureSetup([first, second]);
+    tx.roadmapAllocation.findMany.mockResolvedValueOnce([
+      synced(first),
+      synced(second),
+    ] as never);
+
+    await allocations.reconcile('project', [
+      azureTask(42, 6),
+      azureTask(43, 4),
+    ]);
+
+    const entries = journal();
+    expect(entries).toEqual([
+      expect.objectContaining({
+        action: 'updated',
+        source: 'azure',
+        actorUserId: null,
+        actorEmail: null,
+        actorName: null,
+        allocationId: 'a1',
+        azureTaskId: '42',
+        before: expect.objectContaining({ estimatedHours: 8 }),
+        after: expect.objectContaining({
+          estimatedHours: 6,
+          months: [{ monthKey: '2026-10', hours: 6 }],
+        }),
+      }),
+      expect.objectContaining({
+        allocationId: 'a2',
+        azureTaskId: '43',
+        actorUserId: null,
+        after: expect.objectContaining({ estimatedHours: 4 }),
+      }),
+    ]);
+    // One import is one batch.
+    expect(new Set(entries.map((entry) => entry.batchId)).size).toBe(1);
+    expect(tx.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('reconcile без изменений не пишет журнал', async () => {
+    const quiet = linked('a1', '42');
+    const settled = linked('a2', '43', { personExternalId: 'p2' });
+    const { allocations, tx } = azureSetup([quiet, settled]);
+    tx.roadmapAllocation.findMany.mockResolvedValueOnce([
+      synced(quiet),
+      // Only the sync status changes here: the row is written, the plan is not.
+      synced(settled, { azureSyncStatus: 'conflict' }),
+    ] as never);
+
+    await allocations.reconcile('project', [
+      azureTask(42, 8),
+      azureTask(43, 8),
+    ]);
+
+    expect(tx.roadmapAllocation.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.roadmapPlanChange.createMany).not.toHaveBeenCalled();
+  });
+
+  it('applyAzure при count 0 не пишет журнал', async () => {
+    const first = linked('a1', '42');
+    const { allocations, tx, rows } = azureSetup([first]);
+    tx.roadmapAllocation.findMany.mockResolvedValueOnce([
+      synced(first),
+    ] as never);
+    // A plan edit or a push touched the row after it was read.
+    tx.roadmapAllocation.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await allocations.reconcile('project', [azureTask(42, 6)]);
+
+    expect(rows.get('a1')!.estimatedHours).toBe(8);
+    expect(tx.roadmapPeriodAllocation.update).not.toHaveBeenCalled();
+    expect(tx.roadmapPlanChange.createMany).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * One allocation being sent to its Task, where Azure's lower estimate wins
+ * (conflict policy "skip-field"): planned 8, last pushed 10, the Task says 6.
+ */
+function pushSetup() {
+  const state: Record<string, unknown> & {
+    periods: { id: string; monthKey: string; hours: number }[];
+  } = {
+    id: 'a1',
+    workItemId: workItem.id,
+    roleId: role.id,
+    personExternalId: 'p1',
+    personName: 'Анна',
+    personEmail: 'anna@example.test',
+    quarterKey: '2026-Q4',
+    estimatedHours: 8,
+    azurePushedHours: 10,
+    azureTaskId: '42',
+    azureSyncStatus: 'pending',
+    azureSyncClaimId: null,
+    azureCreateAttemptId: null,
+    periods: [{ id: 'oct-a1', monthKey: '2026-10', hours: 8 }],
+  };
+  const view = () => ({
+    ...state,
+    workItem: { ...workItem, project: { id: 'project', externalId: 'ap' } },
+    role,
+    periods: state.periods.map((p) => ({ ...p })),
+  });
+  const client = {
+    roadmapAllocation: {
+      findUnique: jest.fn(() => Promise.resolve(view())),
+      findMany: jest.fn(() => Promise.resolve([view()])),
+      updateMany: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: Record<string, unknown>;
+          data: Record<string, unknown>;
+        }) => {
+          if (
+            Object.entries(where).some(([key, value]) => state[key] !== value)
+          )
+            return Promise.resolve({ count: 0 });
+          Object.assign(state, data);
+          return Promise.resolve({ count: 1 });
+        },
+      ),
+    },
+    roadmapPeriodAllocation: {
+      findMany: jest.fn(() =>
+        Promise.resolve(state.periods.map(({ id, hours }) => ({ id, hours }))),
+      ),
+      update: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: { hours: number };
+        }) => {
+          state.periods.find((p) => p.id === where.id)!.hours = data.hours;
+          return Promise.resolve({});
+        },
+      ),
+    },
+    roadmapPerson: { findUnique: jest.fn().mockResolvedValue(null) },
+    roadmapAzureProjectState: {
+      upsert: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    user: { findUnique: jest.fn().mockResolvedValue(null) },
+    roadmapPlanChange: {
+      createMany: jest.fn(({ data }: { data: unknown[] }) =>
+        Promise.resolve({ count: data.length }),
+      ),
+    },
+  };
+  const prisma = {
+    ...client,
+    $transaction: jest.fn(
+      (run: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
+        run(client as unknown as Prisma.TransactionClient),
+    ),
+  };
+  const sync = new RoadmapAzureSyncService(
+    prisma as unknown as PrismaService,
+    {
+      getWriteBackSettings: jest
+        .fn()
+        .mockResolvedValue({ mode: 'auto', conflictPolicy: 'skip-field' }),
+      getCredentials: jest
+        .fn()
+        .mockResolvedValue({ organizationUrl: 'https://dev.azure.com/org' }),
+    } as unknown as RoadmapIntegrationService,
+    {
+      importWorkItems: jest.fn().mockResolvedValue([]),
+    } as unknown as RoadmapWorkItemImportService,
+    {} as IsActiveAdminHandler,
+    {} as RoadmapAllocationAzureService,
+    new RoadmapPlanChangeService(),
+  );
+  const spy = (name: string) => jest.spyOn(sync as never, name as never);
+  spy('fetchTask').mockResolvedValue({
+    id: 42,
+    rev: 1,
+    url: '',
+    fields: { 'System.WorkItemType': 'Task', [ORIGINAL_ESTIMATE]: 6 },
+  } as never);
+  spy('typeFields').mockResolvedValue(new Set() as never);
+  const updateTask = spy('updateTask').mockResolvedValue(undefined as never);
+  spy('writeFeatureAggregates').mockResolvedValue(undefined as never);
+  // A released row is queued again; the test drives a single run.
+  spy('enqueue').mockReturnValue(undefined as never);
+  const warn = jest
+    .spyOn((sync as unknown as { logger: { warn: () => void } }).logger, 'warn')
+    .mockReturnValue(undefined);
+  const journal = () =>
+    client.roadmapPlanChange.createMany.mock.calls.flatMap(
+      ([{ data }]) => data as Record<string, unknown>[],
+    );
+  return {
+    state,
+    client,
+    updateTask,
+    warn,
+    journal,
+    run: () =>
+      (
+        sync as unknown as { syncAllocation: (id: string) => Promise<void> }
+      ).syncAllocation('a1'),
+  };
+}
+
+describe('Plan change log: estimate adjusted by Azure on push', () => {
+  it('finish с acceptedHours пишет updated с месяцами после shrinkPeriods', async () => {
+    const { state, journal, run } = pushSetup();
+
+    await run();
+
+    expect(state).toMatchObject({
+      azureSyncStatus: 'synced',
+      estimatedHours: 6,
+      azurePushedHours: 6,
+    });
+    expect(journal()).toEqual([
+      expect.objectContaining({
+        action: 'updated',
+        source: 'azure',
+        actorUserId: null,
+        actorName: null,
+        allocationId: 'a1',
+        azureTaskId: '42',
+        before: expect.objectContaining({
+          estimatedHours: 8,
+          months: [{ monthKey: '2026-10', hours: 8 }],
+        }),
+        after: expect.objectContaining({
+          estimatedHours: 6,
+          months: [{ monthKey: '2026-10', hours: 6 }],
+        }),
+      }),
+    ]);
+  });
+
+  it('finish без применения не пишет журнал', async () => {
+    const { state, updateTask, client, run } = pushSetup();
+    // A plan edit lands while the Task is being written.
+    updateTask.mockImplementation((() => {
+      Object.assign(state, { azureSyncStatus: 'pending', estimatedHours: 20 });
+      return Promise.resolve();
+    }) as never);
+
+    await run();
+
+    expect(state).toMatchObject({
+      azureSyncStatus: 'pending',
+      estimatedHours: 20,
+      azureSyncClaimId: null,
+    });
+    expect(client.roadmapPlanChange.createMany).not.toHaveBeenCalled();
+  });
+
+  it('ошибка shrinkPeriods не роняет отправку, запись пишется с фактически сохранёнными месяцами', async () => {
+    const { state, client, journal, run } = pushSetup();
+    client.roadmapPeriodAllocation.update.mockRejectedValue(
+      new Error('deadlock'),
+    );
+
+    await run();
+
+    expect(state.azureSyncStatus).toBe('synced');
+    expect(journal()).toEqual([
+      expect.objectContaining({
+        action: 'updated',
+        before: expect.objectContaining({ estimatedHours: 8 }),
+        after: expect.objectContaining({
+          estimatedHours: 6,
+          months: [{ monthKey: '2026-10', hours: 8 }],
+        }),
+      }),
+    ]);
+  });
+
+  it('ошибка записи журнала не роняет отправку', async () => {
+    const { state, client, warn, run } = pushSetup();
+    client.roadmapPlanChange.createMany.mockRejectedValue(
+      new Error('journal down'),
+    );
+
+    await run();
+
+    expect(state).toMatchObject({
+      azureSyncStatus: 'synced',
+      estimatedHours: 6,
+    });
+    expect(warn).toHaveBeenCalled();
   });
 });
