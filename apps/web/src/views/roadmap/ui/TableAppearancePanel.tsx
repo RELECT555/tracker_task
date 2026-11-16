@@ -107,6 +107,10 @@ export function TableAppearancePanel({ id, preferences, onChange, onReset, statu
               <Toggle label="Только роли с планом" description="Скрыть роли без оценок в этом периоде" checked={preferences.plannedRolesOnly} onChange={(plannedRolesOnly) => onChange({ plannedRolesOnly })} />
             </div>
           </section>
+          <section className="border-t border-border py-5" aria-labelledby={`${id}-rollup`}>
+            <h3 id={`${id}-rollup`} className="text-sm font-semibold">Подсчёт эпиков</h3>
+            <Toggle label="Учитывать дочерние эпики" description="План и факт эпика включают его дочерние эпики. Без этого эпик считает только свои фичи, а дочерние эпики — отдельно." checked={preferences.includeChildEpics} onChange={(includeChildEpics) => onChange({ includeChildEpics })} />
+          </section>
           <section className="border-t border-border py-5">
             <label className="block text-sm font-semibold"><span>Закрепление столбцов</span><span className="relative mt-3 block"><SearchableSelect searchable={false} portalContainer={portalContainer} value={preferences.pinnedColumns} onChange={(value) => onChange({ pinnedColumns: value as RoadmapTablePreferences['pinnedColumns'] })} options={[{ value: 'none', label: 'Без закрепления' }, { value: 'name', label: 'Закрепить название' }, { value: 'totals', label: 'Название и итоги' }]} /></span></label>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">Закреплённые столбцы остаются на месте при горизонтальной прокрутке.</p>

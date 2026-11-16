@@ -147,9 +147,19 @@ export interface RoadmapMonthlyFact {
   sourceHours?: Record<string, number>;
 }
 
-export function getRoadmapMonthlyFact(projectId: string, monthKey: string, signal?: AbortSignal) {
-  return apiFetch<RoadmapMonthlyFact>(`/roadmap/projects/${encodeURIComponent(projectId)}/fact?monthKey=${encodeURIComponent(monthKey)}`, { signal });
+export function getRoadmapMonthlyFact(projectId: string, monthKey: string, signal?: AbortSignal, includeChildEpics = false) {
+  return apiFetch<RoadmapMonthlyFact>(`/roadmap/projects/${encodeURIComponent(projectId)}/fact?monthKey=${encodeURIComponent(monthKey)}${includeChildEpics ? '&includeChildEpics=1' : ''}`, { signal });
 }
+
+/**
+ * Epic totals depend on the "include child epics" table setting. The default keeps the plain keys, so the
+ * plan stays shared with pages that do not have the setting; prefix invalidation still reaches both.
+ */
+export const roadmapPlanQueryKey = (projectId: string, includeChildEpics = false) =>
+  includeChildEpics ? ['roadmap', 'plan', projectId, 'child-epics'] as const : ['roadmap', 'plan', projectId] as const;
+
+export const roadmapMonthlyFactQueryKey = (projectId: string, monthKey: string, includeChildEpics = false) =>
+  includeChildEpics ? ['roadmap', 'monthly-fact', projectId, monthKey, 'child-epics'] as const : ['roadmap', 'monthly-fact', projectId, monthKey] as const;
 
 export interface RoadmapIntegrationSettings {
   provider: 'azure-devops';
@@ -299,8 +309,8 @@ const liveRoadmapApi = {
         body: JSON.stringify({ name: project.name, url: project.url }),
       },
     ),
-  plan: (projectId: string) =>
-    apiFetch<RoadmapProjectPlan>(`/roadmap/projects/${projectId}/plan`),
+  plan: (projectId: string, includeChildEpics = false) =>
+    apiFetch<RoadmapProjectPlan>(`/roadmap/projects/${projectId}/plan${includeChildEpics ? '?includeChildEpics=1' : ''}`),
   createWorkItem: (externalProjectId: string, input: CreateAzureWorkItemInput) =>
     apiFetch<CreatedAzureWorkItem>(`/roadmap/azure-projects/${encodeURIComponent(externalProjectId)}/work-items`, {
       method: 'POST',

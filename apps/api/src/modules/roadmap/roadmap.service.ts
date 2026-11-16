@@ -106,6 +106,7 @@ function rollUpActualHours<T extends RoadmapHierarchyItem>(
   items: T[],
   itemByExternalId: Map<string, T>,
   hoursOf: (item: T) => number,
+  includeChildEpics = false,
 ) {
   const workItems = new Map<string, number>();
   let totalHours = 0;
@@ -129,6 +130,8 @@ function rollUpActualHours<T extends RoadmapHierarchyItem>(
         workItems.set(ancestor.id, (workItems.get(ancestor.id) ?? 0) + hours);
         contributesToPlan = true;
       }
+      // Без настройки «Учитывать дочерние эпики» факт не поднимается выше ближайшего эпика.
+      if (!includeChildEpics && ancestor.type.toLowerCase() === 'epic') break;
       ancestor = ancestor.parentExternalId
         ? itemByExternalId.get(ancestor.parentExternalId)
         : undefined;
@@ -453,14 +456,19 @@ export class RoadmapService {
         );
         const cumulativeFact = monthKey
           ? undefined
-          : rollUpActualHours(workItems, byExternalId, (item) =>
-              Number(item.actualHours ?? 0),
+          : rollUpActualHours(
+              workItems,
+              byExternalId,
+              (item) => Number(item.actualHours ?? 0),
+              input.includeChildEpics,
             ).workItems;
         const monthlyFact =
           monthKey && input.includeMonthlyFact !== false
-            ? await this.calculateProjectFact(workItems, monthKey).catch(
-                () => undefined,
-              )
+            ? await this.calculateProjectFact(
+                workItems,
+                monthKey,
+                input.includeChildEpics,
+              ).catch(() => undefined)
             : undefined;
         // Cards with fact but no plan count in the quarter only through the fact of its months. If any month
         // fails the counts stay plan-only, as they do while the quarter view has not asked for the fact.
@@ -468,7 +476,11 @@ export class RoadmapService {
           !monthKey && input.includeQuarterFact
             ? await Promise.all(
                 roadmapQuarterMonthKeys(quarterKey).map((key) =>
-                  this.calculateProjectFact(workItems, key),
+                  this.calculateProjectFact(
+                    workItems,
+                    key,
+                    input.includeChildEpics,
+                  ),
                 ),
               ).catch(() => undefined)
             : undefined;
@@ -512,6 +524,7 @@ export class RoadmapService {
     projectId: string,
     actorId: string,
     canEditPlan: boolean,
+    includeChildEpics = false,
   ) {
     const project = await this.prisma.roadmapProject.findUnique({
       where: { id: projectId },
@@ -562,6 +575,7 @@ export class RoadmapService {
       project.workItems,
       itemByExternalId,
       (item) => Number(item.actualHours ?? 0),
+      includeChildEpics,
     );
     const taskUrl = (taskId: string) =>
       settings.organizationUrl
@@ -634,7 +648,11 @@ export class RoadmapService {
     };
   }
 
-  async getProjectFact(projectId: string, monthKey?: string) {
+  async getProjectFact(
+    projectId: string,
+    monthKey?: string,
+    includeChildEpics = false,
+  ) {
     if (
       typeof monthKey !== 'string' ||
       monthKey.length !== 7 ||
@@ -658,12 +676,17 @@ export class RoadmapService {
       },
     });
     if (!project) throw new NotFoundException('Roadmap project was not found');
-    return this.calculateProjectFact(project.workItems, monthKey);
+    return this.calculateProjectFact(
+      project.workItems,
+      monthKey,
+      includeChildEpics,
+    );
   }
 
   private async calculateProjectFact(
     items: RoadmapFactItem[],
     monthKey: string,
+    includeChildEpics = false,
   ) {
     const monthStart = new Date(`${monthKey}-01T00:00:00.000Z`);
     const now = Date.now();
@@ -701,6 +724,7 @@ export class RoadmapService {
       items,
       itemByExternalId,
       (item) => changes.get(item.externalId) ?? 0,
+      includeChildEpics,
     );
     const allocations = linkedAllocations.flatMap(({ id, azureTaskId }) => {
       const hours = changes.get(azureTaskId);

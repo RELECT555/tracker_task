@@ -28,6 +28,8 @@ export const roadmapTablePreferencesSchema = z.object({
   showFactProgress: z.boolean().default(false),
   showRoleDetails: z.boolean(),
   plannedRolesOnly: z.boolean(),
+  /** Added after v1 shipped: off, an epic sums only its own features and child epics count on their own. */
+  includeChildEpics: z.boolean().default(false),
   columnWidths: z.record(columnIdSchema, z.number().finite().min(80).max(2400))
     .refine((value) => Object.keys(value).length <= 500, 'Too many column widths'),
 }).strict();
@@ -52,5 +54,6 @@ export const DEFAULT_ROADMAP_TABLE_PREFERENCES: RoadmapTablePreferences = {
   showFactProgress: false,
   showRoleDetails: true,
   plannedRolesOnly: true,
+  includeChildEpics: false,
   columnWidths: {},
 };

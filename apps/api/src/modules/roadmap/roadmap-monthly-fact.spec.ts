@@ -197,4 +197,53 @@ describe('Roadmap monthly fact', () => {
       ),
     ).toEqual([200, 200, 1, 1]);
   });
+
+  describe('child epics', () => {
+    const items = () => [
+      workItem('archive', '1', 'Epic', null),
+      workItem('child', '2', 'Epic', '1'),
+      workItem('childFeature', '3', 'Feature', '2'),
+      workItem('childTask', '4', 'Task', '3'),
+      workItem('ownFeature', '5', 'Feature', '1'),
+      workItem('ownTask', '6', 'Task', '5'),
+    ];
+    const snapshots = (requestJson: jest.Mock) =>
+      requestJson
+        .mockResolvedValueOnce({
+          value: [1, 2, 3, 4, 5, 6].map((id) => azureItem(id, 0)),
+        })
+        .mockResolvedValueOnce({
+          value: [
+            ...[1, 2, 3, 5].map((id) => azureItem(id, 0)),
+            azureItem(4, 5),
+            azureItem(6, 2),
+          ],
+        });
+
+    it('keeps a child epic out of its parent epic by default', async () => {
+      const { service, requestJson } = setup(items());
+      snapshots(requestJson);
+      const fact = await service.getProjectFact('project', '2026-10');
+      expect(fact.workItems).toEqual({
+        archive: 2,
+        ownFeature: 2,
+        child: 5,
+        childFeature: 5,
+      });
+      expect(fact.totalHours).toBe(7);
+    });
+
+    it('rolls a child epic into its parent epic when the setting is on', async () => {
+      const { service, requestJson } = setup(items());
+      snapshots(requestJson);
+      const fact = await service.getProjectFact('project', '2026-10', true);
+      expect(fact.workItems).toEqual({
+        archive: 7,
+        ownFeature: 2,
+        child: 5,
+        childFeature: 5,
+      });
+      expect(fact.totalHours).toBe(7);
+    });
+  });
 });

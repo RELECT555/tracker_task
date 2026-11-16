@@ -23,6 +23,8 @@ import { ColorMark, RoleMark } from '@/shared/ui/color-mark';
 import {
   getRoadmapMonthlyFact,
   roadmapApi,
+  roadmapMonthlyFactQueryKey,
+  roadmapPlanQueryKey,
   type AzureProject,
   type RoadmapAllocation,
   type RoadmapPeriod,
@@ -764,9 +766,12 @@ export function RoadmapPage() {
   const canImportProject = Boolean(canConfigure && !demoMode && configured && azureProject && !projectIsSynced);
   const roleSettingsHref = roadmapProjectId ? `${routes.roadmapAdminRoles}?projectId=${encodeURIComponent(roadmapProjectId)}` : routes.roadmapAdminRoles;
 
+  const includeChildEpics = preferences.includeChildEpics;
   const planQuery = useQuery({
-    queryKey: ['roadmap', 'plan', roadmapProjectId],
-    queryFn: () => roadmapApi.plan(roadmapProjectId),
+    queryKey: roadmapPlanQueryKey(roadmapProjectId, includeChildEpics),
+    queryFn: () => roadmapApi.plan(roadmapProjectId, includeChildEpics),
+    // Toggling the setting keeps the table on screen while the other roll-up loads.
+    placeholderData: (previous) => previous?.id === roadmapProjectId ? previous : undefined,
     enabled: Boolean(roadmapProjectId),
     // The server pulls Azure changes. An open plan periodically reads the latest local data.
     refetchInterval: (query) => query.state.data?.azure?.writeBackEnabled
@@ -800,14 +805,14 @@ export function RoadmapPage() {
   const currentQuarterMonths = quarterMonths(quarterSelection.year, quarterSelection.quarter);
   const selectedMonth = view === 'roles' ? currentQuarterMonths.find((month) => month.monthKey === selectedMonthKey) : undefined;
   const monthlyFactQuery = useQuery({
-    queryKey: ['roadmap', 'monthly-fact', roadmapProjectId, selectedMonthKey],
-    queryFn: ({ signal }) => getRoadmapMonthlyFact(roadmapProjectId, selectedMonthKey, signal),
+    queryKey: roadmapMonthlyFactQueryKey(roadmapProjectId, selectedMonthKey, includeChildEpics),
+    queryFn: ({ signal }) => getRoadmapMonthlyFact(roadmapProjectId, selectedMonthKey, signal, includeChildEpics),
     enabled: Boolean(plan && selectedMonth && !demoMode),
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
   const monthlyFact = monthlyFactQuery.data;
-  const quarterFact = useRoadmapQuarterFact({ projectId: roadmapProjectId, quarterKey: currentQuarterKey, enabled: Boolean(plan && !selectedMonth && !demoMode) });
+  const quarterFact = useRoadmapQuarterFact({ projectId: roadmapProjectId, quarterKey: currentQuarterKey, includeChildEpics, enabled: Boolean(plan && !selectedMonth && !demoMode) });
   const roles = plan?.roles ?? [];
   const plannedRolesOnly = preferences.plannedRolesOnly;
   const availableRoleTemplates = (roleCatalogQuery.data ?? []).filter((template) => !roles.some((role) => role.name === template.name));
@@ -894,8 +899,8 @@ export function RoadmapPage() {
   });
   const monthKey = selectedMonth?.monthKey;
   const summary = useMemo(() => plan ? getRoadmapSummary(plan, {
-    quarterKey: currentQuarterKey, monthKey, monthlyFact, quarterFact, plannedRolesOnly,
-  }) : undefined, [plan, currentQuarterKey, monthKey, monthlyFact, quarterFact, plannedRolesOnly]);
+    quarterKey: currentQuarterKey, monthKey, monthlyFact, quarterFact, plannedRolesOnly, includeChildEpics,
+  }) : undefined, [plan, currentQuarterKey, monthKey, monthlyFact, quarterFact, plannedRolesOnly, includeChildEpics]);
   const overviewProjects = isAllProjects
     ? azureProjects.filter((project): project is AzureProject & { roadmapId: string } => Boolean(project.imported && project.roadmapId))
     : [];
@@ -904,6 +909,7 @@ export function RoadmapPage() {
     quarterKey: currentQuarterKey,
     monthKey,
     plannedRolesOnly,
+    includeChildEpics,
   };
   const overviewQuery = useQuery({
     queryKey: ['roadmap', 'portfolio', overviewInput],
@@ -944,11 +950,11 @@ export function RoadmapPage() {
   const visibleRoles = summary?.visibleRoles ?? [];
   const totalHours = summary?.planHours ?? 0;
   const unattachedPlanHours = Array.from(rolePlan.byUnattached.values()).reduce((sum, hours) => sum + hours, 0);
-  const factRoots = getRoadmapFactRoots(plannedItems);
+  const factRoots = getRoadmapFactRoots(plannedItems, includeChildEpics);
   const totalActualHours = summary?.actualHours ?? (selectedMonth ? null : 0);
   const roleFact = useMemo(() => plan && (!monthKey || monthlyFact)
-    ? getRoadmapRoleFact(plan.workItems, plan.roles, monthKey ? monthlyFact : undefined)
-    : undefined, [plan, monthKey, monthlyFact]);
+    ? getRoadmapRoleFact(plan.workItems, plan.roles, monthKey ? monthlyFact : undefined, includeChildEpics)
+    : undefined, [plan, monthKey, monthlyFact, includeChildEpics]);
   const projectRoleFact = new Map<string, number>(selectedMonth ? roleFact?.byProject : undefined);
   if (!selectedMonth) {
     for (const item of factRoots) {
@@ -1338,6 +1344,7 @@ export function RoadmapPage() {
               quarterKey={currentQuarterKey}
               monthKey={monthKey}
               plannedRolesOnly={plannedRolesOnly}
+              includeChildEpics={includeChildEpics}
               showFact={preferences.showFact}
               refreshInterval={demoMode ? false : PLAN_REFRESH_INTERVAL}
               columnWidths={columnWidths}

@@ -14,6 +14,8 @@ export interface RoadmapSummaryOptions {
    */
   quarterFact?: { workItems: Record<string, number> }[];
   plannedRolesOnly?: boolean;
+  /** Roll child epics into their parent epic. Off by default: an epic counts only its own features. */
+  includeChildEpics?: boolean;
 }
 
 export interface RoadmapSummaryTotals {
@@ -51,11 +53,15 @@ function isPlanItem(item: RoadmapMetricsItem) {
   return ['epic', 'feature'].includes(item.type.toLowerCase());
 }
 
-/** Root facts are already rolled up by the API, including descendants through intermediate cards. */
-export function getRoadmapFactRoots<Item extends RoadmapMetricsItem>(items: Item[]) {
+/**
+ * Root facts are already rolled up by the API, including descendants through intermediate cards.
+ * Without `includeChildEpics` the API stops each roll-up at the nearest epic, so every epic is a root.
+ */
+export function getRoadmapFactRoots<Item extends RoadmapMetricsItem>(items: Item[], includeChildEpics = false) {
   const byExternalId = new Map(items.map((item) => [item.externalId, item]));
   return items.filter((item) => {
     if (!isPlanItem(item)) return false;
+    if (!includeChildEpics && item.type.toLowerCase() === 'epic') return true;
     const visited = new Set([item.externalId]);
     let ancestor = item.parentExternalId ? byExternalId.get(item.parentExternalId) : undefined;
     while (ancestor && !visited.has(ancestor.externalId)) {
@@ -72,7 +78,7 @@ export function getRoadmapSummary<Item extends RoadmapMetricsItem, Role extends 
   plan: { workItems: Item[]; roles: Role[] },
   options: RoadmapSummaryOptions,
 ): RoadmapSummary<Item, Role> {
-  const { quarterKey, monthKey, monthlyFact, quarterFact, plannedRolesOnly = false } = options;
+  const { quarterKey, monthKey, monthlyFact, quarterFact, plannedRolesOnly = false, includeChildEpics = false } = options;
   const items = plan.workItems.map((item): Item => {
     // Epic assignments are historical data; only descendant cards contribute to planning.
     const allocations = item.type.toLowerCase() === 'epic' ? [] : item.allocations;
@@ -89,7 +95,7 @@ export function getRoadmapSummary<Item extends RoadmapMetricsItem, Role extends 
       }),
     };
   });
-  const rolePlan = getRoadmapRolePlan(items, plan.roles, !monthKey);
+  const rolePlan = getRoadmapRolePlan(items, plan.roles, !monthKey, includeChildEpics);
   const visibleRoles = plannedRolesOnly
     ? plan.roles.filter((role) => (rolePlan.byProject.get(role.id) ?? 0) > 0)
     : plan.roles;
@@ -127,7 +133,10 @@ export function getRoadmapSummary<Item extends RoadmapMetricsItem, Role extends 
     const visited = new Set([feature.externalId]);
     let ancestor = feature.parentExternalId ? byExternalId.get(feature.parentExternalId) : undefined;
     while (ancestor && !visited.has(ancestor.externalId)) {
-      if (ancestor.type.toLowerCase() === 'epic') activeEpicIds.add(ancestor.id);
+      if (ancestor.type.toLowerCase() === 'epic') {
+        activeEpicIds.add(ancestor.id);
+        if (!includeChildEpics) break;
+      }
       visited.add(ancestor.externalId);
       ancestor = ancestor.parentExternalId ? byExternalId.get(ancestor.parentExternalId) : undefined;
     }
@@ -139,7 +148,7 @@ export function getRoadmapSummary<Item extends RoadmapMetricsItem, Role extends 
     planHours: [...rolePlan.byProject.values()].reduce((sum, hours) => sum + hours, 0),
     actualHours: monthKey
       ? monthlyFact ? finiteHours(monthlyFact.totalHours) : null
-      : getRoadmapFactRoots(items).reduce((sum, item) => sum + finiteHours(item.actualHours), 0),
+      : getRoadmapFactRoots(items, includeChildEpics).reduce((sum, item) => sum + finiteHours(item.actualHours), 0),
     roles: visibleRoles.length,
     participants: participants.size,
     participantIds: [...participants],
@@ -178,6 +187,8 @@ export interface RoadmapPortfolioInput {
   includeMonthlyFact?: boolean;
   /** Quarter view only: load the fact of the quarter's months from Azure DevOps so cards with fact but no plan count. */
   includeQuarterFact?: boolean;
+  /** Roll child epics into their parent epic, for both plan and fact. Off by default. */
+  includeChildEpics?: boolean;
 }
 
 export interface RoadmapProjectOverview {

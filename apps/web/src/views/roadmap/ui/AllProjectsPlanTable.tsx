@@ -4,7 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, typ
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRoadmapSummary, type RoadmapProjectOverview, type RoadmapSummary, type RoadmapSummaryMetrics, type RoadmapTablePreferences } from '@tracker/shared';
 import { ArrowDown, ArrowUp, ArrowUpRight, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Download, FolderOpen, Search } from 'lucide-react';
-import { getRoadmapMonthlyFact, roadmapApi, type AzureProject, type RoadmapRole, type RoadmapWorkItem } from '@/entities/roadmap/api/roadmapApi';
+import { getRoadmapMonthlyFact, roadmapApi, roadmapMonthlyFactQueryKey, roadmapPlanQueryKey, type AzureProject, type RoadmapRole, type RoadmapWorkItem } from '@/entities/roadmap/api/roadmapApi';
 import { isRoadmapDemoMode } from '@/entities/roadmap/api/roadmapDemo';
 import { AzureWorkItemIcon } from '@/entities/roadmap/ui/AzureWorkItemIcon';
 import { WorkItemStateBadge } from '@/entities/roadmap/ui/WorkItemStateBadge';
@@ -26,6 +26,7 @@ type DetailPeriod = {
   quarterKey: string;
   monthKey?: string;
   plannedRolesOnly: boolean;
+  includeChildEpics: boolean;
   showFact: boolean;
   refreshInterval: number | false;
 };
@@ -189,14 +190,18 @@ function Metrics({ summary, showFact, loading = false, level, pin }: {
   </>;
 }
 
-/** Include descendants through intermediate Azure cards, without rendering those cards twice. */
-function descendantItems(item: RoadmapWorkItem, items: RoadmapWorkItem[]) {
+/**
+ * Include descendants through intermediate Azure cards, without rendering those cards twice.
+ * Without `includeChildEpics` a child epic and everything under it belong to that epic only.
+ */
+function descendantItems(item: RoadmapWorkItem, items: RoadmapWorkItem[], includeChildEpics: boolean) {
   const byExternalId = new Map(items.map((entry) => [entry.externalId, entry]));
   return items.filter((entry) => {
     let current: RoadmapWorkItem | undefined = entry;
     const visited = new Set<string>();
     while (current && !visited.has(current.externalId)) {
       if (current.id === item.id) return true;
+      if (!includeChildEpics && current.type.toLowerCase() === 'epic') return false;
       visited.add(current.externalId);
       current = current.parentExternalId ? byExternalId.get(current.parentExternalId) : undefined;
     }
@@ -223,8 +228,8 @@ function assignmentCounts(items: RoadmapWorkItem[], visibleRoles: RoadmapRole[],
   return { roles: relevantRoles.length, participants: participants.size };
 }
 
-function itemSummary(item: RoadmapWorkItem, summary: ProjectSummary) {
-  const items = descendantItems(item, summary.items);
+function itemSummary(item: RoadmapWorkItem, summary: ProjectSummary, includeChildEpics: boolean) {
+  const items = descendantItems(item, summary.items, includeChildEpics);
   const byRole = summary.rolePlan.byItem.get(item.id);
   return {
     epics: items.filter((entry) => entry.type.toLowerCase() === 'epic').length,
@@ -286,20 +291,21 @@ const ROW_CLASS = {
 const NESTED_NAME_CLASS = 'pl-[76px] pr-5 sm:pl-[80px]';
 
 function ProjectPlanDetails({
-  projectId, quarterKey, monthKey, plannedRolesOnly, showFact, refreshInterval, expandedEpics, onToggleEpic, pin, columns,
+  projectId, quarterKey, monthKey, plannedRolesOnly, includeChildEpics, showFact, refreshInterval, expandedEpics, onToggleEpic, pin, columns,
 }: DetailPeriod & { projectId: string; expandedEpics: ReadonlySet<string>; onToggleEpic: (key: string) => void; pin: Pin; columns: number }) {
   const client = useQueryClient();
   const demoMode = isRoadmapDemoMode();
   const planQuery = useQuery({
-    queryKey: ['roadmap', 'plan', projectId],
-    queryFn: () => roadmapApi.plan(projectId),
+    queryKey: roadmapPlanQueryKey(projectId, includeChildEpics),
+    queryFn: () => roadmapApi.plan(projectId, includeChildEpics),
+    placeholderData: (previous) => previous?.id === projectId ? previous : undefined,
     refetchInterval: refreshInterval,
     retry: false,
   });
   const plan = planQuery.isError ? undefined : planQuery.data;
   const factQuery = useQuery({
-    queryKey: ['roadmap', 'monthly-fact', projectId, monthKey ?? ''],
-    queryFn: ({ signal }) => getRoadmapMonthlyFact(projectId, monthKey ?? '', signal),
+    queryKey: roadmapMonthlyFactQueryKey(projectId, monthKey ?? '', includeChildEpics),
+    queryFn: ({ signal }) => getRoadmapMonthlyFact(projectId, monthKey ?? '', signal, includeChildEpics),
     enabled: Boolean(plan && monthKey && !demoMode),
     staleTime: 5 * 60 * 1000,
     refetchInterval: refreshInterval,
@@ -316,8 +322,8 @@ function ProjectPlanDetails({
 
   const monthlyFact = factQuery.data;
   const summary = useMemo(() => plan ? getRoadmapSummary(plan, {
-    quarterKey, monthKey, monthlyFact, plannedRolesOnly,
-  }) : undefined, [plan, quarterKey, monthKey, monthlyFact, plannedRolesOnly]);
+    quarterKey, monthKey, monthlyFact, plannedRolesOnly, includeChildEpics,
+  }) : undefined, [plan, quarterKey, monthKey, monthlyFact, plannedRolesOnly, includeChildEpics]);
   const messageRow = (content: ReactNode, className = 'px-4 py-3') => <tr className={ROW_CLASS.feature}>
     <td colSpan={columns} className={className}>{content}</td>
   </tr>;
@@ -361,7 +367,7 @@ function ProjectPlanDetails({
             </div>
           </div>
         </th>
-        <Metrics summary={itemSummary(item, summary)} showFact={showFact} level="epic" pin={pin} />
+        <Metrics summary={itemSummary(item, summary, includeChildEpics)} showFact={showFact} level="epic" pin={pin} />
       </tr>
       {expanded ? features.map((feature, index) => renderFeature(feature, true, index === features.length - 1)) : null}
     </Fragment>;
@@ -387,7 +393,7 @@ function ProjectPlanDetails({
         </div>
       </div>
     </th>
-    <Metrics summary={itemSummary(item, summary)} showFact={showFact} level="feature" pin={pin} />
+    <Metrics summary={itemSummary(item, summary, includeChildEpics)} showFact={showFact} level="feature" pin={pin} />
   </tr>;
 
   const groups = groupItems(summary);

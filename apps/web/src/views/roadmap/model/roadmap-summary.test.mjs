@@ -137,3 +137,36 @@ test('quarter counts cards with fact in any of its months, so it never shows few
   // Cumulative fact from an earlier quarter does not make a card active, and nothing counts while the fact loads.
   assert.deepEqual([getRoadmapSummary(plan, quarter).epics, getRoadmapSummary(plan, quarter).features], [0, 0]);
 });
+
+test('a child epic counts on its own unless the table rolls child epics into their parent', () => {
+  const plan = project([
+    item('archive', 'Epic', null, { actualHours: 2 }),
+    item('own', 'Feature', 'archive', { actualHours: 2, azureCustomFields: { 'Custom.BA': 3 } }),
+    item('child', 'Epic', 'archive', { actualHours: 5 }),
+    item('childFeature', 'Feature', 'child', { actualHours: 5, azureCustomFields: { 'Custom.BA': 10 } }),
+  ], [role('BA')]);
+
+  const separate = getRoadmapSummary(plan, quarter);
+  assert.equal(separate.rolePlan.byItem.get('archive').get('BA'), 3);
+  assert.equal(separate.rolePlan.byItem.get('child').get('BA'), 10);
+  assert.equal(separate.planHours, 13);
+  assert.equal(separate.actualHours, 7);
+  assert.equal(separate.epics, 2);
+
+  // With the setting on the API rolls the child's fact into the parent as well.
+  const rolledPlan = { ...plan, workItems: plan.workItems.map((entry) => entry.id === 'archive' ? { ...entry, actualHours: 7 } : entry) };
+  const rolled = getRoadmapSummary(rolledPlan, { ...quarter, includeChildEpics: true });
+  assert.equal(rolled.rolePlan.byItem.get('archive').get('BA'), 13);
+  assert.equal(rolled.planHours, 13);
+  assert.equal(rolled.actualHours, 7);
+});
+
+test('an epic with only a planned child epic is not active on its own', () => {
+  const plan = project([
+    item('archive', 'Epic'),
+    item('child', 'Epic', 'archive'),
+    item('childFeature', 'Feature', 'child', { azureCustomFields: { 'Custom.BA': 4 } }),
+  ], [role('BA')]);
+  assert.equal(getRoadmapSummary(plan, quarter).epics, 1);
+  assert.equal(getRoadmapSummary(plan, { ...quarter, includeChildEpics: true }).epics, 2);
+});

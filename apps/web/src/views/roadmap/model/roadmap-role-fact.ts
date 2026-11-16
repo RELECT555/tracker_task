@@ -25,7 +25,8 @@ function addHours(totals: RoleHours, roleId: string, hours: number) {
   totals.set(roleId, (totals.get(roleId) ?? 0) + hours);
 }
 
-export function getRoadmapRoleFact(items: RoadmapWorkItem[], roles: RoadmapRole[], monthlyFact?: RoadmapMonthlyFact) {
+/** Without `includeChildEpics` a task's fact stops at its nearest epic, matching the API's roll-up. */
+export function getRoadmapRoleFact(items: RoadmapWorkItem[], roles: RoadmapRole[], monthlyFact?: RoadmapMonthlyFact, includeChildEpics = false) {
   const byItem = new Map<string, RoleHours>();
   const byProject: RoleHours = new Map();
   const itemsByExternalId = new Map(items.map((item) => [item.externalId, item]));
@@ -83,7 +84,8 @@ export function getRoadmapRoleFact(items: RoadmapWorkItem[], roles: RoadmapRole[
         byItem.set(ancestor.id, totals);
         contributesToProject = true;
       }
-      ancestor = ancestor.parentExternalId ? itemsByExternalId.get(ancestor.parentExternalId) : undefined;
+      if (!includeChildEpics && type === 'epic') break;
+      ancestor =ancestor.parentExternalId ? itemsByExternalId.get(ancestor.parentExternalId) : undefined;
     }
     if (contributesToProject) addHours(byProject, roleId, hours);
   }

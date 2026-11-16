@@ -122,6 +122,12 @@ class PortfolioDto implements RoadmapPortfolioInput {
   @IsOptional() @IsBoolean() plannedRolesOnly?: boolean;
   @IsOptional() @IsBoolean() includeMonthlyFact?: boolean;
   @IsOptional() @IsBoolean() includeQuarterFact?: boolean;
+  @IsOptional() @IsBoolean() includeChildEpics?: boolean;
+}
+
+/** `?includeChildEpics=1` (or `true`) rolls child epics into their parent epic; anything else keeps them apart. */
+function queryFlag(value?: string) {
+  return value === '1' || value === 'true';
 }
 
 class CreateRoadmapWorkItemDto {
@@ -304,12 +310,14 @@ export class RoadmapController {
   async projectPlan(
     @CurrentUser() actor: AuthenticatedUser,
     @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Query('includeChildEpics') includeChildEpics?: string,
   ) {
     const canEditPlan = await this.access.require(actor, { projectId }, 'read');
     const plan = await this.roadmap.getProjectPlan(
       projectId,
       actor.id,
       canEditPlan,
+      queryFlag(includeChildEpics),
     );
     return { ...plan, canEditPlan };
   }
@@ -319,9 +327,14 @@ export class RoadmapController {
     @CurrentUser() actor: AuthenticatedUser,
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Query('monthKey') monthKey?: string,
+    @Query('includeChildEpics') includeChildEpics?: string,
   ) {
     await this.access.require(actor, { projectId }, 'read');
-    return this.roadmap.getProjectFact(projectId, monthKey);
+    return this.roadmap.getProjectFact(
+      projectId,
+      monthKey,
+      queryFlag(includeChildEpics),
+    );
   }
 
   @Get('people')

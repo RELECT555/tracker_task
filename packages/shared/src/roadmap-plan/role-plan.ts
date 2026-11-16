@@ -36,8 +36,12 @@ export function azureRoleEstimate(item: RoadmapMetricsItem, role: RoadmapMetrics
   return Number.isFinite(hours) && hours >= 0 ? hours : null;
 }
 
-/** Uses the same role totals for cells, collapsed epics, the project total and filtering. */
-export function getRoadmapRolePlan(items: RoadmapMetricsItem[], roles: RoadmapMetricsRole[], includeAzureEstimates = true) {
+/**
+ * Uses the same role totals for cells, collapsed epics, the project total and filtering.
+ * Without `includeChildEpics` every epic is a root of its own: a parent epic sums only its own features,
+ * and a child epic's plan counts once, in that epic and in the project total.
+ */
+export function getRoadmapRolePlan(items: RoadmapMetricsItem[], roles: RoadmapMetricsRole[], includeAzureEstimates = true, includeChildEpics = false) {
   const byItem = new Map<string, RoleHours>();
   const byProject: RoleHours = new Map();
   const byUnattached: RoleHours = new Map();
@@ -50,6 +54,7 @@ export function getRoadmapRolePlan(items: RoadmapMetricsItem[], roles: RoadmapMe
   const explicitRolesByItem = new Map<string, Set<string>>();
   const roots: RoadmapMetricsItem[] = [];
   const parentPlanItem = (item: RoadmapMetricsItem) => {
+    if (!includeChildEpics && item.type.toLowerCase() === 'epic') return undefined;
     let parent = item.parentExternalId ? byExternalId.get(item.parentExternalId) : undefined;
     const visited = new Set([item.externalId]);
     while (parent && !visited.has(parent.externalId) && !planItemIds.has(parent.id)) {
