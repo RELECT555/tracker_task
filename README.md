@@ -8,6 +8,7 @@
 - `apps/api` — NestJS API и интеграция с Azure DevOps
 - `apps/api/prisma` — схема базы данных и миграции
 - `docs/13-roadmap.md` — планирование и синхронизация с Azure DevOps
+- `docs/coder.md` — как поднять и обновить стенд на Coder
 
 ## Запуск
 
