@@ -1,6 +1,5 @@
 const productionPlaceholder = 'generate-strong-random-secret-min-32-chars';
-const guid =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type AuthProviderKind = 'local' | 'entra';
 
