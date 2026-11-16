@@ -19,6 +19,7 @@ function setup() {
     roadmapWorkItem: {
       upsert: jest.fn().mockReturnValue('upsert'),
       findMany: jest.fn().mockResolvedValue([]),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     roadmapProject: {
       findMany: jest.fn(),
@@ -118,5 +119,40 @@ describe('Work item iteration', () => {
       credentials,
       { requestTimeoutMs: expect.any(Number) },
     );
+    expect(prisma.roadmapWorkItem.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('marks cards Azure no longer returns, so they are not re-requested on every run', async () => {
+    const { prisma, integration } = setup();
+    const project = {
+      id: 'roadmap-id',
+      externalId: 'azure-project',
+      syncedAt: new Date('2026-11-13T14:55:00.000Z'),
+      url: 'https://dev.azure.com/example/_apis/projects/azure-project',
+    };
+    prisma.roadmapProject.findMany.mockResolvedValue([project]);
+    prisma.roadmapWorkItem.findMany.mockResolvedValueOnce([
+      { externalId: '7', azureCustomFields: { 'System.AssignedTo': null }, iterationPath: null },
+      { externalId: '9', azureCustomFields: { 'System.AssignedTo': null }, iterationPath: null },
+    ]);
+    integration.requestJson.mockResolvedValue({ workItems: [] });
+    const importer = {
+      importWorkItems: jest.fn().mockResolvedValue([{ id: 7 }]),
+      invalidateFieldCatalog: jest.fn(),
+    };
+    const service = new RoadmapService(
+      prisma as unknown as PrismaService,
+      integration as unknown as RoadmapIntegrationService,
+      importer as unknown as RoadmapWorkItemImportService,
+      {} as RoadmapAzureSyncService,
+      {} as RoadmapAzureCatalogService,
+    );
+
+    await service.refreshImportedProjects();
+
+    expect(prisma.roadmapWorkItem.updateMany).toHaveBeenCalledWith({
+      where: { projectId: project.id, externalId: { in: ['9'] }, iterationPath: null },
+      data: { iterationPath: '' },
+    });
   });
 });

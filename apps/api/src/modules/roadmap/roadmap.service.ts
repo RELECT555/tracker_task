@@ -379,6 +379,25 @@ export class RoadmapService {
         );
         for (const item of enriched) enrichedIds.add(item.id);
         importedCount += enriched.length;
+        // Cards Azure no longer returns (deleted but kept for their plan, or unreadable) would stay
+        // without an iteration and be requested again on every run. Mark them as checked: no iteration.
+        const unreturned = existing
+          .filter(
+            (item) =>
+              item.iterationPath === null &&
+              !enrichedIds.has(Number(item.externalId)),
+          )
+          .map((item) => item.externalId);
+        if (unreturned.length) {
+          await this.prisma.roadmapWorkItem.updateMany({
+            where: {
+              projectId: project.id,
+              externalId: { in: unreturned },
+              iterationPath: null,
+            },
+            data: { iterationPath: '' },
+          });
+        }
       }
     }
 

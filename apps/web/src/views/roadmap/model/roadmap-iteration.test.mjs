@@ -67,6 +67,14 @@ test('an idle epic outside the iteration with only hidden features is hidden', (
   assert.equal(result.visibleIds.has('f'), false);
 });
 
+test('a card just created from the plan stays visible without a badge, and shows its epic', () => {
+  const items = [item('e', 'Epic', 'P\\2026\\Q3'), item('new', 'Feature', 'P', 'e'), item('g', 'Feature', Q4)];
+  const result = getRoadmapIterationVisibility(items, Q4, new Set(), new Set(['new']));
+  assert.equal(result.visibleIds.has('new'), true);
+  assert.equal(result.outsideIds.has('new'), false);
+  assert.equal(result.visibleIds.has('e'), true);
+});
+
 test('tasks never take part', () => {
   const result = visibility([item('t', 'Task', Q4), item('f', 'Feature', Q4)], ['t']);
   assert.equal(result.visibleIds.has('t'), false);

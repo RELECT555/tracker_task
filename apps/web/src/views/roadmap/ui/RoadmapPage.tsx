@@ -942,10 +942,13 @@ export function RoadmapPage() {
     retry: false,
   });
   const quarterIterationPath = quarterIterationQuery.data?.iterationPath ?? null;
+  // Azure files a card created here under its default iteration; it must not vanish from the table it was created in.
+  const [createdExternalIds, setCreatedExternalIds] = useState<ReadonlySet<string>>(() => new Set());
   const iteration = useMemo(
-    () => getRoadmapIterationVisibility(plannedItems, quarterIterationPath, summary?.activeItemIds ?? new Set<string>()),
-    [plannedItems, quarterIterationPath, summary],
+    () => getRoadmapIterationVisibility(plannedItems, quarterIterationPath, summary?.activeItemIds ?? new Set<string>(), createdExternalIds),
+    [plannedItems, quarterIterationPath, summary, createdExternalIds],
   );
+  const hiddenByIteration = iteration.filtered && plannedItems.some((item) => ['epic', 'feature'].includes(item.type.toLowerCase()));
   const epics = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'epic' && iteration.visibleIds.has(item.id)), [plannedItems, iteration]);
   const features = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'feature' && iteration.visibleIds.has(item.id)), [plannedItems, iteration]);
   const outsideIterationBadge = (item: RoadmapWorkItem, className?: string) => iteration.outsideIds.has(item.id)
@@ -1576,7 +1579,9 @@ export function RoadmapPage() {
 
                 {!epics.length && !features.length ? (
                   <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-                    <p>В проекте пока нет эпиков или фич.{canImportProject ? ' Загрузите проект из Azure DevOps.' : ''}</p>
+                    <p>{hiddenByIteration
+                      ? `В итерации ${quarterIterationPath} пока нет эпиков и фич, и у карточек других итераций нет плана или факта в этом периоде.`
+                      : `В проекте пока нет эпиков или фич.${canImportProject ? ' Загрузите проект из Azure DevOps.' : ''}`}</p>
                     {canCreateWorkItem ? <Button ref={createEpicTrigger} type="button" variant="outline" size="sm" className="mt-4" aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)}><Plus aria-hidden="true" className="size-4" />Создать эпик</Button> : null}
                   </div>
                 ) : (
@@ -1758,6 +1763,7 @@ export function RoadmapPage() {
                   initialType={createTarget.type}
                   parentExternalId={createTarget.parentExternalId}
                   onCreated={(item, parentExternalId) => {
+                    setCreatedExternalIds((current) => new Set(current).add(item.externalId));
                     if (item.type !== 'Feature') return;
                     if (!parentExternalId) {
                       setStandaloneExpanded(true);
