@@ -47,6 +47,8 @@ export function NotificationBell() {
   const markAllRead = useMutation({ mutationFn: roadmapApi.markAllNotificationsRead, onSettled: refresh });
 
   const badge = badgeOf(summary.data);
+  const bellLabel =
+    badge?.kind === 'count' ? `Уведомления, непрочитанных: ${badge.label}` : badge?.kind === 'dot' ? 'Уведомления, есть непрочитанные' : 'Уведомления';
   const items = list.data?.pages.flatMap((page) => page.items) ?? [];
 
   async function openItem(item: RoadmapNotificationDto) {
@@ -66,7 +68,7 @@ export function NotificationBell() {
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label="Уведомления"
+          aria-label={bellLabel}
           title="Уведомления"
           className="relative inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
         >

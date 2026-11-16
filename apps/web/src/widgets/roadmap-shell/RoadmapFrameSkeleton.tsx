@@ -39,7 +39,10 @@ export function RoadmapFrameSkeleton() {
       <div className="relative flex min-w-0 flex-1 flex-col overflow-clip bg-background md:rounded-tl-2xl md:border-l md:border-t md:border-border dark:md:rounded-tl-none dark:md:border-l-0 dark:md:border-t-0">
         <header aria-hidden="true" className="flex min-h-16 shrink-0 items-center justify-between gap-x-2 border-b border-border bg-card px-3 py-1 sm:gap-x-4 sm:px-6">
           <Skeleton className="h-3.5 w-40" />
-          <Skeleton className="size-9 rounded-lg" />
+          <div className="flex items-center gap-2">
+            <Skeleton className="size-9 rounded-lg" />
+            <Skeleton className="size-9 rounded-lg" />
+          </div>
         </header>
         <SkeletonStatus label="Проверка авторизации" className="min-h-0 flex-1 space-y-6 overflow-hidden px-4 py-6 sm:px-6 lg:px-8">
           <div className="space-y-2.5">

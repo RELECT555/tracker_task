@@ -251,11 +251,7 @@ export class RoadmapAlertsService {
           condition.details,
           projectName,
         );
-        const recipients = await resolveRecipients(
-          this.prisma,
-          kind,
-          projectId,
-        );
+        const recipients = await resolveRecipients(tx, kind, projectId);
         if (recipients.length === 0) return;
         await tx.roadmapNotification.createMany({
           data: recipients.map((userId) => ({

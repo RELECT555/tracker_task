@@ -315,24 +315,30 @@ describe('evaluateConditions', () => {
       expect(webhookCondition(minutesBefore(t0, 60), null).active).toBe(false);
     });
 
-    it('is active when polling saw changes 31 minutes after the last webhook', () => {
-      const webhookAt = minutesBefore(t0, 60);
-      const changedAt = new Date(webhookAt.getTime() + 31 * 60_000);
+    it('is active when polling found changes 31 minutes ago and no webhook followed', () => {
+      const changedAt = minutesBefore(t0, 31);
+      const webhookAt = minutesBefore(changedAt, 60);
       expect(webhookCondition(webhookAt, changedAt)).toMatchObject({
         active: true,
         details: {},
       });
     });
 
-    it('is inactive when the gap is 29 minutes', () => {
-      const webhookAt = minutesBefore(t0, 60);
-      const changedAt = new Date(webhookAt.getTime() + 29 * 60_000);
+    it('is inactive when polling found changes only 29 minutes ago', () => {
+      const changedAt = minutesBefore(t0, 29);
+      const webhookAt = minutesBefore(changedAt, 60);
       expect(webhookCondition(webhookAt, changedAt).active).toBe(false);
     });
 
-    it('is inactive when the gap is exactly 30 minutes', () => {
-      const webhookAt = minutesBefore(t0, 60);
-      const changedAt = new Date(webhookAt.getTime() + 30 * 60_000);
+    it('is inactive when polling found changes exactly 30 minutes ago', () => {
+      const changedAt = minutesBefore(t0, 30);
+      const webhookAt = minutesBefore(changedAt, 60);
+      expect(webhookCondition(webhookAt, changedAt).active).toBe(false);
+    });
+
+    it('is inactive when a webhook arrived after the polled change', () => {
+      const changedAt = minutesBefore(t0, 60);
+      const webhookAt = minutesBefore(t0, 45);
       expect(webhookCondition(webhookAt, changedAt).active).toBe(false);
     });
   });

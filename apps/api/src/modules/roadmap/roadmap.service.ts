@@ -239,25 +239,30 @@ export class RoadmapService {
         const catalog = await this.catalog.syncProject(externalId, credentials);
         projectId = catalog.projectId;
         this.importer.invalidateFieldCatalog();
-        const importedWorkItems = await this.importProjectWorkItems(
+        const { importedCount } = await this.importProjectWorkItems(
           { id: catalog.projectId, externalId },
           credentials,
         );
-        return { ...catalog, importedWorkItems };
+        return { ...catalog, importedWorkItems: importedCount };
       });
+      // A full re-import loads every card, so it says nothing about whether
+      // Azure changed anything since the previous poll.
       await recordImportOutcome(this.prisma, result.projectId, {
         ok: true,
-        changed: result.importedWorkItems > 0,
+        changed: false,
         source: 'poll',
       });
       return result;
     } catch (error) {
       // The failure may come before the project is known (catalog sync).
+      // The lookup must never mask the original import error.
       projectId ??= (
-        await this.prisma.roadmapProject.findUnique({
-          where: { externalId },
-          select: { id: true },
-        })
+        await this.prisma.roadmapProject
+          .findUnique({
+            where: { externalId },
+            select: { id: true },
+          })
+          .catch(() => null)
       )?.id;
       if (projectId)
         await recordImportOutcome(this.prisma, projectId, {
@@ -290,13 +295,13 @@ export class RoadmapService {
       )
         continue;
       try {
-        const importedWorkItems = await this.runProjectImport(
+        const { changedCount } = await this.runProjectImport(
           project.externalId,
           () => this.importProjectWorkItems(project, credentials),
         );
         await recordImportOutcome(this.prisma, project.id, {
           ok: true,
-          changed: importedWorkItems > 0,
+          changed: changedCount > 0,
           source: 'poll',
         });
       } catch (error) {
@@ -343,6 +348,9 @@ export class RoadmapService {
       : '';
     const endpoint = `${credentials.organizationUrl}/${encodeURIComponent(project.externalId)}/_apis/wit/wiql`;
     let importedCount = 0;
+    // Cards Azure reported as changed since the last poll; the one-time
+    // AssignedTo enrichment and full re-imports do not count.
+    let changedCount = 0;
     let lastId = 0;
     const enrichedIds = new Set<number>();
     if (changedSince) {
@@ -418,6 +426,7 @@ export class RoadmapService {
         },
       );
       importedCount += imported.length;
+      if (changedSince) changedCount += imported.length;
       if (ids.length < WORK_ITEM_QUERY_PAGE_SIZE) break;
       lastId = ids[ids.length - 1];
     }
@@ -431,7 +440,7 @@ export class RoadmapService {
       },
       data: { syncedAt: startedAt },
     });
-    return importedCount;
+    return { importedCount, changedCount };
   }
 
   async getProjectSummaries(input: RoadmapPortfolioInput, email?: string) {

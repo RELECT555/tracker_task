@@ -12,7 +12,7 @@ export class RoadmapNotificationsController {
 
   @Get()
   list(@CurrentUser() user: AuthenticatedUser, @Query() query: unknown) {
-    return this.notifications.list(user.id, query);
+    return this.notifications.list(user, query);
   }
 
   @Get('summary')

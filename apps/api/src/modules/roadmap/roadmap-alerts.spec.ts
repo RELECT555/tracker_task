@@ -297,6 +297,21 @@ describe('RoadmapAlertsService.evaluate', () => {
     });
   });
 
+  it('resolves recipients on the transaction client, not a second connection', async () => {
+    const { service, prisma, notifications, setErrors } = setup();
+    const txUsers = jest.fn(() => Promise.resolve([{ id: 'tx-admin' }]));
+    prisma.$transaction.mockImplementation((run) =>
+      run({ ...prisma, user: { findMany: txUsers } }),
+    );
+    setErrors(1);
+
+    await service.evaluate(at(0));
+
+    expect(txUsers).toHaveBeenCalled();
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+    expect(notifications.map((row) => row.userId)).toEqual(['tx-admin']);
+  });
+
   it('five ticks with growing count create no new rows and update details.count', async () => {
     const { service, alerts, notifications, setErrors } = setup();
     for (let tick = 0; tick < 5; tick += 1) {

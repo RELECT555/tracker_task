@@ -289,7 +289,7 @@ describe('Scheduled Roadmap project refresh', () => {
     );
   });
 
-  it('records a successful manual import as a poll', async () => {
+  it('records a full manual import as a poll without claiming Azure changes', async () => {
     const { service, prisma, integration, importer } = setup();
     integration.requestJson.mockResolvedValueOnce({ workItems: [{ id: 7 }] });
     importer.importWorkItems.mockResolvedValueOnce([{ id: 7 }]);
@@ -298,8 +298,59 @@ describe('Scheduled Roadmap project refresh', () => {
 
     expect(prisma.roadmapAzureProjectState.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        update: expect.objectContaining({ lastImportChangedAt: now }),
+        where: { projectId: project.id },
+        update: { importFailingSince: null, lastImportOkAt: now },
       }),
     );
+  });
+
+  it('does not count the one-time AssignedTo enrichment as a change', async () => {
+    const { service, prisma, importer } = setup();
+    prisma.roadmapWorkItem.findMany.mockResolvedValueOnce([
+      { externalId: '7', azureCustomFields: { 'Custom.Estimate': 12 } },
+    ]);
+    importer.importWorkItems.mockResolvedValueOnce([{ id: 7 }]);
+
+    await service.refreshImportedProjects();
+
+    expect(importer.importWorkItems).toHaveBeenCalledTimes(2);
+    const [call] = prisma.roadmapAzureProjectState.upsert.mock.calls;
+    expect(call[0].update).toEqual({
+      importFailingSince: null,
+      lastImportOkAt: now,
+    });
+  });
+
+  it('counts cards returned by the changed-since query as a change', async () => {
+    const { service, prisma, integration, importer } = setup();
+    prisma.roadmapWorkItem.findMany.mockResolvedValueOnce([
+      { externalId: '7', azureCustomFields: { 'Custom.Estimate': 12 } },
+    ]);
+    integration.requestJson.mockResolvedValueOnce({ workItems: [{ id: 9 }] });
+    importer.importWorkItems
+      .mockResolvedValueOnce([{ id: 7 }])
+      .mockResolvedValueOnce([{ id: 9 }]);
+
+    await service.refreshImportedProjects();
+
+    const [call] = prisma.roadmapAzureProjectState.upsert.mock.calls;
+    expect(call[0].update).toEqual({
+      importFailingSince: null,
+      lastImportOkAt: now,
+      lastImportChangedAt: now,
+    });
+  });
+
+  it('rethrows the original import error when the project lookup also fails', async () => {
+    const { service, prisma, catalog } = setup();
+    catalog.syncProject.mockRejectedValueOnce(new Error('catalog unavailable'));
+    prisma.roadmapProject.findUnique.mockRejectedValueOnce(
+      new Error('database down'),
+    );
+
+    await expect(service.syncProject(project.externalId)).rejects.toThrow(
+      'catalog unavailable',
+    );
+    expect(prisma.roadmapAzureProjectState.upsert).not.toHaveBeenCalled();
   });
 });

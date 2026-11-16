@@ -13,6 +13,7 @@ import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { roadmapAdminSections } from '@/shared/config/roadmap-admin-sections';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
+import { NotificationBell } from './NotificationBell';
 
 const SIDEBAR_STORAGE_KEY = 'roadmap:sidebar-collapsed';
 const ADMIN_LABEL = 'Администрирование';
@@ -374,6 +375,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
                 <Settings2 className="size-4" strokeWidth={1.7} aria-hidden="true" />
               </Link>
             ) : null}
+            <NotificationBell />
             <TourLauncherIcon />
             <button type="button" data-tour="theme" onClick={cycleTheme} title={`Тема: ${themeLabel}`} aria-label={`Тема: ${themeLabel}. Нажмите, чтобы переключить`} className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
               <ThemeIcon className="size-4" aria-hidden="true" />

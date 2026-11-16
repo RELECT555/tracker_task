@@ -106,11 +106,13 @@ function evaluateProject(
   const importFailing =
     project.importFailingSince !== null &&
     now.getTime() - project.importFailingSince.getTime() >= IMPORT_FAILING_MS;
+  // Polling found changes that no webhook announced, and a webhook had the
+  // whole lag window to arrive since.
   const webhookSilent =
     project.lastWebhookAt !== null &&
     project.lastImportChangedAt !== null &&
-    project.lastImportChangedAt.getTime() - project.lastWebhookAt.getTime() >
-      WEBHOOK_LAG_MS;
+    project.lastWebhookAt.getTime() < project.lastImportChangedAt.getTime() &&
+    now.getTime() - project.lastImportChangedAt.getTime() > WEBHOOK_LAG_MS;
 
   return [
     make('sync_errors', project.errorCount >= 1, !writesBack, {

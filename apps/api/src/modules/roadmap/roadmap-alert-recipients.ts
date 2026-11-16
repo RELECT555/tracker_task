@@ -1,5 +1,5 @@
 import type { RoadmapAlertKind } from '@tracker/shared';
-import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
+import type { Prisma } from '@prisma/client';
 
 /** Alert kinds that concern the whole installation, not a single project. */
 const ADMIN_ONLY_KINDS: readonly RoadmapAlertKind[] = [
@@ -7,12 +7,18 @@ const ADMIN_ONLY_KINDS: readonly RoadmapAlertKind[] = [
   'webhook_silent',
 ];
 
+/** A transaction client or the service itself: either can run these reads. */
+export type RecipientsDb = Pick<
+  Prisma.TransactionClient,
+  'user' | 'roadmapProjectAccess'
+>;
+
 /**
  * Users to notify when an alert episode opens: active admins, plus the active
  * planners of the project for project-level alerts. Returns unique user ids.
  */
 export async function resolveRecipients(
-  prisma: PrismaService,
+  prisma: RecipientsDb,
   kind: RoadmapAlertKind,
   projectId: string | null,
 ): Promise<string[]> {

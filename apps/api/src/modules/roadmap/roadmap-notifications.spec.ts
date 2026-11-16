@@ -63,6 +63,8 @@ const user: AuthenticatedUser = {
   isAdmin: false,
 };
 
+const admin: AuthenticatedUser = { ...user, isAdmin: true };
+
 describe('RoadmapNotificationsService', () => {
   it('list returns only own rows', async () => {
     const { controller, prisma } = setup();
@@ -86,7 +88,7 @@ describe('RoadmapNotificationsService', () => {
       row('c', 1, { state: 'open', generation: 1 }),
     ]);
 
-    const page = await service.list(userId, {
+    const page = await service.list(admin, {
       cursor: notificationId,
       limit: '2',
     });
@@ -113,7 +115,7 @@ describe('RoadmapNotificationsService', () => {
       row('older', 1, { state: 'open', generation: 2 }),
     ]);
 
-    const page = await service.list(userId, {});
+    const page = await service.list(admin, {});
 
     expect(page.nextCursor).toBeNull();
     expect(page.items[0]).toEqual({
@@ -137,6 +139,21 @@ describe('RoadmapNotificationsService', () => {
     });
   });
 
+  it('links admins to the integrations tab and everyone else to the plan', async () => {
+    const { service, prisma } = setup();
+    prisma.roadmapNotification.findMany.mockResolvedValue([
+      row('a', 1, { state: 'open', generation: 1 }),
+    ]);
+
+    const adminPage = await service.list(admin, {});
+    const planner = await service.list(user, {});
+
+    expect(adminPage.items[0].link).toBe(
+      '/roadmap/admin/integrations#azure-projects',
+    );
+    expect(planner.items[0].link).toBe('/roadmap');
+  });
+
   it('resolution comes from the alert when the episode is closed', async () => {
     const { service, prisma } = setup();
     prisma.roadmapNotification.findMany.mockResolvedValue([
@@ -147,7 +164,7 @@ describe('RoadmapNotificationsService', () => {
       }),
     ]);
 
-    const page = await service.list(userId, {});
+    const page = await service.list(admin, {});
 
     expect(page.items[0]).toMatchObject({
       active: false,
@@ -227,7 +244,7 @@ describe('RoadmapNotificationsService', () => {
   it('list rejects limit=500', async () => {
     const { service, prisma } = setup();
 
-    await expect(service.list(userId, { limit: '500' })).rejects.toThrow(
+    await expect(service.list(admin, { limit: '500' })).rejects.toThrow(
       BadRequestException,
     );
     expect(prisma.roadmapNotification.findMany).not.toHaveBeenCalled();

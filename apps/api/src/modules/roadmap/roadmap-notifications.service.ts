@@ -15,6 +15,7 @@ import {
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { alertLink } from './roadmap-alert-format';
 
+const PLAN_PAGE = '/roadmap';
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -23,7 +24,10 @@ const UUID_PATTERN =
 export class RoadmapNotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(userId: string, query: unknown): Promise<RoadmapNotificationPage> {
+  async list(
+    user: { id: string; isAdmin: boolean },
+    query: unknown,
+  ): Promise<RoadmapNotificationPage> {
     const parsed = roadmapNotificationListQuerySchema.safeParse(query);
     if (!parsed.success) {
       throw new BadRequestException(
@@ -33,7 +37,7 @@ export class RoadmapNotificationsService {
     const { cursor, limit } = parsed.data;
 
     const rows = await this.prisma.roadmapNotification.findMany({
-      where: { userId },
+      where: { userId: user.id },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -62,7 +66,8 @@ export class RoadmapNotificationsService {
         projectName: alert.project?.name ?? null,
         title: row.title,
         body: row.body,
-        link: alertLink(kind, row.projectId),
+        // Admin pages are closed to everyone else; planners get the plan itself.
+        link: user.isAdmin ? alertLink(kind, row.projectId) : PLAN_PAGE,
         createdAt: row.createdAt.toISOString(),
         readAt: row.readAt?.toISOString() ?? null,
         active,
