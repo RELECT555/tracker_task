@@ -346,18 +346,19 @@ export class RoadmapService {
     let lastId = 0;
     const enrichedIds = new Set<number>();
     if (changedSince) {
-      // Older imports did not request AssignedTo. Enrich them once even when the
-      // Azure card has not changed since the last incremental synchronization.
+      // Older imports did not store AssignedTo or the iteration. Enrich them once even
+      // when the Azure card has not changed since the last incremental synchronization.
       const existing = await this.prisma.roadmapWorkItem.findMany({
         where: {
           projectId: project.id,
           type: { in: ['Epic', 'Feature', 'Task'] },
         },
-        select: { externalId: true, azureCustomFields: true },
+        select: { externalId: true, azureCustomFields: true, iterationPath: true },
       });
-      const missingAssigneeIds = existing
+      const needsEnrichmentIds = existing
         .filter(
           (item) =>
+            item.iterationPath === null ||
             !item.azureCustomFields ||
             typeof item.azureCustomFields !== 'object' ||
             !Object.prototype.hasOwnProperty.call(
@@ -367,10 +368,10 @@ export class RoadmapService {
         )
         .map((item) => Number(item.externalId))
         .filter((id) => Number.isSafeInteger(id) && id > 0 && id <= 2147483647);
-      if (missingAssigneeIds.length) {
+      if (needsEnrichmentIds.length) {
         const enriched = await this.importer.importWorkItems(
           project,
-          missingAssigneeIds,
+          needsEnrichmentIds,
           credentials,
           {
             requestTimeoutMs: AZURE_IMPORT_REQUEST_TIMEOUT_MS,
