@@ -64,6 +64,8 @@ model User {
 
   email String @unique @db.VarChar(255)
 
+  externalId String? @unique @map("external_id") @db.VarChar(64)
+
   passwordHash String? @map("password_hash") @db.VarChar(255)
 
   fullName String @map("full_name") @db.VarChar(255)

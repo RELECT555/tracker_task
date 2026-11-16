@@ -1,22 +1,24 @@
 import {
+  Inject,
   Injectable,
   NestMiddleware,
-  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
-import { TokenService } from '../../../modules/identity/infrastructure/token.service';
+import { AuthUserResolver } from '../../../modules/identity/application/auth-user-resolver';
 import {
-  isDatabaseUnavailable,
-  PrismaService,
-} from '../../infrastructure/prisma/prisma.service';
+  ACCESS_TOKEN_VERIFIER,
+  type AccessTokenVerifier,
+  type VerifiedIdentity,
+} from '../../../modules/identity/infrastructure/access-token-verifier';
 import type { AuthenticatedUser } from '../decorators/current-user.decorator';
 
 @Injectable()
 export class AuthMiddleware implements NestMiddleware {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly tokens: TokenService,
+    @Inject(ACCESS_TOKEN_VERIFIER)
+    private readonly verifier: AccessTokenVerifier,
+    private readonly users: AuthUserResolver,
   ) {}
 
   async use(req: Request, _res: Response, next: NextFunction): Promise<void> {
@@ -26,39 +28,15 @@ export class AuthMiddleware implements NestMiddleware {
       : undefined;
 
     if (!token) throw this.unauthorized('Authentication required');
-    let id: string;
+    let identity: VerifiedIdentity;
     try {
-      id = this.tokens.verifyAccessToken(token);
+      identity = await this.verifier.verify(token);
     } catch {
       throw this.unauthorized('Invalid or expired access token');
     }
 
-    const user = await this.prisma.user
-      .findUnique({
-        where: { id },
-        select: {
-          id: true,
-          email: true,
-          isActive: true,
-          roles: { select: { role: { select: { code: true } } } },
-        },
-      })
-      .catch((error: unknown) => {
-        if (!isDatabaseUnavailable(error)) throw error;
-        throw new ServiceUnavailableException({
-          error: {
-            code: 'DB_UNAVAILABLE',
-            message: 'Database is not available',
-          },
-        });
-      });
-    if (!user?.isActive) throw this.unauthorized('Account is inactive');
-
-    (req as Request & { user: AuthenticatedUser }).user = {
-      id: user.id,
-      email: user.email,
-      isAdmin: user.roles.some(({ role }) => role.code === 'admin'),
-    };
+    (req as Request & { user: AuthenticatedUser }).user =
+      await this.users.resolve(identity);
     next();
   }
 
