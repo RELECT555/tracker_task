@@ -67,6 +67,13 @@ export function alertKey(
   return `${kind}:${projectId ?? 'global'}`;
 }
 
+/** Kinds explained by a rejected PAT (spec §4); conflicts are not among them. */
+const SUPPRESSED_BY_AUTH: ReadonlySet<RoadmapAlertKind> = new Set([
+  'sync_errors',
+  'import_failing',
+  'webhook_silent',
+]);
+
 function isAzureAuthFailing(auth: HealthInput['auth']): boolean {
   if (!auth.authFailedAt) return false;
   if (!auth.authOkAt) return true;
@@ -76,7 +83,7 @@ function isAzureAuthFailing(auth: HealthInput['auth']): boolean {
 function evaluateProject(
   project: ProjectHealth,
   input: HealthInput,
-  suppressed: boolean,
+  authEpisodeOpen: boolean,
 ): AlertCondition[] {
   const { now, integrationConfigured } = input;
   const make = (
@@ -91,7 +98,7 @@ function evaluateProject(
     projectName: project.name,
     active: active && !obsolete,
     obsolete,
-    suppressed,
+    suppressed: authEpisodeOpen && SUPPRESSED_BY_AUTH.has(kind),
     details,
   });
 
@@ -160,8 +167,12 @@ export function evaluateConditions(
     },
   ];
 
+  // Spec §4: suppression lasts while the azure_auth episode is open, which
+  // includes its clear window after the PAT starts working again.
+  const authEpisodeOpen =
+    authActive || openKeys.has(alertKey('azure_auth', null));
   for (const project of input.projects) {
-    conditions.push(...evaluateProject(project, input, authActive));
+    conditions.push(...evaluateProject(project, input, authEpisodeOpen));
   }
 
   const known = new Set(conditions.map((condition) => condition.key));

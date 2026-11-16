@@ -338,6 +338,11 @@ describe('evaluateConditions', () => {
   });
 
   describe('azure_auth and suppression', () => {
+    const suppressedKinds = (conditions: AlertCondition[]) =>
+      conditions
+        .filter((c) => c.suppressed)
+        .map((c) => c.kind)
+        .sort();
     const noisyProject = project({
       errorCount: 1,
       importFailingSince: minutesBefore(t0, 20),
@@ -364,7 +369,50 @@ describe('evaluateConditions', () => {
       });
       const projectConditions = result.filter((c) => c.projectId === 'p1');
       expect(projectConditions).toHaveLength(4);
-      expect(projectConditions.every((c) => c.suppressed)).toBe(true);
+      expect(suppressedKinds(projectConditions)).toEqual([
+        'import_failing',
+        'sync_errors',
+        'webhook_silent',
+      ]);
+    });
+
+    it('never suppresses sync_conflicts while auth is failing', () => {
+      const result = evaluateConditions(
+        health({
+          auth: {
+            authFailedAt: minutesBefore(t0, 1),
+            authOkAt: null,
+            httpStatus: 401,
+          },
+          projects: [project({ conflictCount: 2 })],
+        }),
+        new Set(),
+      );
+      expect(find(result, 'sync_conflicts')).toMatchObject({
+        active: true,
+        suppressed: false,
+      });
+    });
+
+    it('keeps suppressing while the azure_auth episode is still open after recovery', () => {
+      const result = evaluateConditions(
+        health({
+          auth: {
+            authFailedAt: minutesBefore(t0, 5),
+            authOkAt: minutesBefore(t0, 1),
+            httpStatus: 401,
+          },
+          projects: [noisyProject],
+        }),
+        new Set(['azure_auth:global']),
+      );
+      expect(find(result, 'azure_auth', null).active).toBe(false);
+      expect(suppressedKinds(result)).toEqual([
+        'import_failing',
+        'sync_errors',
+        'webhook_silent',
+      ]);
+      expect(find(result, 'sync_conflicts').suppressed).toBe(false);
     });
 
     it('is active when auth failed and never succeeded', () => {
