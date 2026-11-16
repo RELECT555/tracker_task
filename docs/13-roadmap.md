@@ -101,6 +101,19 @@ Planners are matched by the email on the project's access list, ignoring case; i
 - **One cause, one notification.** While an `azure_auth` problem is open, new `import_failing`, `sync_errors` and `webhook_silent` problems are held back (conflicts are not, because they are not caused by the PAT); problems that were already open stay as they are. Assignments left in `error` do not fix themselves after the PAT is repaired, so `sync_errors` opens once `azure_auth` closes. That notification is the reminder to send them again. For `sync_errors` and `sync_conflicts`, only projects where write-back is on (manual or automatic) and in scope are counted.
 - Error text in a notification is cut to 300 characters and stripped of the PAT, webhook secret and authorization headers.
 
+### Sync problems page
+
+**Синхронизация** (`/roadmap/sync`) shows every sync problem, with what is broken now and what was broken before. The menu item and the bell's **Все уведомления** link are shown to administrators and project planners. Administrators see every problem, including the PAT and webhook ones. Planners see only their projects' problems. Viewers do not see the page at all.
+
+- **One row per problem.** A row is one problem (kind and project) showing its latest episode. Each time the problem opens and closes, that is recorded in a journal kept for 90 days. **История (N)** expands the earlier episodes, and **N-й раз за 7 дней** marks a problem that keeps coming back.
+- **Filters.** **Активные / Исправленные / Все** and the project select are kept in the URL (`?status=&project=`), so a filtered view can be shared as a link.
+- **What each row shows.**
+  - How long the episode has been open, or how long it lasted. The duration ends when the condition went away, not when the watchdog closed the problem 10 minutes later.
+  - The highest count reached during the episode.
+  - The cleaned error text.
+  - A **«что сделать»** hint and a button. Administrators get the integration tab; planners get the plan.
+- **Data.** The page polls every minute. Problems that were already closed before the journal existed are not listed.
+
 ## Local demo data
 
 For local testing without an Azure DevOps connection, run `npm run db:seed:roadmap-mocks --workspace @tracker/api` to add five demo people and four demo roles to the `OKR` project when available (otherwise the most recently synced project). Pass a project name after `--` to choose a different target, for example `npm run db:seed:roadmap-mocks --workspace @tracker/api -- CRM 2.0`. Demo rows are marked in the UI and are excluded from Azure sync deactivation.
