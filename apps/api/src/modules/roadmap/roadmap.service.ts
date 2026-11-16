@@ -26,6 +26,11 @@ import {
   type AzureDevOpsCredentials,
 } from './roadmap-integration.service';
 import { recordImportOutcome } from './roadmap-import-health';
+import type {
+  AllocationSnapshot,
+  PlanChangeContext,
+} from './roadmap-plan-change';
+import { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import {
   azureOrganizationName,
@@ -154,6 +159,7 @@ export class RoadmapService {
     private readonly importer: RoadmapWorkItemImportService,
     private readonly azureSync: RoadmapAzureSyncService,
     private readonly catalog: RoadmapAzureCatalogService,
+    private readonly planChanges: RoadmapPlanChangeService,
   ) {}
 
   connectionStatus() {
@@ -1420,8 +1426,10 @@ export class RoadmapService {
       }[];
     },
     /** The caller sends the allocation to Azure DevOps itself (creating its Task). */
-    options: { skipSync?: boolean } = {},
+    options: { skipSync?: boolean } | undefined,
+    context: PlanChangeContext,
   ) {
+    const skipSync = options?.skipSync ?? false;
     const monthKeys = dto.periods.flatMap((period) =>
       period.monthKey ? [period.monthKey] : [],
     );
@@ -1513,6 +1521,20 @@ export class RoadmapService {
             ...this.azureSync.pendingUpdate,
           };
 
+          // Without an id the upsert may still update the row with this key.
+          const previousId =
+            dto.allocationId ??
+            (
+              await tx.roadmapAllocation.findUnique({
+                where: { workItemId_roleId_personExternalId_quarterKey: key },
+                select: { id: true },
+              })
+            )?.id;
+          const before = await this.planChanges.read(
+            tx,
+            previousId ? [previousId] : [],
+          );
+
           let saved;
           if (dto.allocationId) {
             const current = await tx.roadmapAllocation.findUnique({
@@ -1565,6 +1587,7 @@ export class RoadmapService {
               })),
             });
           }
+          await this.recordPlanChanges(tx, context, before, [saved.id]);
           return saved;
         },
         { isolationLevel: 'Serializable' },
@@ -1581,12 +1604,30 @@ export class RoadmapService {
         }
         throw error;
       });
-    if (!options.skipSync)
-      await this.azureSync.onAllocationSaved(allocation.id);
+    if (!skipSync) await this.azureSync.onAllocationSaved(allocation.id);
     return { ...allocation, periods: dto.periods };
   }
 
-  async rebalanceAllocations(ids: string[]) {
+  /** Reads the allocations after a write and logs how they differ from `before`. */
+  private async recordPlanChanges(
+    tx: Prisma.TransactionClient,
+    context: PlanChangeContext,
+    before: Map<string, { snapshot: AllocationSnapshot }>,
+    allocationIds: string[],
+  ) {
+    const after = await this.planChanges.read(tx, allocationIds);
+    await this.planChanges.record(
+      tx,
+      context,
+      [...after.values()].map(({ ref, snapshot }) => ({
+        ref,
+        before: before.get(ref.allocationId)?.snapshot ?? null,
+        after: snapshot,
+      })),
+    );
+  }
+
+  async rebalanceAllocations(ids: string[], context: PlanChangeContext) {
     const changed = await this.prisma
       .$transaction(
         async (tx) => {
@@ -1645,6 +1686,7 @@ export class RoadmapService {
               'Часы нельзя распределить с сохранением текущей оценки и шага 0,5 ч.',
             );
 
+          const before = await this.planChanges.read(tx, ids);
           for (const row of balanced) {
             await tx.roadmapAllocation.update({
               where: { id: row.id },
@@ -1667,6 +1709,7 @@ export class RoadmapService {
               });
             }
           }
+          await this.recordPlanChanges(tx, context, before, ids);
           return balanced.map(({ id }) => id);
         },
         { isolationLevel: 'Serializable' },
@@ -1693,6 +1736,7 @@ export class RoadmapService {
     allocationId: string,
     quarterKey: string,
     months: { monthKey: string; hours: number }[],
+    context: PlanChangeContext,
   ) {
     const expectedMonths = quarterMonthKeys(quarterKey);
     if (
@@ -1773,6 +1817,7 @@ export class RoadmapService {
             );
           }
 
+          const before = await this.planChanges.read(tx, [allocationId]);
           await tx.roadmapPeriodAllocation.deleteMany({
             where: { allocationId, monthKey: { in: monthKeys } },
           });
@@ -1782,6 +1827,7 @@ export class RoadmapService {
               data: plannedMonths.map((month) => ({ allocationId, ...month })),
             });
           }
+          await this.recordPlanChanges(tx, context, before, [allocationId]);
           return plannedMonths;
         },
         { isolationLevel: 'Serializable' },

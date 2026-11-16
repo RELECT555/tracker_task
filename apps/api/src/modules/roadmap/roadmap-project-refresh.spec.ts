@@ -1,6 +1,7 @@
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { normalizeSyncSettings } from '@tracker/shared';
 import type { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
+import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
@@ -58,6 +59,7 @@ function setup(projects = [project]) {
       workItemImporter,
       {} as RoadmapAzureSyncService,
       catalog as unknown as RoadmapAzureCatalogService,
+      {} as RoadmapPlanChangeService,
     );
   return {
     service: createService(importer as unknown as RoadmapWorkItemImportService),

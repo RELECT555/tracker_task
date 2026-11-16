@@ -11,6 +11,7 @@ import {
   type ChatMessage,
 } from '@mtkit/agent-integration';
 import type { AuthenticatedUser } from '../../shared/presentation/decorators/current-user.decorator';
+import { planChangeContext } from '../roadmap/roadmap-plan-change';
 import { RoadmapProjectAccessService } from '../roadmap/roadmap-project-access.service';
 import { RoadmapService } from '../roadmap/roadmap.service';
 import {
@@ -110,6 +111,11 @@ export class AgentService {
   ): Promise<ApplyResult[]> {
     await this.access.require(actor, { projectId }, 'edit');
 
+    // One batch for the whole apply; a proposal that fails logs nothing.
+    const context = planChangeContext(
+      { id: actor.id, email: actor.email },
+      'ai',
+    );
     const results: ApplyResult[] = [];
     for (const [index, change] of changes.entries()) {
       // Re-read each time: an earlier change may have affected the next one.
@@ -129,21 +135,25 @@ export class AgentService {
             personExternalId === proposal.personExternalId,
         );
       try {
-        await this.roadmap.saveAllocation({
-          allocationId: existing?.id,
-          workItemId: proposal.workItemId,
-          roleId: proposal.roleId,
-          personExternalId: proposal.personExternalId,
-          personName: proposal.personName,
-          personEmail: member?.personEmail ?? undefined,
-          quarterKey: proposal.quarterKey,
-          estimatedHours: proposal.toHours,
-          // saveAllocation replaces the periods, so keep the existing ones.
-          periods: (existing?.periods ?? []).map((period) => ({
-            ...period,
-            monthKey: period.monthKey ?? undefined,
-          })),
-        });
+        await this.roadmap.saveAllocation(
+          {
+            allocationId: existing?.id,
+            workItemId: proposal.workItemId,
+            roleId: proposal.roleId,
+            personExternalId: proposal.personExternalId,
+            personName: proposal.personName,
+            personEmail: member?.personEmail ?? undefined,
+            quarterKey: proposal.quarterKey,
+            estimatedHours: proposal.toHours,
+            // saveAllocation replaces the periods, so keep the existing ones.
+            periods: (existing?.periods ?? []).map((period) => ({
+              ...period,
+              monthKey: period.monthKey ?? undefined,
+            })),
+          },
+          undefined,
+          context,
+        );
         results.push({ index, ok: true });
       } catch (error) {
         results.push({

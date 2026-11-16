@@ -1,5 +1,6 @@
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import type { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
+import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import {
   AzureDevOpsHttpError,
@@ -37,6 +38,7 @@ function serviceWithAzureError(
       {} as RoadmapWorkItemImportService,
       {} as RoadmapAzureSyncService,
       {} as RoadmapAzureCatalogService,
+      {} as RoadmapPlanChangeService,
     ),
   };
 }

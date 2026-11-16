@@ -40,6 +40,7 @@ import {
 } from '../../shared/presentation/decorators/current-user.decorator';
 import { AdminRoleGuard } from '../admin/presentation/guards/admin-role.guard';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import { planChangeContext } from './roadmap-plan-change';
 import { RoadmapService } from './roadmap.service';
 import {
   ROADMAP_CREATE_WORK_ITEM_TYPES,
@@ -358,9 +359,11 @@ export class RoadmapController {
     @Body() dto: SaveAllocationDto,
   ) {
     await this.access.require(actor, { workItemId: dto.workItemId }, 'edit');
-    const saved = await this.roadmap.saveAllocation(dto, {
-      skipSync: dto.createTask,
-    });
+    const saved = await this.roadmap.saveAllocation(
+      dto,
+      { skipSync: dto.createTask },
+      planChangeContext({ id: actor.id, email: actor.email }, 'plan'),
+    );
     if (!dto.createTask) return saved;
     // An allocation that already has a Task is simply updated; otherwise its Task is created now.
     if (saved.azureTaskId) await this.azureSync.onAllocationSaved(saved.id);
@@ -396,7 +399,10 @@ export class RoadmapController {
       { allocationIds: dto.allocationIds },
       'edit',
     );
-    return this.roadmap.rebalanceAllocations(dto.allocationIds);
+    return this.roadmap.rebalanceAllocations(
+      dto.allocationIds,
+      planChangeContext({ id: actor.id, email: actor.email }, 'plan'),
+    );
   }
 
   @Post('allocations/:allocationId/azure-push')
@@ -474,6 +480,7 @@ export class RoadmapController {
       allocationId,
       quarterKey,
       dto.months,
+      planChangeContext({ id: actor.id, email: actor.email }, 'plan'),
     );
   }
 }

@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import type { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
+import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
@@ -45,6 +46,7 @@ function setup() {
     {} as RoadmapWorkItemImportService,
     {} as RoadmapAzureSyncService,
     {} as RoadmapAzureCatalogService,
+    {} as RoadmapPlanChangeService,
   );
   return { service, tx, people };
 }
