@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { aggregateRoadmapSummaries, azureRoleEstimate, getRoadmapFactRoots, getRoadmapRolePlan, getRoadmapSummary } from '@tracker/shared';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Cloud, Equal, Layers, ListChecks, Maximize2, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Cloud, Equal, History, Layers, ListChecks, Maximize2, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
@@ -61,6 +61,7 @@ const CreateAzureWorkItem = dynamic(() => import('./CreateAzureWorkItem').then((
   loading: () => <p role="status" className="fixed bottom-4 right-4 z-50 rounded-lg border border-border bg-card px-3 py-2 text-sm">Загружаем форму…</p>,
 });
 const WorkItemCardSheet = dynamic(() => import('./WorkItemCardSheet').then((module) => module.WorkItemCardSheet));
+const PlanChangesSheet = dynamic(() => import('./PlanChangesSheet').then((module) => module.PlanChangesSheet));
 const AllProjectsPlanTable = dynamic(() => import('./AllProjectsPlanTable').then((module) => module.AllProjectsPlanTable), {
   loading: () => <PortfolioTableSkeleton />,
 });
@@ -861,6 +862,9 @@ export function RoadmapPage() {
     onSuccess: refreshAfterAllocationWrite,
   });
   const [pushPreviewOpen, setPushPreviewOpen] = useState(false);
+  // The change log panel loads on first use and then stays mounted, so it can animate closed.
+  const [changesOpen, setChangesOpen] = useState(false);
+  const [changesLoaded, setChangesLoaded] = useState(false);
   const pushAllocationMutation = useMutation({
     mutationFn: roadmapApi.pushAllocationToAzure,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roadmap', 'plan', roadmapProjectId] }),
@@ -1502,6 +1506,14 @@ export function RoadmapPage() {
                       canEditPlan={Boolean(cardPlan) && canEditPlan}
                       writeEnabled={Boolean(cardPlan?.azure?.writeBackEnabled)}
                     /> : null}
+                    {roadmapProjectId && changesLoaded ? <PlanChangesSheet
+                      key={roadmapProjectId}
+                      projectId={roadmapProjectId}
+                      open={changesOpen}
+                      onClose={() => setChangesOpen(false)}
+                      onOpenWorkItem={(externalId) => showCard({ projectId: roadmapProjectId, externalId })}
+                      roles={roles}
+                    /> : null}
                     {!demoMode && roadmapProjectId ? <AgentPanel
                       key={roadmapProjectId}
                       projectId={roadmapProjectId}
@@ -1515,6 +1527,15 @@ export function RoadmapPage() {
                     {view === 'periods' ? <Button type="button" variant={showUnassignedPeriods ? 'secondary' : 'outline'} size="sm" className="h-8" onClick={() => setShowUnassignedPeriods((value) => !value)}>{showUnassignedPeriods ? 'Скрыть без назначений' : 'Показать без назначений'}</Button> : null}
                     {periodControls}
                     {appearanceSettings}
+                    {roadmapProjectId ? <IconButton
+                      variant="outline"
+                      aria-haspopup="dialog"
+                      label="Журнал изменений"
+                      tooltip="Журнал изменений: кто и когда менял назначения и часы"
+                      icon={<History aria-hidden="true" />}
+                      align="end"
+                      onClick={() => { setChangesLoaded(true); setChangesOpen(true); }}
+                    /> : null}
                     {canPushToAzure ? <Popover open={pushPreviewOpen} onOpenChange={setPushPreviewOpen}>
                       <PopoverTrigger asChild>
                         <IconButton
