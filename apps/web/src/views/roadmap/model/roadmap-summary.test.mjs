@@ -122,3 +122,18 @@ test('epic and feature counts follow the selected quarter and month', () => {
   const nov = getRoadmapSummary(plan, { ...quarter, monthKey: '2026-11' });
   assert.deepEqual([nov.epics, nov.features], [1, 1]);
 });
+
+test('quarter counts cards with fact in any of its months, so it never shows fewer cards than a month', () => {
+  const plan = project([
+    item('epic', 'Epic'), item('feature', 'Feature', 'epic', { actualHours: 32 }),
+    item('old-epic', 'Epic'), item('old-feature', 'Feature', 'old-epic', { actualHours: 8 }),
+  ]);
+  const nov = { workItems: { feature: 32, epic: 32 }, allocations: {}, totalHours: 32 };
+  const empty = { workItems: {}, allocations: {}, totalHours: 0 };
+  const month = getRoadmapSummary(plan, { ...quarter, monthKey: '2026-11', monthlyFact: nov });
+  assert.deepEqual([month.epics, month.features], [1, 1]);
+  const q4 = getRoadmapSummary(plan, { ...quarter, quarterFact: [empty, nov, empty] });
+  assert.deepEqual([q4.epics, q4.features], [1, 1]);
+  // Cumulative fact from an earlier quarter does not make a card active, and nothing counts while the fact loads.
+  assert.deepEqual([getRoadmapSummary(plan, quarter).epics, getRoadmapSummary(plan, quarter).features], [0, 0]);
+});

@@ -8,6 +8,11 @@ export interface RoadmapSummaryOptions {
     allocations: Record<string, number>;
     totalHours: number;
   };
+  /**
+   * Quarter view only: the monthly fact of each month of the quarter. A card with fact in any of them counts
+   * as active, so the quarter never shows fewer cards than one of its months. Omitted while it is loading.
+   */
+  quarterFact?: { workItems: Record<string, number> }[];
   plannedRolesOnly?: boolean;
 }
 
@@ -27,6 +32,14 @@ export interface RoadmapSummary<Item extends RoadmapMetricsItem, Role extends Ro
   items: Item[];
   visibleRoles: Role[];
   rolePlan: ReturnType<typeof getRoadmapRolePlan>;
+}
+
+/** `YYYY-MM` keys of the three months of a `YYYY-Qn` quarter; empty for a malformed key. */
+export function roadmapQuarterMonthKeys(quarterKey: string) {
+  const match = /^(\d{4})-Q([1-4])$/.exec(quarterKey);
+  if (!match) return [];
+  const firstMonth = (Number(match[2]) - 1) * 3 + 1;
+  return [0, 1, 2].map((offset) => `${match[1]}-${String(firstMonth + offset).padStart(2, '0')}`);
 }
 
 function finiteHours(value: number | string | null | undefined) {
@@ -59,7 +72,7 @@ export function getRoadmapSummary<Item extends RoadmapMetricsItem, Role extends 
   plan: { workItems: Item[]; roles: Role[] },
   options: RoadmapSummaryOptions,
 ): RoadmapSummary<Item, Role> {
-  const { quarterKey, monthKey, monthlyFact, plannedRolesOnly = false } = options;
+  const { quarterKey, monthKey, monthlyFact, quarterFact, plannedRolesOnly = false } = options;
   const items = plan.workItems.map((item): Item => {
     // Epic assignments are historical data; only descendant cards contribute to planning.
     const allocations = item.type.toLowerCase() === 'epic' ? [] : item.allocations;
@@ -102,9 +115,11 @@ export function getRoadmapSummary<Item extends RoadmapMetricsItem, Role extends 
   // Cards count for the period only when they carry plan or fact in it; the item list itself stays complete
   // so unplanned cards can still be picked up and planned. In the quarter view the plan also includes the
   // role hours written in Azure DevOps (they carry no period), in a month only local assignments count.
+  // The quarter's fact comes from its months: the cumulative fact shown in the quarter view has no period.
   const planHoursOf = (item: Item) => [...(rolePlan.byItem.get(item.id)?.values() ?? [])].reduce((sum, hours) => sum + hours, 0);
+  const hasQuarterFact = (item: Item) => quarterFact?.some((month) => finiteHours(month.workItems[item.id]) !== 0) ?? false;
   const hasActivity = (item: Item) => item.allocations.length > 0
-    || (monthKey ? finiteHours(item.actualHours) !== 0 : planHoursOf(item) > 0);
+    || (monthKey ? finiteHours(item.actualHours) !== 0 : planHoursOf(item) > 0 || hasQuarterFact(item));
   const byExternalId = new Map(items.map((item) => [item.externalId, item]));
   const activeFeatures = items.filter((item) => item.type.toLowerCase() === 'feature' && hasActivity(item));
   const activeEpicIds = new Set(items.filter((item) => item.type.toLowerCase() === 'epic' && hasActivity(item)).map((item) => item.id));
@@ -161,6 +176,8 @@ export interface RoadmapPortfolioInput {
   monthKey?: string;
   plannedRolesOnly?: boolean;
   includeMonthlyFact?: boolean;
+  /** Quarter view only: load the fact of the quarter's months from Azure DevOps so cards with fact but no plan count. */
+  includeQuarterFact?: boolean;
 }
 
 export interface RoadmapProjectOverview {

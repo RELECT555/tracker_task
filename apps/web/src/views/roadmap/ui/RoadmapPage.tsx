@@ -48,6 +48,7 @@ import { AgentPanel } from '@/features/roadmap-agent/ui/AgentPanel';
 import './table-appearance.css';
 import { ColumnResizeHandle, planColumnOffset, ResizablePlanTable, type PlanColumn } from './ResizablePlanTable';
 import { PlanTableSkeleton, PortfolioTableSkeleton } from './PlanTableSkeleton';
+import { useRoadmapQuarterFact } from '../model/use-roadmap-quarter-fact';
 
 const AzurePushPreview = dynamic(() => import('@/entities/roadmap/ui/AzurePushPreview').then((module) => module.AzurePushPreview), {
   loading: () => <p role="status" className="p-3 text-sm text-muted-foreground">Загружаем предварительный просмотр…</p>,
@@ -62,13 +63,25 @@ const AllProjectsPlanTable = dynamic(() => import('./AllProjectsPlanTable').then
 
 const NAME_COLUMN = { defaultWidth: 440, minWidth: 280, grow: true };
 const SUMMARY_COLUMN = { defaultWidth: 120, minWidth: 96, maxWidth: 480 };
-const ROLE_COLUMN = { defaultWidth: 200, minWidth: 140, grow: true };
+// Plan, fact and delta of one role always share a single width (and a single stored override).
+const ROLE_METRIC_COLUMN = { defaultWidth: 140, minWidth: 100, maxWidth: 480 };
 const FACT_COLUMN = { defaultWidth: 100, minWidth: 80, maxWidth: 480 };
-const DELTA_COLUMN = { defaultWidth: 90, minWidth: 80, maxWidth: 480 };
 type ColumnWidths = ColumnWidthsApi;
+/** The period table keeps its task column in place at every width. */
+const PERIOD_PINNED_COLUMNS = ['name'];
+
+/** Maps `plan:<role>`, `fact:<role>` and `delta:<role>` to one shared width key. */
+function widthKey(columnId: string) {
+  const match = /^(?:plan|fact|delta):(.+)$/.exec(columnId);
+  return match && columnId !== 'fact:unattributed' ? `role-metric:${match[1]}` : columnId;
+}
 
 function planColumn(widths: ColumnWidths, id: string, label: string, sizing: ColumnWidthConfig & { grow?: boolean }): PlanColumn & ColumnWidthConfig {
-  return { ...sizing, id, label, width: widths.getWidth(id, sizing), customized: widths.hasCustomWidth(id) };
+  const key = widthKey(id);
+  return {
+    ...sizing, id, label, width: widths.getWidth(key, sizing), customized: widths.hasCustomWidth(key),
+    widthGroup: key === id ? undefined : key,
+  };
 }
 const PLAN_REFRESH_INTERVAL = 60_000;
 const EMPTY_OVERVIEW = aggregateRoadmapSummaries([]);
@@ -468,7 +481,7 @@ function QuarterPlanningGrid({
     {legacyPeriods.length ? <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-800 dark:text-amber-200">Сохранены старые периоды без месячной детализации: {legacyHours} ч. Они не распределены по месяцам, но учитываются в проверке общей оценки.</div> : null}
     {saving ? <p role="status" className="text-xs text-muted-foreground">Сохраняем план…</p> : null}
     <div className={cn('roadmap-scrollbar relative overflow-auto', focusMode && 'min-h-0 flex-1')}>
-      <ResizablePlanTable columns={columns} onColumnResize={(id, width) => columnWidths.commitWidth(id, width, columns.find((column) => column.id === id)!)} onPaste={handlePaste} className="table-fixed border-collapse text-left">
+      <ResizablePlanTable columns={columns} pinnedColumnIds={PERIOD_PINNED_COLUMNS} onColumnResize={(id, width) => columnWidths.commitWidth(id, width, columns.find((column) => column.id === id)!)} onPaste={handlePaste} className="table-fixed border-collapse text-left">
         <thead className="sticky top-0 z-[3] bg-card">
           <tr className="border-b border-border text-xs font-semibold text-muted-foreground">
             <th scope="col" data-column-id="name" className="sticky left-0 top-0 z-20 border-r border-border/80 bg-muted/90 px-4 py-3 pr-5"><span>Задача / назначение</span><ColumnResizeHandle columnId="name" /></th>
@@ -793,6 +806,7 @@ export function RoadmapPage() {
     retry: false,
   });
   const monthlyFact = monthlyFactQuery.data;
+  const quarterFact = useRoadmapQuarterFact({ projectId: roadmapProjectId, quarterKey: currentQuarterKey, enabled: Boolean(plan && !selectedMonth && !demoMode) });
   const roles = plan?.roles ?? [];
   const plannedRolesOnly = preferences.plannedRolesOnly;
   const availableRoleTemplates = (roleCatalogQuery.data ?? []).filter((template) => !roles.some((role) => role.name === template.name));
@@ -879,8 +893,8 @@ export function RoadmapPage() {
   });
   const monthKey = selectedMonth?.monthKey;
   const summary = useMemo(() => plan ? getRoadmapSummary(plan, {
-    quarterKey: currentQuarterKey, monthKey, monthlyFact, plannedRolesOnly,
-  }) : undefined, [plan, currentQuarterKey, monthKey, monthlyFact, plannedRolesOnly]);
+    quarterKey: currentQuarterKey, monthKey, monthlyFact, quarterFact, plannedRolesOnly,
+  }) : undefined, [plan, currentQuarterKey, monthKey, monthlyFact, quarterFact, plannedRolesOnly]);
   const overviewProjects = isAllProjects
     ? azureProjects.filter((project): project is AzureProject & { roadmapId: string } => Boolean(project.imported && project.roadmapId))
     : [];
@@ -897,10 +911,11 @@ export function RoadmapPage() {
     staleTime: 0,
     refetchInterval: demoMode ? false : PLAN_REFRESH_INTERVAL,
   });
+  // A month adds its fact; the quarter adds the fact of its months, which only changes which cards count.
   const overviewFactQuery = useQuery({
     queryKey: ['roadmap', 'portfolio', overviewInput, 'monthly-fact'],
-    queryFn: ({ signal }) => roadmapApi.projectSummaries(overviewInput, signal),
-    enabled: Boolean(overviewProjects.length && monthKey && !demoMode),
+    queryFn: ({ signal }) => roadmapApi.projectSummaries({ ...overviewInput, includeQuarterFact: !monthKey }, signal),
+    enabled: Boolean(overviewProjects.length && !demoMode),
     staleTime: 0,
     refetchInterval: PLAN_REFRESH_INTERVAL,
   });
@@ -956,12 +971,13 @@ export function RoadmapPage() {
     planColumn(columnWidths, 'summary:plan', 'План', SUMMARY_COLUMN),
     ...(preferences.showFact ? [planColumn(columnWidths, 'summary:fact', 'Факт', SUMMARY_COLUMN)] : []),
     ...detailRoles.flatMap((role) => [
-      planColumn(columnWidths, `plan:${role.id}`, `План · ${role.name}`, ROLE_COLUMN),
-      ...(preferences.showFact ? [planColumn(columnWidths, `fact:${role.id}`, `Факт · ${role.name}`, FACT_COLUMN)] : []),
-      ...(preferences.showDelta ? [planColumn(columnWidths, `delta:${role.id}`, `Дельта · ${role.name}`, DELTA_COLUMN)] : []),
+      planColumn(columnWidths, `plan:${role.id}`, `План · ${role.name}`, ROLE_METRIC_COLUMN),
+      ...(preferences.showFact ? [planColumn(columnWidths, `fact:${role.id}`, `Факт · ${role.name}`, ROLE_METRIC_COLUMN)] : []),
+      ...(preferences.showDelta ? [planColumn(columnWidths, `delta:${role.id}`, `Дельта · ${role.name}`, ROLE_METRIC_COLUMN)] : []),
     ]),
     ...(showUnattributedFact ? [planColumn(columnWidths, 'fact:unattributed', 'Факт · Без роли', FACT_COLUMN)] : []),
   ];
+  const pinnedColumnIds = pinnedColumns === 'none' ? [] : pinnedColumns === 'name' ? ['name'] : ['name', 'summary:plan', ...(preferences.showFact ? ['summary:fact'] : [])];
   const allEpicsExpanded = epics.length > 0 && epics.every((epic) => expandedEpics.has(epic.id));
   const quarterTotalHours = plannedItems
     .filter((item) => item.type.toLowerCase() === 'feature' || item.type.toLowerCase() === 'epic')
@@ -1028,7 +1044,7 @@ export function RoadmapPage() {
     const featureCountForm = isEpic ? FEATURE_COUNT_PLURALS.select(childCount) : null;
     return (
       <tr key={item.id} data-row-kind={isEpic ? 'epic' : 'feature'} className={`group/row align-top transition-colors ${isEpic ? 'border-t border-border bg-[color-mix(in_srgb,var(--color-muted)_30%,var(--color-card))] hover:bg-[color-mix(in_srgb,var(--color-muted)_45%,var(--color-card))]' : 'border-t border-border/50 bg-card hover:bg-[color-mix(in_srgb,var(--color-muted)_15%,var(--color-card))]'}`}>
-        <th scope="row" style={pinnedCellStyle('name')} className={cn('py-2 text-left font-normal', pinnedCellClass('name'), isEpic ? 'px-3 pr-5 inset-shadow-[2px_0_0] inset-shadow-primary/40 sm:px-4 sm:pr-5' : isChild ? cn('relative pl-0 pr-5 before:pointer-events-none before:absolute before:left-2 before:top-0 before:border-l-2 before:border-border/80 after:pointer-events-none after:absolute after:left-2 after:top-[calc(var(--plan-pad-y)+10px)] after:w-5 after:border-t-2 after:border-border/80', isLastChild ? 'before:h-[calc(var(--plan-pad-y)+11px)]' : 'before:bottom-0') : 'pl-3 pr-5 sm:pl-4 sm:pr-5')} data-plan-connector={isChild ? '' : undefined}>
+        <th scope="row" style={pinnedCellStyle('name')} className={cn('py-2 text-left font-normal', pinnedCellClass('name'), isEpic ? 'px-3 pr-5 inset-shadow-[2px_0_0] inset-shadow-primary/40 sm:px-4 sm:pr-5' : isChild ? cn('relative pl-0 pr-5 before:pointer-events-none before:absolute before:left-[52px] before:top-0 before:border-l before:border-border sm:before:left-[56px] after:pointer-events-none after:absolute after:left-[52px] after:top-[calc(var(--plan-pad-y)+10px)] after:w-3 after:border-t after:border-border sm:after:left-[56px]', isLastChild ? 'before:h-[calc(var(--plan-pad-y)+11px)]' : 'before:bottom-0') : 'pl-3 pr-5 sm:pl-4 sm:pr-5')} data-plan-connector={isChild ? '' : undefined}>
           {isEpic ? (
             <div className={cn('-ml-1 grid items-start gap-x-2', canCreateWorkItem ? 'grid-cols-[1.75rem_1rem_minmax(0,1fr)_2rem]' : 'grid-cols-[1.75rem_1rem_minmax(0,1fr)]')}>
               <Button
@@ -1049,8 +1065,8 @@ export function RoadmapPage() {
                 {canOpenCard
                   ? <button type="button" data-plan-title title={`${item.title} — открыть карточку`} aria-haspopup="dialog" onClick={() => showCard({ projectId: roadmapProjectId, externalId: item.externalId })} className="block w-full rounded-sm text-left text-sm leading-5 font-semibold text-foreground underline-offset-2 [overflow-wrap:anywhere] hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{item.title}</button>
                   : <div data-plan-title title={item.title} className="text-sm leading-5 font-semibold text-foreground [overflow-wrap:anywhere]">{item.title}</div>}
-                <div data-plan-meta className="mt-1.5 grid grid-cols-[2.75rem_4.25rem_auto] items-center justify-start gap-x-1.5 gap-y-1.5 text-xs leading-4 text-muted-foreground">
-                  <span className="min-w-0 tabular-nums [overflow-wrap:anywhere]" title={`Epic #${item.externalId}`}><span className="sr-only">Epic </span>#{item.externalId}</span>
+                <div data-plan-meta className="mt-1.5 grid grid-cols-[3.25rem_4.25rem_auto] items-center justify-start gap-x-1.5 gap-y-1.5 text-xs leading-4 text-muted-foreground">
+                  <span className="min-w-0 whitespace-nowrap tabular-nums" title={`Epic #${item.externalId}`}><span className="sr-only">Epic </span>#{item.externalId}</span>
                   <WorkItemStateBadge state={item.state} className="w-full justify-center" />
                   <span className="justify-self-start rounded-full px-2 py-px text-[10.5px] leading-4 whitespace-nowrap tabular-nums text-muted-foreground ring-1 ring-inset ring-border">
                     {childCount} {featureCountForm === 'one' ? 'фича' : featureCountForm === 'few' ? 'фичи' : 'фич'}
@@ -1070,15 +1086,15 @@ export function RoadmapPage() {
               ><Plus aria-hidden="true" className="size-4" /></Button> : null}
             </div>
           ) : (
-            <div data-plan-name className={cn(isChild ? 'pl-7' : 'pl-3', canCreateWorkItem && 'pr-10')}>
+            <div data-plan-name className={cn(isChild ? 'pl-[68px] sm:pl-[72px]' : 'pl-3', canCreateWorkItem && 'pr-10')}>
               <div className="flex min-w-0 items-start gap-2">
                 <AzureWorkItemIcon type={item.type} className="mt-0.5" />
                 {canOpenCard
                   ? <button type="button" data-plan-title title={`${item.title} — открыть карточку`} aria-haspopup="dialog" onClick={() => showCard({ projectId: roadmapProjectId, externalId: item.externalId })} className="min-w-0 rounded-sm text-left text-sm leading-snug text-foreground/90 underline-offset-2 [overflow-wrap:anywhere] hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{item.title}</button>
                   : <span data-plan-title title={item.title} className="min-w-0 text-sm leading-snug [overflow-wrap:anywhere]">{item.title}</span>}
               </div>
-              <div data-plan-meta className="mt-1 grid grid-cols-[2.75rem_auto] items-center justify-start gap-x-1.5 gap-y-1 pl-6 text-[11px] text-muted-foreground">
-                <span className="tabular-nums" title={`Feature #${item.externalId}`}><span className="sr-only">Feature </span>#{item.externalId}</span>
+              <div data-plan-meta className="mt-1 grid grid-cols-[3.25rem_auto] items-center justify-start gap-x-1.5 gap-y-1 pl-6 text-[11px] text-muted-foreground">
+                <span className="whitespace-nowrap tabular-nums" title={`Feature #${item.externalId}`}><span className="sr-only">Feature </span>#{item.externalId}</span>
                 <WorkItemStateBadge state={item.state} variant="dot" className="justify-self-start" />
               </div>
             </div>
@@ -1235,9 +1251,14 @@ export function RoadmapPage() {
     errorCount={azureErrorCount}
   /> : null;
 
+  // The role table is the one vertical scroller of the page: it takes the height left under the controls (never less than the
+  // table's own minimum) instead of a fixed viewport height measured from the page top. Two nested vertical scrollers of different
+  // sizes make macOS wheel/trackpad gestures latch onto the inner one and stall; page scroll only appears when the screen is too short.
+  const fitTable = Boolean(plan) && !isAllProjects && view === 'roles' && !focusMode && (epics.length > 0 || features.length > 0);
+
   return (
     <main className="roadmap-scrollbar relative min-h-0 flex-1 overflow-auto overscroll-none px-4 py-5 sm:px-6 lg:px-8">
-        <div className="mx-auto flex min-h-full w-full flex-col gap-4">
+        <div className={cn('mx-auto flex w-full flex-col gap-4', fitTable ? 'min-h-full lg:h-full' : 'min-h-full')}>
           <h1 className="sr-only">План проекта</h1>
           <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-6 gap-y-4">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -1310,7 +1331,7 @@ export function RoadmapPage() {
               <div className="flex flex-wrap items-center gap-2">{appearanceSettings}{overviewData ? <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5" disabled={overviewQuery.isFetching || overviewFactQuery.isFetching} onClick={() => {
                 void overviewQuery.refetch();
                 void queryClient.refetchQueries({ queryKey: ['roadmap', 'plan'], type: 'active' });
-                if (monthKey && !demoMode) {
+                if (!demoMode) {
                   void overviewFactQuery.refetch();
                   void queryClient.refetchQueries({ queryKey: ['roadmap', 'monthly-fact'], type: 'active' });
                 }
@@ -1355,7 +1376,7 @@ export function RoadmapPage() {
                 aria-label={focusMode ? 'Режим заполнения плана' : undefined}
                 className={cn(appearanceProps.className, focusMode
                   ? 'fixed inset-3 z-50 flex h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl'
-                  : 'flex flex-col overflow-hidden rounded-xl border border-border bg-card')}
+                  : cn('flex flex-col rounded-xl border border-border bg-card', fitTable ? 'overflow-hidden lg:min-h-[38rem] lg:flex-1' : 'overflow-hidden'))}
               >
                 {/* The project picker above already names the plan; the title is only shown when focus mode hides the picker. */}
                 {focusMode ? <div className="flex min-w-0 items-center gap-2 border-b border-border px-4 py-2.5">
@@ -1446,7 +1467,7 @@ export function RoadmapPage() {
                     {canCreateWorkItem ? <Button ref={createEpicTrigger} type="button" variant="outline" size="sm" className="mt-4" aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)}><Plus aria-hidden="true" className="size-4" />Создать эпик</Button> : null}
                   </div>
                 ) : (
-                  <div className={focusMode ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : undefined}>
+                  <div className={focusMode ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : fitTable ? 'flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-hidden' : undefined}>
                     {!roles.length ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/20 px-4 py-3">
                         <div>
@@ -1486,13 +1507,14 @@ export function RoadmapPage() {
                       role="region"
                       aria-label="Таблица плана и факта по ролям"
                       tabIndex={0}
-                      className={cn('@container roadmap-scrollbar relative min-w-0 overflow-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring', focusMode ? 'min-h-0 flex-1' : 'max-h-[calc(100dvh-7rem)]')}
+                      className={cn('@container roadmap-scrollbar relative min-w-0 overflow-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring', focusMode ? 'min-h-0 flex-1' : fitTable ? 'max-h-[calc(100dvh-7rem)] lg:max-h-none lg:min-h-[16rem] lg:flex-1' : 'max-h-[calc(100dvh-7rem)]')}
                     >
                       <ResizablePlanTable
                         key={JSON.stringify([user?.id, roadmapProjectId])}
                         columns={tableColumns}
-                        onColumnResize={(id, width) => columnWidths.commitWidth(id, width, tableColumns.find((column) => column.id === id)!)}
-                        className="roadmap-plan-table table-fixed border-separate border-spacing-0 text-left [&>thead>tr>th]:border-b [&>thead>tr>th]:border-b-inherit [&>tbody>tr+tr>*]:border-t [&>tbody>tr+tr>*]:border-t-inherit [&>tfoot>tr>*]:border-t-2 [&>tfoot>tr>*]:border-t-inherit"
+                        pinnedColumnIds={pinnedColumnIds}
+                        onColumnResize={(id, width) => columnWidths.commitWidth(widthKey(id), width, tableColumns.find((column) => column.id === id)!)}
+                        className="roadmap-plan-table table-fixed border-separate border-spacing-0 text-left [&>thead>tr>th]:border-b [&>thead>tr>th]:border-b-inherit [&>tbody>tr+tr>*]:border-t [&>tbody>tr+tr>*]:border-t-inherit"
                       >
                       <thead className="sticky top-0 z-20 bg-card [&_th]:isolate">
                         <tr className="border-b border-border bg-[color-mix(in_srgb,var(--color-muted)_40%,var(--color-card))] text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1563,6 +1585,20 @@ export function RoadmapPage() {
                             {preferences.showDelta ? <th scope="col" data-column-id={`delta:${role.id}`} title="Дельта: факт − план, ч" className="relative border-l border-border/40 px-3 py-1.5">Δ, ч<ColumnResizeHandle columnId={`delta:${role.id}`} /></th> : null}
                           </Fragment>)}
                         </tr> : null}
+                        {/* Project totals stay pinned under the column headers. Without the role breakdown they would only repeat the summary cards above the table. */}
+                        {headerRowSpan === 2 ? <tr data-row-kind="totals" className="bg-[color-mix(in_srgb,var(--color-muted)_65%,var(--color-card))] text-sm font-semibold text-foreground [&>*]:border-b-2 [&>*]:border-b-border">
+                          <th scope="row" style={pinnedCellStyle('name')} className={cn('px-3 py-2.5 text-left @lg:px-4', pinnedCellClass('name'))}>Итого по проекту</th>
+                          <td data-tone="plan" style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-2.5 text-right tabular-nums', pinnedCellClass('summary:plan'))}>{cellHours(totalHours)}</td>
+                          {preferences.showFact ? <td data-tone="fact" style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-2.5 text-right tabular-nums', pinnedCellClass('summary:fact'), !totalActualHours && EMPTY_VALUE_CLASS)}>{cellHours(totalActualHours)}</td> : null}
+                          {detailRoles.map((role) => {
+                            const hours = rolePlan.byProject.get(role.id) ?? 0;
+                            return <Fragment key={role.id}>
+                              <td className={cn('border-l border-border/60 px-3 py-2.5 text-right tabular-nums', !hours && EMPTY_VALUE_CLASS)}>{cellHours(hours)}</td>
+                              {renderRoleMetrics(role.id, hours, totalActualHours === null ? null : projectRoleFact.get(role.id) ?? 0)}
+                            </Fragment>;
+                          })}
+                          {showUnattributedFact ? renderFactCell(totalActualHours === null ? null : projectUnattributedFact, 'unattributed') : null}
+                        </tr> : null}
                       </thead>
                       <tbody>
                         {epics.map((epic) => {
@@ -1594,22 +1630,6 @@ export function RoadmapPage() {
                           {showUnattributedFact ? renderFactCell(null, 'unattributed') : null}
                         </tr> : null}
                       </tbody>
-                      {/* Without the role breakdown the totals row would only repeat the summary cards above the table. */}
-                      {headerRowSpan === 2 ? <tfoot className="sticky bottom-0 z-20 bg-card shadow-[0_-8px_10px_-8px_rgb(0_0_0/0.3)]">
-                        <tr className="border-t-2 border-border bg-[color-mix(in_srgb,var(--color-muted)_65%,var(--color-card))] text-sm font-semibold text-foreground">
-                          <th scope="row" style={pinnedCellStyle('name')} className={cn('px-3 py-3 @lg:px-4', pinnedCellClass('name'))}>Итого по проекту</th>
-                          <td data-tone="plan" style={pinnedCellStyle('summary:plan')} className={cn('whitespace-nowrap border-l border-border/60 px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:plan'))}>{cellHours(totalHours)}</td>
-                          {preferences.showFact ? <td data-tone="fact" style={pinnedCellStyle('summary:fact')} className={cn('whitespace-nowrap px-3 py-3 text-right tabular-nums', pinnedCellClass('summary:fact'), !totalActualHours && EMPTY_VALUE_CLASS)}>{cellHours(totalActualHours)}</td> : null}
-                          {detailRoles.map((role) => {
-                            const hours = rolePlan.byProject.get(role.id) ?? 0;
-                            return <Fragment key={role.id}>
-                              <td className={cn('border-l border-border/60 px-3 py-3 text-right tabular-nums', !hours && EMPTY_VALUE_CLASS)}>{cellHours(hours)}</td>
-                              {renderRoleMetrics(role.id, hours, totalActualHours === null ? null : projectRoleFact.get(role.id) ?? 0)}
-                            </Fragment>;
-                          })}
-                          {showUnattributedFact ? renderFactCell(totalActualHours === null ? null : projectUnattributedFact, 'unattributed') : null}
-                        </tr>
-                      </tfoot> : null}
                     </ResizablePlanTable></div>}
                   </div>
                 )}

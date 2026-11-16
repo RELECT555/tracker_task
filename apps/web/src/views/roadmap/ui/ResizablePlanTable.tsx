@@ -2,16 +2,11 @@
 
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties, type RefObject } from 'react';
 import { cn } from '@/shared/lib/utils';
+import { capStoredWidths, fitColumns, limitPinnedColumns, MAX_COLUMN_SHARE, pinnedSlack, resizeGroup, type PlanColumn } from '../model/plan-column-layout';
 
-export type PlanColumn = {
-  id: string;
-  label: string;
-  width: number;
-  minWidth: number;
-  maxWidth?: number;
-  grow?: boolean;
-  customized?: boolean;
-};
+export type { PlanColumn };
+
+const NO_PINNED_COLUMNS: readonly string[] = [];
 
 type FittedColumn = PlanColumn & { maxWidth: number };
 
@@ -33,44 +28,36 @@ export const planColumnOffset = (precedingIds: string[]) => precedingIds.length
   : '0px';
 const clampWidth = (column: FittedColumn, width: number) => Math.round(Math.min(column.maxWidth, Math.max(column.minWidth, width)));
 
-function fitColumns(columns: PlanColumn[], availableWidth: number): PlanColumn[] {
-  let remaining = availableWidth - columns.reduce((total, column) => total + column.width, 0);
-  // Prefer columns the user has not resized. When every growable column was
-  // resized by hand (e.g. no role columns are visible), they still absorb the
-  // leftover width so the table never stops short of its container.
-  const untouched = columns.some((column) => column.grow && !column.customized);
-  const canGrow = (column: PlanColumn) => column.grow && (!untouched || !column.customized);
-  let weight = columns.filter(canGrow).reduce((total, column) => total + column.width, 0);
-  return columns.map((column) => {
-    if (!canGrow(column) || remaining <= 0) return column;
-    const growth = Math.round(remaining * column.width / weight);
-    remaining -= growth;
-    weight -= column.width;
-    return { ...column, width: column.width + growth };
-  });
-}
-
 type ResizablePlanTableProps = ComponentPropsWithoutRef<'table'> & {
   columns: PlanColumn[];
+  /** Columns that stay in place during horizontal scroll; together they may cover only part of the container. */
+  pinnedColumnIds?: readonly string[];
   onColumnResize: (columnId: string, width: number) => void;
 };
 
 /** Exact column widths keep the browser from redistributing space during a drag. */
-export function ResizablePlanTable({ columns, onColumnResize, children, className, style, ...props }: ResizablePlanTableProps) {
+export function ResizablePlanTable({ columns, pinnedColumnIds = NO_PINNED_COLUMNS, onColumnResize, children, className, style, ...props }: ResizablePlanTableProps) {
   const tableRef = useRef<HTMLTableElement>(null);
   const runwayRef = useRef<HTMLDivElement>(null);
   const [availableWidth, setAvailableWidth] = useState(0);
   const [lockedWidths, setLockedWidths] = useState<{ layoutKey: string; widths: Map<string, number> } | null>(null);
-  const layoutKey = JSON.stringify([availableWidth, ...columns.map((column) => column.id)]);
+  const layoutKey = JSON.stringify([availableWidth, pinnedColumnIds, ...columns.map((column) => column.id)]);
   const hasCustomizedColumns = columns.some((column) => column.customized);
   const keepWidths = hasCustomizedColumns && lockedWidths?.layoutKey === layoutKey;
-  const currentColumns = keepWidths
-    ? columns.map((column) => column.customized ? column : { ...column, width: lockedWidths.widths.get(column.id) ?? column.width })
-    : fitColumns(columns, availableWidth);
-  const fittedColumns = currentColumns.map((column) => ({
-    ...column,
-    maxWidth: column.maxWidth ?? Math.max(1200, availableWidth, column.width),
-  }));
+  // Stored widths may come from a wider container: they are fitted here for display only and stay stored as they are.
+  const cappedColumns = capStoredWidths(columns, availableWidth);
+  const currentColumns = limitPinnedColumns(keepWidths
+    ? cappedColumns.map((column) => column.customized ? column : { ...column, width: lockedWidths.widths.get(column.id) ?? column.width })
+    : fitColumns(cappedColumns, availableWidth), pinnedColumnIds, availableWidth);
+  const slack = pinnedSlack(currentColumns, pinnedColumnIds, availableWidth);
+  const fittedColumns = currentColumns.map((column) => {
+    // A drag stops where the layout would cut the width back, so the column never jumps on release.
+    const maxWidth = column.maxWidth ?? Math.max(column.minWidth, Math.round(availableWidth * MAX_COLUMN_SHARE), column.width);
+    return {
+      ...column,
+      maxWidth: pinnedColumnIds.includes(column.id) ? Math.max(column.width, Math.min(maxWidth, column.width + slack)) : maxWidth,
+    };
+  });
   const columnStyles = Object.fromEntries(fittedColumns.map((column) => [widthProperty(column.id), `${clampWidth(column, column.width)}px`]));
   const totalWidth = fittedColumns.length ? `calc(${fittedColumns.map((column) => `var(${widthProperty(column.id)})`).join(' + ')})` : '0px';
 
@@ -141,6 +128,13 @@ function trimRunway(table: HTMLTableElement, runway: HTMLDivElement) {
   runway.style.width = viewportEnd > tableEnd + 1 ? `${Math.ceil(viewportEnd)}px` : '0px';
 }
 
+type DragMember = {
+  property: string;
+  col: HTMLTableColElement | null;
+  /** Pinned cells whose sticky offset reads the column's width variable. */
+  dependents: HTMLElement[];
+};
+
 type DragSession = {
   pointerId: number;
   columnId: string;
@@ -152,12 +146,12 @@ type DragSession = {
   table: HTMLTableElement;
   runway: HTMLDivElement;
   handle: HTMLDivElement;
-  property: string;
-  col: HTMLTableColElement | null;
+  /** The dragged column and every column that shares its width; all of them are previewed together. */
+  members: DragMember[];
+  /** Pointer pixels per pixel of width: grouped columns before the handle widen too and move it along. */
+  edgeFactor: number;
   /** Table width when the drag began; the preview offsets it by the width delta. */
   tableStartWidth: number;
-  /** Pinned cells whose sticky offset reads the column's width variable. */
-  dependents: HTMLElement[];
   /** Last previewed width, or null while nothing has been painted yet. */
   painted: number | null;
   cursor: string;
@@ -192,24 +186,28 @@ function paintWidth(drag: DragSession, width: number) {
   // descendant, which costs far more than a frame on large plans. The preview
   // writes literal widths instead and only the few pinned cells that read the
   // variable get a local override. The variable itself is set once on release.
-  if (drag.col) drag.col.style.width = `${width}px`;
-  const tableWidth = `${drag.tableStartWidth + width - drag.startWidth}px`;
+  for (const member of drag.members) {
+    if (member.col) member.col.style.width = `${width}px`;
+    for (const element of member.dependents) element.style.setProperty(member.property, `${width}px`);
+  }
+  const tableWidth = `${drag.tableStartWidth + (width - drag.startWidth) * drag.members.length}px`;
   drag.table.style.width = tableWidth;
   drag.table.style.minWidth = tableWidth;
   drag.table.style.maxWidth = tableWidth;
-  for (const element of drag.dependents) element.style.setProperty(drag.property, `${width}px`);
   drag.handle.setAttribute('aria-valuenow', String(width));
   drag.handle.setAttribute('aria-valuetext', `${width} пикселей`);
 }
 
 /** Hands the previewed width back to the variable-driven layout without a visual jump. */
 function settleWidth(drag: DragSession) {
-  for (const element of drag.dependents) element.style.removeProperty(drag.property);
-  const { table, col } = drag;
-  // A removed column must not recreate its obsolete CSS variable on cleanup.
-  if (!col || !table.contains(col)) return;
-  if (drag.painted !== null) table.style.setProperty(drag.property, `${drag.painted}px`);
-  col.style.width = `var(${drag.property})`;
+  const { table } = drag;
+  for (const { property, col, dependents } of drag.members) {
+    for (const element of dependents) element.style.removeProperty(property);
+    // A removed column must not recreate its obsolete CSS variable on cleanup.
+    if (!col || !table.contains(col)) continue;
+    if (drag.painted !== null) table.style.setProperty(property, `${drag.painted}px`);
+    col.style.width = `var(${property})`;
+  }
   const total = Array.from(table.querySelectorAll('col'), (entry) => `var(${widthProperty(entry.dataset.columnId ?? '')})`).join(' + ');
   const tableWidth = total ? `calc(${total})` : '0px';
   table.style.width = tableWidth;
@@ -293,6 +291,8 @@ export function ColumnResizeHandle({ columnId }: { columnId: string }) {
       const table = tableRef.current;
       const property = widthProperty(columnId);
       const startWidth = Number.parseFloat(table.style.getPropertyValue(property)) || width;
+      const group = resizeGroup(context.columns, columnId);
+      const cols = Array.from(table.querySelectorAll('col'));
       handle.focus({ preventScroll: true });
       const drag: DragSession = {
         pointerId: event.pointerId,
@@ -305,10 +305,16 @@ export function ColumnResizeHandle({ columnId }: { columnId: string }) {
         table,
         runway: runwayRef.current,
         handle,
-        property,
-        col: Array.from(table.querySelectorAll('col')).find((entry) => entry.dataset.columnId === columnId) ?? null,
+        members: group.ids.map((id) => {
+          const memberProperty = widthProperty(id);
+          return {
+            property: memberProperty,
+            col: cols.find((entry) => entry.dataset.columnId === id) ?? null,
+            dependents: visibleDependents(table, memberProperty),
+          };
+        }),
+        edgeFactor: group.edgeFactor,
         tableStartWidth: table.getBoundingClientRect().width,
-        dependents: visibleDependents(table, property),
         painted: null,
         cursor: document.body.style.cursor,
         userSelect: document.body.style.userSelect,
@@ -317,7 +323,7 @@ export function ColumnResizeHandle({ columnId }: { columnId: string }) {
       dragRef.current = drag;
       const move = (pointer: PointerEvent) => {
         if (pointer.pointerId !== drag.pointerId || dragRef.current !== drag) return;
-        drag.width = clampWidth(column, drag.startWidth + pointer.clientX - drag.startX);
+        drag.width = clampWidth(column, drag.startWidth + (pointer.clientX - drag.startX) / drag.edgeFactor);
         if (drag.frame !== null) return;
         drag.frame = requestAnimationFrame(() => {
           drag.frame = null;
@@ -327,7 +333,7 @@ export function ColumnResizeHandle({ columnId }: { columnId: string }) {
       const finish = (pointer: PointerEvent) => {
         if (pointer.pointerId !== drag.pointerId || dragRef.current !== drag) return;
         dragRef.current = null;
-        const nextWidth = clampWidth(column, drag.startWidth + pointer.clientX - drag.startX);
+        const nextWidth = clampWidth(column, drag.startWidth + (pointer.clientX - drag.startX) / drag.edgeFactor);
         paintWidth(drag, nextWidth);
         releaseDrag(drag);
         if (nextWidth !== startWidth) onColumnResize(columnId, nextWidth);

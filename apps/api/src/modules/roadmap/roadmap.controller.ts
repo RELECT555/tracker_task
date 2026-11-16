@@ -121,6 +121,7 @@ class PortfolioDto implements RoadmapPortfolioInput {
   @IsOptional() @Matches(/^(?!0000)\d{4}-(0[1-9]|1[0-2])$/) monthKey?: string;
   @IsOptional() @IsBoolean() plannedRolesOnly?: boolean;
   @IsOptional() @IsBoolean() includeMonthlyFact?: boolean;
+  @IsOptional() @IsBoolean() includeQuarterFact?: boolean;
 }
 
 class CreateRoadmapWorkItemDto {

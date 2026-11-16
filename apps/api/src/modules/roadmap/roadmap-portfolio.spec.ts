@@ -125,6 +125,52 @@ describe('Roadmap portfolio', () => {
     expect(result.factIncomplete).toBe(true);
   });
 
+  it('counts cards with fact but no plan in the quarter only when the quarter fact is requested', async () => {
+    const unplanned = (id: string, externalId: string) => {
+      const entry = project(id, externalId);
+      return {
+        ...entry,
+        workItems: [
+          {
+            ...entry.workItems[0],
+            azureCustomFields: { 'Custom.Developer': 0 },
+            allocations: [],
+          },
+        ],
+      };
+    };
+    const { service, getCompletedWorkChanges } = setup([
+      unplanned('first', '1'),
+      unplanned('second', '2'),
+    ]);
+    jest.useFakeTimers({ now: new Date('2026-11-16T12:00:00.000Z') });
+    try {
+      getCompletedWorkChanges.mockImplementation(
+        (_ids: number[], before: Date) =>
+          Promise.resolve(
+            before.toISOString().startsWith('2026-10-31')
+              ? new Map([['1', 4]])
+              : new Map(),
+          ),
+      );
+
+      const planOnly = await service.getProjectSummaries(input);
+      expect(planOnly.projects.first.metrics.features).toBe(0);
+      expect(getCompletedWorkChanges).not.toHaveBeenCalled();
+
+      const result = await service.getProjectSummaries({
+        ...input,
+        includeQuarterFact: true,
+      });
+      expect(result.projects.first.metrics.features).toBe(1);
+      expect(result.projects.second.metrics.features).toBe(0);
+      // December has not started, so only October and November reach Azure.
+      expect(getCompletedWorkChanges).toHaveBeenCalledTimes(4);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('can return the monthly plan without contacting Azure for fact', async () => {
     const { service, getCompletedWorkChanges } = setup([
       project('first', '1'),

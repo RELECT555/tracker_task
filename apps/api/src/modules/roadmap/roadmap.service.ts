@@ -12,6 +12,7 @@ import {
   buildRoadmapPortfolio,
   getRoadmapSummary,
   rebalanceAllocations,
+  roadmapQuarterMonthKeys,
   type RoadmapPortfolioInput,
 } from '@tracker/shared';
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
@@ -461,6 +462,16 @@ export class RoadmapService {
                 () => undefined,
               )
             : undefined;
+        // Cards with fact but no plan count in the quarter only through the fact of its months. If any month
+        // fails the counts stay plan-only, as they do while the quarter view has not asked for the fact.
+        const quarterFact =
+          !monthKey && input.includeQuarterFact
+            ? await Promise.all(
+                roadmapQuarterMonthKeys(quarterKey).map((key) =>
+                  this.calculateProjectFact(workItems, key),
+                ),
+              ).catch(() => undefined)
+            : undefined;
         const summary = getRoadmapSummary(
           {
             workItems: workItems.map((item) => ({
@@ -489,7 +500,7 @@ export class RoadmapService {
               })),
             })),
           },
-          { ...input, monthlyFact },
+          { ...input, monthlyFact, quarterFact },
         );
         return { id, summary };
       }),

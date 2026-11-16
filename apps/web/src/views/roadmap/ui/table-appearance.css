@@ -85,7 +85,8 @@
 }
 
 .roadmap-table-appearance[data-accent='true'] .roadmap-plan-table > tfoot,
-.roadmap-table-appearance[data-accent='true'] .roadmap-plan-table > tfoot > tr {
+.roadmap-table-appearance[data-accent='true'] .roadmap-plan-table > tfoot > tr,
+.roadmap-table-appearance[data-accent='true'] .roadmap-plan-table > thead > tr[data-row-kind='totals'] {
   background-color: var(--roadmap-palette-footer);
 }
 
@@ -151,26 +152,13 @@
   border-color: color-mix(in srgb, var(--color-foreground) 32%, var(--color-card));
 }
 
-/* Compact rows keep the name cell on one line: title on the left, id, state and counts in a fixed column on the right. */
-.roadmap-table-appearance[data-density='compact'] .roadmap-plan-table [data-plan-name] {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: 0.75rem;
-}
-
-.roadmap-table-appearance[data-density='compact'] .roadmap-plan-table [data-plan-name] > :first-child {
-  min-width: 0;
-  max-width: 100%;
-}
-
+/* Compact rows keep id, state and counts on one tight line under the title. */
 .roadmap-table-appearance[data-density='compact'] .roadmap-plan-table [data-plan-meta] {
   /* Same columns for epics and features, so id, state and count line up in every row. */
   display: grid;
-  grid-template-columns: 2.75rem 4.25rem 4.25rem;
+  grid-template-columns: 3.25rem 4.25rem auto;
   column-gap: 0.375rem;
-  margin-top: 0;
-  padding-left: 0;
+  margin-top: 0.125rem;
 }
 
 .roadmap-table-appearance[data-density='compact'] .roadmap-plan-table [data-plan-meta] > * {
