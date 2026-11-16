@@ -3,8 +3,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { aggregateRoadmapSummaries, azureRoleEstimate, getRoadmapFactRoots, getRoadmapIterationVisibility, getRoadmapRolePlan, getRoadmapSummary } from '@tracker/shared';
-import Link from 'next/link';
-import dynamic from 'next/dynamic';
+import Link from '@/shared/lib/router/link';
+import { dynamic } from '@/shared/lib/router/dynamic';
 import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Cloud, Equal, History, Layers, ListChecks, Maximize2, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';

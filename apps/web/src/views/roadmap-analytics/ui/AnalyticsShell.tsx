@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo, type ReactNode } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import Link from '@/shared/lib/router/link';
+import { usePathname, useRouter, useSearchParams } from '@/shared/lib/router/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { roadmapApi, type RoadmapProjectPlan } from '@/entities/roadmap/api/roadmapApi';

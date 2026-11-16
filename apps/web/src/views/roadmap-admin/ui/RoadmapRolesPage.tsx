@@ -1,7 +1,7 @@
 'use client';
 
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import Link from '@/shared/lib/router/link';
+import { useSearchParams } from '@/shared/lib/router/navigation';
 import { useId, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Building2, Plus } from 'lucide-react';

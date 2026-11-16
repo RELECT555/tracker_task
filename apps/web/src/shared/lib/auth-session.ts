@@ -7,7 +7,7 @@ import {
 } from '@/shared/lib/auth-storage';
 import { refreshOutcomeForStatus, type RefreshOutcome } from '@/shared/lib/refresh-outcome';
 
-const baseURL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api/v1';
 
 export const AUTH_EXPIRED_EVENT = 'tracker:auth-expired';
 

@@ -46,7 +46,7 @@ async function call<T>(method: DemoMethod, args: unknown[] = [], signal?: AbortS
 }
 
 export function isRoadmapDemoMode(): boolean {
-  return process.env.NEXT_PUBLIC_ROADMAP_DEMO === 'true';
+  return import.meta.env.VITE_ROADMAP_DEMO === 'true';
 }
 
 export const roadmapDemoApi = {

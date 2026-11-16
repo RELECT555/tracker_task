@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useMemo, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/shared/lib/router/link';
 import { CalendarClock, CircleCheck, UserX } from 'lucide-react';
 import { routes } from '@/shared/config/routes';
 import { Button } from '@/shared/ui/button';

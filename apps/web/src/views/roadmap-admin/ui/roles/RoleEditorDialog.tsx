@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/shared/lib/router/link';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { RefreshCw, X } from 'lucide-react';

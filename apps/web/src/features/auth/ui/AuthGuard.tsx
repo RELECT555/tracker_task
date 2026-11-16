@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname } from '@/shared/lib/router/navigation';
 import { useEffect } from 'react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { routes } from '@/shared/config/routes';

@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/shared/lib/utils';
@@ -51,7 +50,7 @@ export function RoadmapPersonAvatar({ person, className }: { person: RoadmapPers
     >
       {personInitials(person.name)}
       {src && src !== failedSrc ? (
-        <Image src={src} alt="" unoptimized width={44} height={44} className="absolute inset-0 size-full object-cover" onError={() => setFailedSrc(src)} />
+        <img src={src} alt="" width={44} height={44} loading="lazy" className="absolute inset-0 size-full object-cover" onError={() => setFailedSrc(src)} />
       ) : null}
     </span>
   );

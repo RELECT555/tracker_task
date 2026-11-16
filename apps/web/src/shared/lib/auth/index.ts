@@ -8,7 +8,7 @@ export type { AuthProvider, AuthProviderKind } from './types';
 export type { EntraAuthProvider } from './entra-session';
 export { AUTH_EXPIRED_EVENT } from '@/shared/lib/auth-session';
 
-const baseURL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api/v1';
 
 async function fetchAuthConfig(): Promise<AuthClientConfig> {
   const response = await fetch(`${baseURL}/auth/config`);

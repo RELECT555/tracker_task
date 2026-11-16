@@ -1,6 +1,6 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams } from '@/shared/lib/router/navigation';
 import { type FormEvent, useState } from 'react';
 import { ArrowRight, Eye, EyeOff, Layers2, LoaderCircle } from 'lucide-react';
 import { useAuth } from '@/features/auth/model/useAuth';

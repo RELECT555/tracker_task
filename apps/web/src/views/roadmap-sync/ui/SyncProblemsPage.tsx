@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import Link from '@/shared/lib/router/link';
+import { usePathname, useRouter, useSearchParams } from '@/shared/lib/router/navigation';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { ArrowRight, Check, ChevronRight, CircleCheck, Clock3, FolderKanban, History } from 'lucide-react';
 import type { SyncProblemDto, SyncProblemEpisodeDto, SyncProblemStatusFilter } from '@tracker/shared';
