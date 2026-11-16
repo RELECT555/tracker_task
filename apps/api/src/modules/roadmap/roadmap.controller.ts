@@ -21,6 +21,7 @@ import {
   IsBoolean,
   IsDateString,
   IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -40,7 +41,8 @@ import {
 } from '../../shared/presentation/decorators/current-user.decorator';
 import { AdminRoleGuard } from '../admin/presentation/guards/admin-role.guard';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
-import { planChangeContext } from './roadmap-plan-change';
+import { planChangeContext, type PlanChangeQuery } from './roadmap-plan-change';
+import { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import { RoadmapService } from './roadmap.service';
 import {
   ROADMAP_CREATE_WORK_ITEM_TYPES,
@@ -168,6 +170,16 @@ class LogTimeDto {
   @IsOptional() @IsString() @MaxLength(500) comment?: string;
 }
 
+class PlanChangesQueryDto implements PlanChangeQuery {
+  @IsOptional() @IsString() @MaxLength(100) workItemExternalId?: string;
+  @IsOptional() @IsString() @MaxLength(255) personExternalId?: string;
+  @IsOptional() @IsDateString() from?: string;
+  @IsOptional() @IsDateString() to?: string;
+  @IsOptional() @IsString() @MaxLength(200) cursor?: string;
+  /** Not capped here: the service clamps it to 200. */
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) limit?: number;
+}
+
 @Controller('roadmap')
 export class RoadmapController {
   constructor(
@@ -177,7 +189,18 @@ export class RoadmapController {
     private readonly access: RoadmapProjectAccessService,
     private readonly workItemCard: RoadmapWorkItemCardService,
     private readonly allocationAzure: RoadmapAllocationAzureService,
+    private readonly planChanges: RoadmapPlanChangeService,
   ) {}
+
+  @Get('projects/:projectId/changes')
+  async projectChanges(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Query() query: PlanChangesQueryDto,
+  ) {
+    await this.access.require(actor, { projectId }, 'read');
+    return this.planChanges.list(projectId, query);
+  }
 
   @Get('projects/:projectId/work-items/:externalId/azure')
   async workItemCardView(

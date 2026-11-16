@@ -291,7 +291,7 @@ function setup(initial: Row[] = []) {
       onAllocationSaved: jest.fn(),
     } as unknown as RoadmapAzureSyncService,
     {} as RoadmapAzureCatalogService,
-    new RoadmapPlanChangeService(),
+    new RoadmapPlanChangeService({} as never),
   );
   /** Every journal row written, in order. */
   const journal = () =>
@@ -322,14 +322,14 @@ function azureSetup(initial: Row[], settings: Record<string, unknown> = {}) {
     {} as RoadmapWorkItemImportService,
     {} as IsActiveAdminHandler,
     {} as RoadmapAllocationAzureService,
-    new RoadmapPlanChangeService(),
+    new RoadmapPlanChangeService({} as never),
   );
   const allocations = new RoadmapAllocationAzureService(
     env.prisma as unknown as PrismaService,
     integration as unknown as RoadmapIntegrationService,
     {} as RoadmapWorkItemImportService,
     {} as IsActiveAdminHandler,
-    new RoadmapPlanChangeService(),
+    new RoadmapPlanChangeService({} as never),
   );
   return { ...env, integration, sync, allocations };
 }
@@ -995,7 +995,7 @@ function pushSetup() {
     } as unknown as RoadmapWorkItemImportService,
     {} as IsActiveAdminHandler,
     {} as RoadmapAllocationAzureService,
-    new RoadmapPlanChangeService(),
+    new RoadmapPlanChangeService({} as never),
   );
   const spy = (name: string) => jest.spyOn(sync as never, name as never);
   spy('fetchTask').mockResolvedValue({

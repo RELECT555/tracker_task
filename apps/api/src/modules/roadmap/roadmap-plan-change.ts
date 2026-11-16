@@ -43,6 +43,73 @@ export interface PlanChangeInput {
   details?: Record<string, unknown>;
 }
 
+export interface PlanChangeQuery {
+  workItemExternalId?: string;
+  personExternalId?: string;
+  /** ISO date or date-time; entries created at or after it. */
+  from?: string;
+  /** ISO date or date-time; a plain date includes that whole day. */
+  to?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface PlanChangeDto {
+  id: string;
+  batchId: string;
+  action: PlanChangeAction;
+  source: PlanChangeSource;
+  actorName: string | null;
+  actorEmail: string | null;
+  workItemExternalId: string;
+  workItemTitle: string;
+  roleName: string;
+  quarterKey: string;
+  azureTaskId: string | null;
+  before: AllocationSnapshot | null;
+  after: AllocationSnapshot | null;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const PLAN_CHANGE_DEFAULT_LIMIT = 50;
+export const PLAN_CHANGE_MAX_LIMIT = 200;
+
+export function clampLimit(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit)) {
+    return PLAN_CHANGE_DEFAULT_LIMIT;
+  }
+  return Math.min(Math.max(Math.trunc(limit), 1), PLAN_CHANGE_MAX_LIMIT);
+}
+
+/** Opaque position in the list: base64url of `createdAt|id`. */
+export function encodeCursor(entry: { createdAt: Date; id: string }): string {
+  return Buffer.from(
+    `${entry.createdAt.toISOString()}|${entry.id}`,
+    'utf8',
+  ).toString('base64url');
+}
+
+/** null when the cursor is not one `encodeCursor` produced. */
+export function decodeCursor(
+  cursor: string,
+): { createdAt: Date; id: string } | null {
+  const [time, id, ...rest] = Buffer.from(cursor, 'base64url')
+    .toString('utf8')
+    .split('|');
+  const createdAt = new Date(time);
+  if (
+    !UUID.test(id ?? '') ||
+    rest.length > 0 ||
+    Number.isNaN(createdAt.getTime())
+  ) {
+    return null;
+  }
+  return { createdAt, id };
+}
+
 /** Fields needed to build both the snapshot and the reference of an allocation. */
 export const ALLOCATION_SNAPSHOT_SELECT = {
   id: true,

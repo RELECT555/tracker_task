@@ -4,6 +4,7 @@ import { RoadmapProjectAccessService } from './roadmap-project-access.service';
 import type { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
 import type { RoadmapWorkItemCardService } from './roadmap-work-item-card.service';
 import type { RoadmapWorkItemCreateService } from './roadmap-work-item-create.service';
+import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import { RoadmapController } from './roadmap.controller';
 import type { RoadmapService } from './roadmap.service';
 
@@ -37,6 +38,7 @@ describe('Local Roadmap projects', () => {
         access,
         {} as RoadmapWorkItemCardService,
         {} as RoadmapAllocationAzureService,
+        {} as RoadmapPlanChangeService,
       );
 
       await expect(

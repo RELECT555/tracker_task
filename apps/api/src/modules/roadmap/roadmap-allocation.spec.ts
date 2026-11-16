@@ -5,6 +5,7 @@ import type { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service
 import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import { planChangeContext } from './roadmap-plan-change';
+import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import { RoadmapService } from './roadmap.service';
 
@@ -84,7 +85,7 @@ function setup() {
       onAllocationSaved,
     } as unknown as RoadmapAzureSyncService,
     {} as RoadmapAzureCatalogService,
-    planChanges,
+    planChanges as unknown as RoadmapPlanChangeService,
   );
   return { service, tx, transaction, onAllocationSaved, events };
 }

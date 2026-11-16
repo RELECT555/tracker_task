@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   actionOf,
@@ -77,7 +78,7 @@ function setup() {
     },
     roadmapAllocation: { findMany: jest.fn().mockResolvedValue([]) },
   };
-  return { tx, service: new RoadmapPlanChangeService() };
+  return { tx, service: new RoadmapPlanChangeService({} as never) };
 }
 
 describe('actionOf', () => {
@@ -190,6 +191,8 @@ describe('RoadmapPlanChangeService.record', () => {
     expect(tx.roadmapPlanChange.createMany).toHaveBeenCalledTimes(1);
     const { data } = tx.roadmapPlanChange.createMany.mock.calls[0][0];
     expect(data).toHaveLength(1);
+    // Whole milliseconds, so the list cursor can compare it exactly.
+    expect(data[0].createdAt).toBeInstanceOf(Date);
     expect(data[0]).toMatchObject({
       projectId: 'project',
       batchId: 'batch',
@@ -416,5 +419,235 @@ describe('RoadmapPlanChangeService.recordAfter', () => {
       await service.recordAfter(tx as never, context, before, ['allocation']),
     ).toBe(0);
     expect(tx.roadmapPlanChange.createMany).not.toHaveBeenCalled();
+  });
+});
+
+type Row = ReturnType<typeof changeRow>;
+type Where = Record<string, unknown>;
+
+/** A well-formed row id, ordered like its letter. */
+const uid = (letter: string) => `00000000-0000-4000-8000-${letter.repeat(12)}`;
+
+function changeRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'a',
+    projectId: 'project',
+    batchId: 'batch',
+    action: 'updated',
+    source: 'plan',
+    actorUserId: 'user',
+    actorEmail: 'user@example.com',
+    actorName: 'Пётр Петров',
+    azureTaskId: null as string | null,
+    allocationId: 'allocation',
+    workItemId: 'work-item',
+    workItemExternalId: '1001',
+    workItemTitle: 'Feature title',
+    roleId: 'role',
+    roleName: 'Backend',
+    quarterKey: '2026-Q4',
+    before: snapshot as unknown,
+    after: { ...snapshot, estimatedHours: 24 } as unknown,
+    details: {} as unknown,
+    createdAt: new Date('2026-11-16T10:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+/** Evaluates the subset of Prisma `where` that `list` builds, over in-memory rows. */
+function matches(row: Row, where: Where): boolean {
+  return Object.entries(where).every(([key, condition]) => {
+    if (key === 'AND')
+      return (condition as Where[]).every((part) => matches(row, part));
+    if (key === 'OR')
+      return (condition as Where[]).some((part) => matches(row, part));
+    const value = (row as Where)[key];
+    if (condition instanceof Date)
+      return (value as Date).getTime() === condition.getTime();
+    if (condition === null || typeof condition !== 'object')
+      return value === condition;
+    const filter = condition as Record<string, unknown>;
+    if ('path' in filter) {
+      const json = value as Record<string, unknown> | null;
+      return json?.[(filter.path as string[])[0]] === filter.equals;
+    }
+    const order = (input: unknown) =>
+      input instanceof Date ? input.getTime() : String(input);
+    const current = order(value);
+    return (
+      (!('gte' in filter) || current >= order(filter.gte)) &&
+      (!('gt' in filter) || current > order(filter.gt)) &&
+      (!('lte' in filter) || current <= order(filter.lte)) &&
+      (!('lt' in filter) || current < order(filter.lt))
+    );
+  });
+}
+
+function listSetup(rows: Row[]) {
+  const findMany = jest.fn(
+    ({ where, take }: { where: Where; take: number }): Promise<Row[]> =>
+      Promise.resolve(
+        rows
+          .filter((row) => matches(row, where))
+          .sort(
+            (a, b) =>
+              b.createdAt.getTime() - a.createdAt.getTime() ||
+              (a.id < b.id ? 1 : -1),
+          )
+          .slice(0, take),
+      ),
+  );
+  const prisma = { roadmapPlanChange: { findMany } };
+  return { findMany, service: new RoadmapPlanChangeService(prisma as never) };
+}
+
+describe('RoadmapPlanChangeService.list', () => {
+  it('returns entries of a deleted allocation with their snapshots', async () => {
+    const { service } = listSetup([
+      changeRow({
+        id: 'removed',
+        action: 'deleted',
+        before: snapshot,
+        after: null,
+        azureTaskId: '77',
+        details: { task: { state: 'deleted' } },
+      }),
+    ]);
+
+    const page = await service.list('project', {});
+
+    expect(page.nextCursor).toBeNull();
+    expect(page.items).toEqual([
+      {
+        id: 'removed',
+        batchId: 'batch',
+        action: 'deleted',
+        source: 'plan',
+        actorName: 'Пётр Петров',
+        actorEmail: 'user@example.com',
+        workItemExternalId: '1001',
+        workItemTitle: 'Feature title',
+        roleName: 'Backend',
+        quarterKey: '2026-Q4',
+        azureTaskId: '77',
+        before: snapshot,
+        after: null,
+        details: { task: { state: 'deleted' } },
+        createdAt: '2026-11-16T10:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('only lists the requested project and work item', async () => {
+    const { service } = listSetup([
+      changeRow({ id: 'mine' }),
+      changeRow({ id: 'other-project', projectId: 'another' }),
+      changeRow({ id: 'other-item', workItemExternalId: '2002' }),
+    ]);
+
+    const page = await service.list('project', { workItemExternalId: '1001' });
+
+    expect(page.items.map((item) => item.id)).toEqual(['mine']);
+  });
+
+  it('filters by person in before and after', async () => {
+    const other = { ...snapshot, personExternalId: 'someone-else' };
+    const { service } = listSetup([
+      changeRow({ id: 'as-before', before: snapshot, after: other }),
+      changeRow({ id: 'as-after', before: other, after: snapshot }),
+      changeRow({ id: 'created', before: null, after: snapshot }),
+      changeRow({ id: 'deleted', before: snapshot, after: null }),
+      changeRow({ id: 'unrelated', before: other, after: other }),
+    ]);
+
+    const page = await service.list('project', { personExternalId: 'person' });
+
+    expect(page.items.map((item) => item.id).sort()).toEqual([
+      'as-after',
+      'as-before',
+      'created',
+      'deleted',
+    ]);
+  });
+
+  it('filters by period, taking the whole last day', async () => {
+    const { service } = listSetup([
+      changeRow({ id: 'before', createdAt: new Date('2026-11-09T23:59:59Z') }),
+      changeRow({ id: 'first', createdAt: new Date('2026-11-10T00:00:00Z') }),
+      changeRow({ id: 'last', createdAt: new Date('2026-11-12T23:59:59Z') }),
+      changeRow({ id: 'after', createdAt: new Date('2026-11-13T00:00:00Z') }),
+    ]);
+
+    const page = await service.list('project', {
+      from: '2026-11-10',
+      to: '2026-11-12',
+    });
+
+    expect(page.items.map((item) => item.id)).toEqual(['last', 'first']);
+  });
+
+  it('paginates: limit 2 of 3 gives a cursor and the second page the rest', async () => {
+    const { service } = listSetup([
+      changeRow({
+        id: uid('c'),
+        createdAt: new Date('2026-11-16T10:00:00.000Z'),
+      }),
+      changeRow({
+        id: uid('b'),
+        createdAt: new Date('2026-11-16T09:30:00.000Z'),
+      }),
+      changeRow({
+        id: uid('a'),
+        createdAt: new Date('2026-11-16T09:00:00.000Z'),
+      }),
+    ]);
+
+    const first = await service.list('project', { limit: 2 });
+    expect(first.items.map((item) => item.id)).toEqual([uid('c'), uid('b')]);
+    expect(first.nextCursor).toEqual(expect.any(String));
+
+    const second = await service.list('project', {
+      limit: 2,
+      cursor: first.nextCursor!,
+    });
+    expect(second.items.map((item) => item.id)).toEqual([uid('a')]);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it('does not repeat or skip rows that share createdAt across a page boundary', async () => {
+    const same = new Date('2026-11-16T10:00:00.000Z');
+    const ids = ['e', 'd', 'c', 'b', 'a'].map(uid);
+    const { service } = listSetup(
+      ids.map((id) => changeRow({ id, createdAt: same })),
+    );
+
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await service.list('project', { limit: 2, cursor });
+      seen.push(...page.items.map((item) => item.id));
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+
+    expect(seen).toEqual(ids);
+  });
+
+  it('clamps limit 500 to 200 and defaults to 50', async () => {
+    const { service, findMany } = listSetup([]);
+
+    await service.list('project', { limit: 500 });
+    await service.list('project', {});
+
+    // One extra row is requested to learn whether another page exists.
+    expect(findMany.mock.calls[0][0].take).toBe(201);
+    expect(findMany.mock.calls[1][0].take).toBe(51);
+  });
+
+  it('rejects a malformed cursor', async () => {
+    const { service } = listSetup([]);
+
+    await expect(
+      service.list('project', { cursor: 'not-a-cursor' }),
+    ).rejects.toThrow(BadRequestException);
   });
 });
