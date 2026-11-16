@@ -47,7 +47,7 @@
   - `getRoadmapIterationVisibility(items: RoadmapIterationItem[], quarterIterationPath: string | null, activeItemIds: ReadonlySet<string>): RoadmapIterationVisibility`
   - `RoadmapSummary.activeItemIds: Set<string>` — ids of epics/features for which `hasActivity(item)` is true (own activity only, **not** epics activated through their features). Not added to `RoadmapSummaryTotals`.
 
-- [ ] **Step 1: Write failing tests** (`node:test` + `assert/strict`, import from `@tracker/shared`, items built like `roadmap-summary.test.mjs`):
+- [x] **Step 1: Write failing tests** (`node:test` + `assert/strict`, import from `@tracker/shared`, items built like `roadmap-summary.test.mjs`):
   - `roadmapIterationContains('P\\2026\\Q4', x)` is true for `P\2026\Q4`, `P\2026\Q4\Sprint 1`, `\p\2026\q4`; false for `P\2026\Q40`, `P\2026\Q4x`, `P\2026\Q3`, `P`, `null`, `''`.
   - Quarter path `null` → `filtered: false`, `visibleIds` = all epic/feature ids, `outsideIds` empty.
   - All epics/features have `iterationPath: null` → `filtered: false`.
@@ -59,10 +59,10 @@
   - Epic in Q3, inactive, its only feature hidden → not visible.
   - Tasks (`type: 'Task'`) never appear in `visibleIds`.
   - `getRoadmapSummary(...).activeItemIds` contains a feature with a quarter allocation and does not contain its parent epic that has no own activity.
-- [ ] **Step 2: Run** `npm run build -w @tracker/shared; node --test apps/web/src/views/roadmap/model/roadmap-iteration.test.mjs` → FAIL (export missing).
-- [ ] **Step 3: Implement** in `iteration.ts`. Normalize a path: trim, strip leading `\`, lowercase. Contains = equal, or item starts with `quarter + '\\'`. Only `epic`/`feature` types (case-insensitive) take part. Features first, then epics (an epic is visible if in iteration, active, or any visible feature has `parentExternalId === epic.externalId`; outside only if not in iteration and active). In `summary.ts` add `activeItemIds: new Set(items.filter((item) => isPlanItem(item) && hasActivity(item)).map((item) => item.id))` to the returned object and the `RoadmapSummary` interface.
-- [ ] **Step 4: Run** the same commands → PASS; also `node --test apps/web/src/views/roadmap/model/roadmap-summary.test.mjs` → PASS.
-- [ ] **Step 5: Commit** `feat(roadmap): shared rule for iteration-based plan visibility`
+- [x] **Step 2: Run** `npm run build -w @tracker/shared; node --test apps/web/src/views/roadmap/model/roadmap-iteration.test.mjs` → FAIL (export missing).
+- [x] **Step 3: Implement** in `iteration.ts`. Normalize a path: trim, strip leading `\`, lowercase. Contains = equal, or item starts with `quarter + '\\'`. Only `epic`/`feature` types (case-insensitive) take part. Features first, then epics (an epic is visible if in iteration, active, or any visible feature has `parentExternalId === epic.externalId`; outside only if not in iteration and active). In `summary.ts` add `activeItemIds: new Set(items.filter((item) => isPlanItem(item) && hasActivity(item)).map((item) => item.id))` to the returned object and the `RoadmapSummary` interface.
+- [x] **Step 4: Run** the same commands → PASS; also `node --test apps/web/src/views/roadmap/model/roadmap-summary.test.mjs` → PASS.
+- [x] **Step 5: Commit** `feat(roadmap): shared rule for iteration-based plan visibility`
 
 ### Task 2: Store the iteration on import
 
@@ -76,13 +76,13 @@
 **Interfaces:**
 - Produces: `RoadmapWorkItem.iterationPath: string | null` in Prisma; included automatically in `getProjectPlan` work items.
 
-- [ ] **Step 1: Write failing tests** (mock style of `roadmap-project-refresh.spec.ts`):
+- [x] **Step 1: Write failing tests** (mock style of `roadmap-project-refresh.spec.ts`):
   - `importWorkItems` with an Azure item whose `fields['System.IterationPath'] = 'P\\2026\\Q4'` calls `prisma.roadmapWorkItem.upsert` with `create.iterationPath` and `update.iterationPath` = `'P\\2026\\Q4'`; when the field is absent both are `null`.
   - Incremental `refreshImportedProjects` (project with `syncedAt`): an existing Feature with `azureCustomFields: { 'System.AssignedTo': null }` and `iterationPath: null` is re-imported by id; one with `iterationPath: 'P'` is not.
-- [ ] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-work-item-iteration` → FAIL.
-- [ ] **Step 3: Implement.** Add the column. Generate SQL with `npx prisma migrate diff --from-schema-datasource apps/api/prisma/schema.prisma --to-schema-datamodel apps/api/prisma/schema.prisma --script` against a migrated local DB (expected: one `ALTER TABLE "roadmap_work_items" ADD COLUMN "iteration_path" VARCHAR(1000);`). In `upsert` data: `iterationPath: stringValue(fields[ITERATION_PATH])`. In the enrichment block select `iterationPath` too and rename `missingAssigneeIds` → `needsEnrichmentIds`, also matching `item.iterationPath === null`; update the comment.
-- [ ] **Step 4: Run** `npm run db:generate; npm run test -w @tracker/api -- roadmap-work-item-iteration roadmap-project-refresh` → PASS; then `npm run test -w @tracker/api` → PASS.
-- [ ] **Step 5: Commit** `feat(roadmap): store Azure iteration path of work items`
+- [x] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-work-item-iteration` → FAIL.
+- [x] **Step 3: Implement.** Add the column. Generate SQL with `npx prisma migrate diff --from-schema-datasource apps/api/prisma/schema.prisma --to-schema-datamodel apps/api/prisma/schema.prisma --script` against a migrated local DB (expected: one `ALTER TABLE "roadmap_work_items" ADD COLUMN "iteration_path" VARCHAR(1000);`). In `upsert` data: `iterationPath: stringValue(fields[ITERATION_PATH])`. In the enrichment block select `iterationPath` too and rename `missingAssigneeIds` → `needsEnrichmentIds`, also matching `item.iterationPath === null`; update the comment.
+- [x] **Step 4: Run** `npm run db:generate; npm run test -w @tracker/api -- roadmap-work-item-iteration roadmap-project-refresh` → PASS; then `npm run test -w @tracker/api` → PASS.
+- [x] **Step 5: Commit** `feat(roadmap): store Azure iteration path of work items`
 
 ### Task 3: Quarter iteration endpoint
 
@@ -96,16 +96,16 @@
   - `RoadmapAzureSyncService.findQuarterIteration(projectId: string, quarterKey: string): Promise<{ iterationPath: string | null }>`
   - `GET /roadmap/projects/:projectId/iteration?quarterKey=YYYY-Qn` → `{ iterationPath: string | null }`; access `this.access.require(actor, { projectId }, 'read')`; `ParseUUIDPipe` on `projectId`.
 
-- [ ] **Step 1: Write failing tests:**
+- [x] **Step 1: Write failing tests:**
   - Malformed `quarterKey` (`'2026-Q5'`, `'2026Q4'`, missing) → `BadRequestException`.
   - Unknown project → `NotFoundException`.
   - Integration not configured (`getPublicSettings().configured === false`) → `{ iterationPath: null }` without an Azure call.
   - Iterations tree with `\P\Iteration\2026\Q4` → `{ iterationPath: 'P\\2026\\Q4' }`.
   - `requestJson` rejects / `getCredentials` throws → `{ iterationPath: null }`.
-- [ ] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-quarter-iteration` → FAIL.
-- [ ] **Step 3: Implement** `findQuarterIteration`: validate with `/^\d{4}-Q[1-4]$/`, look up `roadmapProject.externalId`, check configured, then `quarterIterationPath(externalId, quarterKey, credentials)` inside try/catch → `null` on error. Reuse the existing `iterationCache`; do not change `quarterIterationPath`'s behavior. Add the controller route.
-- [ ] **Step 4: Run** `npm run test -w @tracker/api -- roadmap-quarter-iteration` → PASS; then `npm run test -w @tracker/api` → PASS.
-- [ ] **Step 5: Commit** `feat(roadmap): endpoint for the Azure iteration of a quarter`
+- [x] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-quarter-iteration` → FAIL.
+- [x] **Step 3: Implement** `findQuarterIteration`: validate with `/^\d{4}-Q[1-4]$/`, look up `roadmapProject.externalId`, check configured, then `quarterIterationPath(externalId, quarterKey, credentials)` inside try/catch → `null` on error. Reuse the existing `iterationCache`; do not change `quarterIterationPath`'s behavior. Add the controller route.
+- [x] **Step 4: Run** `npm run test -w @tracker/api -- roadmap-quarter-iteration` → PASS; then `npm run test -w @tracker/api` → PASS.
+- [x] **Step 5: Commit** `feat(roadmap): endpoint for the Azure iteration of a quarter`
 
 ### Task 4: Filter the plan table
 
@@ -118,8 +118,8 @@
 - Consumes: Task 1 `getRoadmapIterationVisibility`, `RoadmapSummary.activeItemIds`; Task 3 endpoint.
 - Produces: `RoadmapWorkItem.iterationPath?: string | null`; `roadmapApi.quarterIteration(projectId: string, quarterKey: string): Promise<{ iterationPath: string | null }>`; demo `quarterIteration` → `{ iterationPath: null }`.
 
-- [ ] **Step 1: Add API types and client**, demo handler.
-- [ ] **Step 2: Wire the page.** `useQuery` with key `['roadmap', 'iteration', roadmapProjectId, currentQuarterKey]`, `enabled: Boolean(plan && !isAllProjects)`, `staleTime: 5 * 60 * 1000`, `retry: false`. `quarterIterationPath = query.data?.iterationPath ?? null` (loading/error = no filter). `const iteration = getRoadmapIterationVisibility(plannedItems, quarterIterationPath, summary?.activeItemIds ?? new Set())`. Apply `iteration.visibleIds.has(item.id)` together with `matchesState` in: epic rows (`epics.map` in the main table), their `children`, `standaloneFeatures`, and `stateOptions`/`stateCounts` (so state counts match visible rows). Leave `QuarterPlanningGrid` (periods view) and summary counters untouched.
-- [ ] **Step 3: Badge and notice.** In `renderItemRow`'s meta line (`data-plan-meta`, epic and feature variants) render `<span>вне итерации</span>` when `iteration.outsideIds.has(item.id)`, styled like the existing feature-count pill with an amber tone, `title` = `Итерация: ${item.iterationPath}` or `Итерация не задана`. When `quarterIterationPath === null` and the query has succeeded and the plan is an Azure project (not demo, `configured`), show the notice text in the status row above the table (same place/style as the month status line).
-- [ ] **Step 4: Verify.** `npm run lint -w @tracker/web` → no errors; `node --test apps/web/src/views/roadmap/model/*.test.mjs` → PASS. Run the web dev server via preview, open a synced Azure project: switching Q3↔Q4 changes the row list; an out-of-iteration card with plan shows the badge and tooltip; demo mode looks unchanged. Screenshot into `output/`.
-- [ ] **Step 5: Commit** `feat(roadmap): filter plan rows by Azure iteration of the quarter`
+- [x] **Step 1: Add API types and client**, demo handler.
+- [x] **Step 2: Wire the page.** `useQuery` with key `['roadmap', 'iteration', roadmapProjectId, currentQuarterKey]`, `enabled: Boolean(plan && !isAllProjects)`, `staleTime: 5 * 60 * 1000`, `retry: false`. `quarterIterationPath = query.data?.iterationPath ?? null` (loading/error = no filter). `const iteration = getRoadmapIterationVisibility(plannedItems, quarterIterationPath, summary?.activeItemIds ?? new Set())`. Apply `iteration.visibleIds.has(item.id)` together with `matchesState` in: epic rows (`epics.map` in the main table), their `children`, `standaloneFeatures`, and `stateOptions`/`stateCounts` (so state counts match visible rows). Leave `QuarterPlanningGrid` (periods view) and summary counters untouched.
+- [x] **Step 3: Badge and notice.** In `renderItemRow`'s meta line (`data-plan-meta`, epic and feature variants) render `<span>вне итерации</span>` when `iteration.outsideIds.has(item.id)`, styled like the existing feature-count pill with an amber tone, `title` = `Итерация: ${item.iterationPath}` or `Итерация не задана`. When `quarterIterationPath === null` and the query has succeeded and the plan is an Azure project (not demo, `configured`), show the notice text in the status row above the table (same place/style as the month status line).
+- [x] **Step 4: Verify.** `npm run lint -w @tracker/web` → no errors; `node --test apps/web/src/views/roadmap/model/*.test.mjs` → PASS. Run the web dev server via preview, open a synced Azure project: switching Q3↔Q4 changes the row list; an out-of-iteration card with plan shows the badge and tooltip; demo mode looks unchanged. Screenshot into `output/`.
+- [x] **Step 5: Commit** `feat(roadmap): filter plan rows by Azure iteration of the quarter`

@@ -74,7 +74,7 @@
     export function closeEpisode(db: EpisodeDb, alert: {...same}, resolution: 'fixed' | 'obsolete', endedAt: Date): Promise<void>; // upsert with resolvedAt/resolution
     ```
 
-- [ ] **Step 1: Write failing tests** in `roadmap-alerts.spec.ts`:
+- [x] **Step 1: Write failing tests** in `roadmap-alerts.spec.ts`:
   - `opening creates one episode with openedCount and peakCount` (count 3 → both 3).
   - `refresh raises peakCount but never lowers it`: counts 3 → 5 → 2 give peak 5, `details.count` 2.
   - `fixed resolve ends the episode at clearSince`: clear starts at t+1 min, resolves at t+11 min, so `resolvedAt === t+1min` and `resolution 'fixed'`.
@@ -83,13 +83,13 @@
   - `a lost resolve race writes nothing to the episode`.
   - `an alert opened before the journal gets an episode on its first refresh` with `openedAt` equal to the alert's.
   - `cleanup deletes resolved episodes older than 90 days and keeps resolved alerts that still have episodes`.
-- [ ] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-alerts` and expect FAIL.
-- [ ] **Step 3: Schema and migration.**
+- [x] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-alerts` and expect FAIL.
+- [x] **Step 3: Schema and migration.**
   - Edit the schema.
   - Generate the SQL with `npx prisma migrate diff --from-schema-datamodel <HEAD schema> --to-schema-datamodel apps/api/prisma/schema.prisma --script`, as Task 1 of the previous plan did.
   - Save it to the migration folder above. It must be additive only.
   - Run `npm run db:generate`. If it hits EPERM because a dev server holds the engine, note it and continue.
-- [ ] **Step 4: Implement the helpers, then wire them in.**
+- [x] **Step 4: Implement the helpers, then wire them in.**
   - **`open`:** call `createEpisode(tx, …)` right after the alert row is won or created, before recipients. It belongs to the same transaction and is written even with zero recipients.
   - **`refresh`:** after a won `updateMany` (`count === 1`), load the alert (`id`, `generation`, `kind`, `projectId`, `openedAt`) and call `touchEpisode`.
   - **`resolve`:**
@@ -98,8 +98,8 @@
   - **`cleanup`:**
     - Add `roadmapAlertEpisode.deleteMany({ where: { resolvedAt: { lt: now − 90d } } })`.
     - Change the alert delete to `{ state: 'resolved', notifications: { none: {} }, episodes: { none: {} } }`.
-- [ ] **Step 5: Run** the spec, expect PASS. Then run the full `npm run test -w @tracker/api` and expect PASS.
-- [ ] **Step 6: Commit** `feat(api): journal of sync problem episodes`.
+- [x] **Step 5: Run** the spec, expect PASS. Then run the full `npm run test -w @tracker/api` and expect PASS.
+- [x] **Step 6: Commit** `feat(api): journal of sync problem episodes`.
 
 ---
 
@@ -135,7 +135,7 @@
   - `GET /roadmap/sync-problems` → `SyncProblemPage`.
   - `GET /roadmap/sync-problems/:alertId/history?limit=20` → `{ items: SyncProblemEpisodeDto[] }`.
 
-- [ ] **Step 1: Write failing tests.**
+- [x] **Step 1: Write failing tests.**
   - `roadmap-alert-format.spec.ts`:
     - `alertHint` returns the exact copy for all 5 kinds.
     - `alertAction`, admin: `sync_errors` → «Интеграции → Проекты», `#azure-projects`; `azure_auth` → «Подключение», `#azure-connection`; `webhook_silent` → «Webhook», `#azure-webhook`.
@@ -157,16 +157,16 @@
   - `roadmap-notifications.spec.ts`:
     - `summary.canViewSyncProblems`: admin → true; a user with one planner grant → true; viewer only → false.
     - `list` returns `openedCount` from the matching episode, or `null` when there is none.
-- [ ] **Step 2: Run** the three specs and expect FAIL.
-- [ ] **Step 3: Implement.**
+- [x] **Step 2: Run** the three specs and expect FAIL.
+- [x] **Step 3: Implement.**
   - Access: look up the planner project ids for `user.email.trim().toLowerCase()` with `roadmapProjectAccess.findMany({ where: { email, role: 'planner' } })`.
   - Latest episode per alert: query alerts with `include: { episodes: { orderBy: { generation: 'desc' }, take: 1 } }` and `episodes: { some: {} }` in the where.
   - `recurrence7d` and `historyCount`: one `$queryRaw` over the page's alert ids. Return per alertId the episode count and the count where `opened_at >= latest_opened_at - interval '7 days'`.
   - `title`: `formatAlert(kind, latest.details, projectName)`. `body`: the `formatAlert` body.
   - `currentCount`: `details.count` of the latest episode.
   - Controller: `@Controller('roadmap/sync-problems')` with `@CurrentUser()`, like the notifications controller. Register it in the module.
-- [ ] **Step 4: Run** `npm run build -w @tracker/shared`, then the three specs → PASS, then full API tests and `npm run lint -w @tracker/api` → PASS.
-- [ ] **Step 5: Commit** `feat(api): sync problems list and history`.
+- [x] **Step 4: Run** `npm run build -w @tracker/shared`, then the three specs → PASS, then full API tests and `npm run lint -w @tracker/api` → PASS.
+- [x] **Step 5: Commit** `feat(api): sync problems list and history`.
 
 ---
 
@@ -190,7 +190,7 @@
   ```
   - `ALERT_KIND_ICON` imports `lucide-react`. If importing it breaks the `node --test` run, move the icon map into `notification-icons.ts` and keep `notification-view.ts` icon-free.
 
-- [ ] **Step 1: Write failing tests** in `notification-view.test.mjs`:
+- [x] **Step 1: Write failing tests** in `notification-view.test.mjs`:
   - `notificationTone`: active → `'active'`; `fixed` → `'fixed'`; `obsolete` → `'obsolete'`.
   - `currentLabel`:
     - active, `current.count` 1, `openedCount` 1 → `null`;
@@ -201,8 +201,8 @@
   - `recurrenceLabel`: 1 → `null`; 2 → `'2-й раз за 7 дней'`; 5 → `'5-й раз за 7 дней'`.
   - `PROBLEM_STATUS_META` labels are exactly «Активна», «Исправлено», «Больше не актуально».
   - The previous `statusLabel` tests are updated or removed if the function is replaced.
-- [ ] **Step 2: Run** `node --test apps/web/src/widgets/roadmap-shell/notification-view.test.mjs` and expect FAIL.
-- [ ] **Step 3: Implement the helpers, then redesign the popover** per spec §7.2.
+- [x] **Step 2: Run** `node --test apps/web/src/widgets/roadmap-shell/notification-view.test.mjs` and expect FAIL.
+- [x] **Step 3: Implement the helpers, then redesign the popover** per spec §7.2.
   - **Each row:**
     - kind icon in a round chip coloured by tone;
     - title in `font-semibold text-foreground` when unread, `font-normal text-foreground` when read;
@@ -211,8 +211,8 @@
     - row divider, plus hover and focus background.
   - **Footer:** «Все уведомления →» links to `routes.roadmapSync`, rendered only when `summary.canViewSyncProblems`. Clicking it closes the popover.
   - **Keep:** the width, `collisionPadding={16}`, the non-blocking mark-read, and the `aria-label`.
-- [ ] **Step 4: Run** the node test (PASS), `npx tsc --noEmit -p apps/web`, and eslint on the touched files from `apps/web` (clean).
-- [ ] **Step 5: Commit** `feat(web): clearer notification popover`.
+- [x] **Step 4: Run** the node test (PASS), `npx tsc --noEmit -p apps/web`, and eslint on the touched files from `apps/web` (clean).
+- [x] **Step 5: Commit** `feat(web): clearer notification popover`.
 
 ---
 
@@ -236,7 +236,7 @@
   - Matching demo methods.
   - `parseSyncQuery(search: URLSearchParams): { status: 'active'|'resolved'|'all'; projectId: string | null }` and `serializeSyncQuery(q): string`.
 
-- [ ] **Step 1: Write failing tests.**
+- [x] **Step 1: Write failing tests.**
   - `sync-problems-query.test.mjs`:
     - an empty search gives `{ status: 'active', projectId: null }`;
     - an invalid status falls back to `'active'`;
@@ -244,8 +244,8 @@
     - the default status is omitted from the serialized string.
   - Demo store reads return `{ items: [], nextCursor: null, counts: { active: 0 }, projects: [] }` and `{ items: [] }`.
   - The demo summary for an admin has `canViewSyncProblems: true`.
-- [ ] **Step 2: Run** `node --test` on both test files and expect FAIL.
-- [ ] **Step 3: Implement the page** per spec §7.1.
+- [x] **Step 2: Run** `node --test` on both test files and expect FAIL.
+- [x] **Step 3: Implement the page** per spec §7.1.
   - **Header:** «Проблемы синхронизации» with «Активных: N» or «Активных проблем нет».
   - **Status filter:** a segmented control «Активные / Исправленные / Все».
   - **Project filter:** a project select built from `page.projects`, with «Все проекты» first.
@@ -260,8 +260,8 @@
     - «История (N)» when `historyCount > 0`, which lazily loads the history list.
   - **States:** a skeleton while loading. Empty copy exactly per §7.1. Errors through `ErrorNotice`. A 403 shows «Нет доступа к проблемам синхронизации».
   - **Layout at 375 px:** the row stacks into a column and the button takes full width.
-- [ ] **Step 4: Run** the node tests (PASS), `npx tsc --noEmit -p apps/web`, and eslint on the touched files (clean).
-- [ ] **Step 5: Verify in the browser.** The dev server is already running on :3000.
+- [x] **Step 4: Run** the node tests (PASS), `npx tsc --noEmit -p apps/web`, and eslint on the touched files (clean).
+- [x] **Step 5: Verify in the browser.** The dev server is already running on :3000.
   - Problems resolved before the migration have no episode, so they are not listed. To check the flow, temporarily set one allocation of a write-back project to `error` with SQL, then restore it.
   - As admin, `/roadmap/sync` shows the problem under «Активные» within about 1 minute, and under «Исправленные» about 10 minutes after the restore.
   - Filters update the URL and survive a reload.
@@ -269,7 +269,7 @@
   - At 375 px there is no horizontal scroll.
   - In light and dark themes the popover shows the new rows and the footer link.
   - Save screenshots to `output/`.
-- [ ] **Step 6: Commit** `feat(web): sync problems page`.
+- [x] **Step 6: Commit** `feat(web): sync problems page`.
 
 ---
 
@@ -278,6 +278,6 @@
 **Files:**
 - Modify: `docs/13-roadmap.md` (extend the «Notifications» section: the page, who sees it, the journal, 90 days)
 
-- [ ] **Step 1: Write the doc paragraph and a short list of the page's filters and actions.**
-- [ ] **Step 2: Run** `npm run build`, `npm run test` and `npm run lint` from the root, and expect all to pass.
-- [ ] **Step 3: Commit** `docs(roadmap): document the sync problems page`.
+- [x] **Step 1: Write the doc paragraph and a short list of the page's filters and actions.**
+- [x] **Step 2: Run** `npm run build`, `npm run test` and `npm run lint` from the root, and expect all to pass.
+- [x] **Step 3: Commit** `docs(roadmap): document the sync problems page`.

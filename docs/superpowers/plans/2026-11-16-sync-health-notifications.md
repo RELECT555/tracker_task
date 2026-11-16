@@ -67,26 +67,26 @@
   - `type ImportOutcome = { ok: true; changed: boolean; source: 'poll' | 'webhook' } | { ok: false; error: unknown }`
   - `recordImportOutcome(prisma: PrismaService, projectId: string, outcome: ImportOutcome, now?: Date): Promise<void>`
 
-- [ ] **Step 1: Write failing tests** in `roadmap-import-health.spec.ts` with a mocked `prisma.roadmapAzureProjectState` (`upsert`, `updateMany` as `jest.fn`), in the style of `roadmap-table-preferences.spec.ts`:
+- [x] **Step 1: Write failing tests** in `roadmap-import-health.spec.ts` with a mocked `prisma.roadmapAzureProjectState` (`upsert`, `updateMany` as `jest.fn`), in the style of `roadmap-table-preferences.spec.ts`:
   - `failure sets importFailingSince only when empty`: two failures at `t0` and `t0+5min` → stored `importFailingSince === t0`, `lastImportFailedAt === t0+5min`.
   - `success clears the failure series`: failure then `{ ok: true, changed: false, source: 'poll' }` → `importFailingSince === null`, `lastImportOkAt` set.
   - `poll with changes stamps lastImportChangedAt, webhook does not`: `{ok:true, changed:true, source:'poll'}` sets it; same with `source:'webhook'` leaves it unchanged.
   - `failure text is redacted and truncated`: error message `'Basic abc123 failed ' + 'x'.repeat(600)` → stored `lastImportError` has no `abc123` and `length <= 500`.
-- [ ] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-import-health` → FAIL (module not found).
-- [ ] **Step 3: Edit schema, then write the migration.**
+- [x] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-import-health` → FAIL (module not found).
+- [x] **Step 3: Edit schema, then write the migration.**
   - Edit the schema.
   - Generate the SQL with `npx prisma migrate diff --from-schema-datasource apps/api/prisma/schema.prisma --to-schema-datamodel apps/api/prisma/schema.prisma --script` against a migrated local DB, and save it to the migration folder above.
   - Check the SQL: it must contain only `CREATE TABLE`, `ALTER TABLE ... ADD COLUMN` and `CREATE INDEX`.
-- [ ] **Step 4: Implement `recordImportOutcome`.**
+- [x] **Step 4: Implement `recordImportOutcome`.**
   - Failure: `upsert` (create with `importFailingSince: now`). Then, in the update path, run `updateMany({ where: { projectId, importFailingSince: null }, data: { importFailingSince: now } })` so concurrent failures keep the earliest timestamp.
   - Redaction: use `redactSecrets` from Task 2's `roadmap-alert-format.ts`. Create that file now with just `redactSecrets(text: string, max: number): string`. It must strip `(Basic|Bearer)\s+\S+`, 52-char and 84-char alphanumeric tokens and anything after `x-roadmap-webhook-secret:`, then truncate.
-- [ ] **Step 5: Wire callers.**
+- [x] **Step 5: Wire callers.**
   - `refreshImportedProjects` and the manual sync path (`runProjectImport` callers in `roadmap.service.ts`) record `{ ok: true, changed: importedWorkItems > 0, source: 'poll' }` on success and `{ ok: false, error }` on failure. Keep the existing `logger.warn`.
   - `flushWebhookImports` records `source: 'webhook'` / failure.
   - The `importWorkItems` calls at `:1180` and `:2005` record failure only. On success they record `{ ok: true, changed: false, source: 'webhook' }`, which never stamps `lastImportChangedAt`.
   - Do not change queueing.
-- [ ] **Step 6: Run** `npm run db:generate && npm run test -w @tracker/api -- roadmap-import-health` → PASS; then full `npm run test -w @tracker/api` → PASS.
-- [ ] **Step 7: Commit** `feat(api): persist Azure import health per project`.
+- [x] **Step 6: Run** `npm run db:generate && npm run test -w @tracker/api -- roadmap-import-health` → PASS; then full `npm run test -w @tracker/api` → PASS.
+- [x] **Step 7: Commit** `feat(api): persist Azure import health per project`.
 
 ---
 
@@ -121,7 +121,7 @@
   - `alertLink(kind: RoadmapAlertKind, projectId: string | null): string`
   - `pluralAssignments(n: number): string`
 
-- [ ] **Step 1: Write failing tests.**
+- [x] **Step 1: Write failing tests.**
   - `roadmap-alert-format.spec.ts`:
     - `formatAlert('sync_errors', { count: 5 }, 'Alpha').title === 'Ошибки отправки в Azure: 5 назначений · Alpha'`;
     - `count: 1` → `'1 назначение'`, `2` → `'2 назначения'`, `11` → `'11 назначений'`, `21` → `'21 назначение'`;
@@ -139,8 +139,8 @@
     - a following 200 writes `authOkAt` once;
     - a 403 writes nothing;
     - `getCredentials()` with an undecryptable PAT writes `authFailedAt` and still throws.
-- [ ] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-alert-format roadmap-auth-health` → FAIL.
-- [ ] **Step 3: Implement.**
+- [x] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-alert-format roadmap-auth-health` → FAIL.
+- [x] **Step 3: Implement.**
   - Shared types: write them, then run `npm run build -w @tracker/shared`.
   - `formatAlert` / `alertLink`: titles are exactly as in the tests. Body: the redacted `details.error` (≤ 300) for `import_failing`, otherwise `null`.
   - Auth health in the integration service:
@@ -148,8 +148,8 @@
     - Call it from `request` on `response.status === 401` (before throwing) and on `response.ok`.
     - Call it from `getCredentials` around `decryptPat`, with failure and `httpStatus: null`.
     - `testConnection` uses raw `fetch`, so it stays untouched.
-- [ ] **Step 4: Run** the same tests → PASS; full API tests → PASS.
-- [ ] **Step 5: Commit** `feat(api): record Azure auth health and alert texts`.
+- [x] **Step 4: Run** the same tests → PASS; full API tests → PASS.
+- [x] **Step 5: Commit** `feat(api): record Azure auth health and alert texts`.
 
 ---
 
@@ -165,16 +165,16 @@
   - `azure_auth` and `webhook_silent` go to admins only.
   - The other kinds go to admins plus the project's planners.
 
-- [ ] **Step 1: Write failing tests** with mocked `prisma.user.findMany` and `prisma.roadmapProjectAccess.findMany`:
+- [x] **Step 1: Write failing tests** with mocked `prisma.user.findMany` and `prisma.roadmapProjectAccess.findMany`:
   - `planner email matched case-insensitively`: access email `planner@x.test`, user email `Planner@X.test` → included. The query must use `email: { in: [...], mode: 'insensitive' }`; assert on the mock call args.
   - `inactive users excluded`: assert both queries filter `isActive: true`.
   - `admin who is also planner appears once`.
   - `viewer never included`: access query filters `role: 'planner'`.
   - `webhook_silent ignores planners`: `roadmapProjectAccess.findMany` not called.
-- [ ] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-alert-recipients` → FAIL.
-- [ ] **Step 3: Implement** `resolveRecipients` as above. Admins: `user.findMany({ where: { isActive: true, roles: { some: { role: { code: 'admin' } } } }, select: { id: true } })`.
-- [ ] **Step 4: Run** → PASS.
-- [ ] **Step 5: Commit** `feat(api): resolve notification recipients`.
+- [x] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-alert-recipients` → FAIL.
+- [x] **Step 3: Implement** `resolveRecipients` as above. Admins: `user.findMany({ where: { isActive: true, roles: { some: { role: { code: 'admin' } } } }, select: { id: true } })`.
+- [x] **Step 4: Run** → PASS.
+- [x] **Step 5: Commit** `feat(api): resolve notification recipients`.
 
 ---
 
@@ -220,7 +220,7 @@
   - `azure_auth` is active when `integrationConfigured && (authOkAt == null ? authFailedAt != null : authFailedAt > authOkAt)`.
   - When `azure_auth` is active, every project condition has `suppressed: true`.
 
-- [ ] **Step 1: Write failing tests**, one `it` per case; `t0 = new Date('2026-11-16T10:00:00Z')`.
+- [x] **Step 1: Write failing tests**, one `it` per case; `t0 = new Date('2026-11-16T10:00:00Z')`.
   - `decideAlert`:
     - `null` + active → `open`;
     - resolved + active → `open`;
@@ -246,10 +246,10 @@
     - auth ok after failed → not suppressed;
     - `integrationConfigured: false` → every condition `obsolete: true`;
     - `openKeys` containing `sync_errors:gone-project` → an obsolete condition for that key.
-- [ ] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-alert-rules` → FAIL.
-- [ ] **Step 3: Implement** both functions with no I/O.
-- [ ] **Step 4: Run** → PASS.
-- [ ] **Step 5: Commit** `feat(api): alert rules for sync health`.
+- [x] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-alert-rules` → FAIL.
+- [x] **Step 3: Implement** both functions with no I/O.
+- [x] **Step 4: Run** → PASS.
+- [x] **Step 5: Commit** `feat(api): alert rules for sync health`.
 
 ---
 
@@ -281,7 +281,7 @@
     - `POST /roadmap/notifications/read-all` (204);
     - `POST /roadmap/notifications/:id/read` (204).
 
-- [ ] **Step 1: Write failing tests.**
+- [x] **Step 1: Write failing tests.**
   - `roadmap-alerts.spec.ts`: use an in-memory fake Prisma for `roadmapAlert` and `roadmapNotification`:
     - `updateMany` honours `where.state` and returns `{ count }`;
     - `createMany` with `skipDuplicates` honours the `(alertId, generation, userId)` uniqueness.
@@ -300,12 +300,12 @@
     - `summary.activeUnread excludes closed episodes`;
     - `markRead on someone else's id throws NotFoundException` (`updateMany` count 0 → throw);
     - `list rejects limit=500` with `BadRequestException`.
-- [ ] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-alerts roadmap-notifications` → FAIL.
-- [ ] **Step 3: Implement `loadHealth`.**
+- [x] **Step 2: Run** `npm run test -w @tracker/api -- roadmap-alerts roadmap-notifications` → FAIL.
+- [x] **Step 3: Implement `loadHealth`.**
   - Counts: one `$queryRaw` that selects `wi.project_id, a.azure_sync_status, count(*)` from `roadmap_allocations a join roadmap_work_items wi`, filtered to status `in ('error','conflict')` and grouped by both.
   - Then read `roadmapProject` (only projects with `syncedAt` not null, joined to `azureState`) and auth health.
   - `writeBackEnabled = settings.mode !== 'off' && (!settings.projectIds || settings.projectIds.includes(project.id))`, using `getSyncSettings()`. This mirrors `roadmap-azure-sync.service.ts:905`.
-- [ ] **Step 4: Implement `evaluate`.** Load the open alert keys, run `evaluateConditions`, then for each condition read the alert and apply `decideAlert`:
+- [x] **Step 4: Implement `evaluate`.** Load the open alert keys, run `evaluateConditions`, then for each condition read the alert and apply `decideAlert`:
   - `open`:
     - existing row → `updateMany({ where: { key, state: 'resolved' } })`;
     - missing row → `create`, catching P2002 as "lost the race";
@@ -315,17 +315,17 @@
   - `start-clear`: `updateMany({ where: { key, state: 'open', clearSince: null } })`.
   - `resolve`: `updateMany({ where: { key, state: 'open' } })` setting `resolved`, `resolvedAt`, `resolution`.
   - Cleanup: delete notifications older than 90 days, then resolved alerts with no notifications.
-- [ ] **Step 5: Implement `RoadmapNotificationsService` and the controller.**
+- [x] **Step 5: Implement `RoadmapNotificationsService` and the controller.**
   - Query: parse with `roadmapNotificationListQuerySchema` (invalid → `BadRequestException`). Fetch `take: limit + 1` ordered by `createdAt desc, id desc`, with `cursor` and `skip: 1` when a cursor is given. Include `alert: { select: { state, generation, details, resolution } }` and `alert.project.name`.
   - `link` comes from `alertLink(kind, projectId)`.
   - `active = alert.state === 'open' && alert.generation === row.generation`.
   - `current` is `alert.details` when active, else `null`.
   - `resolution` is `alert.resolution` when not active and the generation matches; a newer generation means the old episode was `fixed`.
-- [ ] **Step 6: Run** the two spec files → PASS. Then run:
+- [x] **Step 6: Run** the two spec files → PASS. Then run:
   - full `npm run test -w @tracker/api` → PASS;
   - `npm run test:e2e -w @tracker/api` → PASS (the existing access e2e still works with the new controller registered);
   - `npm run lint -w @tracker/api` → no new errors.
-- [ ] **Step 7: Commit** `feat(api): sync health watchdog and notifications API`.
+- [x] **Step 7: Commit** `feat(api): sync health watchdog and notifications API`.
 
 ---
 
@@ -346,7 +346,7 @@
   - `badgeOf(summary: RoadmapNotificationSummary | undefined): { kind: 'count'; label: string } | { kind: 'dot' } | null` (labels above 9 become `'9+'`);
   - `statusLabel(item: RoadmapNotificationDto): string | null` (`'исправлено'` / `'больше не актуально'` / `null` when active).
 
-- [ ] **Step 1: Write failing tests** in `notification-view.test.mjs` (`node:test` + `assert/strict`, importing `./notification-view.ts` like `shared/lib/error-message.test.mjs`):
+- [x] **Step 1: Write failing tests** in `notification-view.test.mjs` (`node:test` + `assert/strict`, importing `./notification-view.ts` like `shared/lib/error-message.test.mjs`):
   - `badgeOf`:
     - `{unread:0, activeUnread:0}` → `null`;
     - `{unread:2, activeUnread:0}` → `{kind:'dot'}`;
@@ -358,8 +358,8 @@
     - `resolution:'fixed'` → `'исправлено'`;
     - `'obsolete'` → `'больше не актуально'`.
   - A test asserting that the `roadmapDemoStore` reads return `{ items: [], nextCursor: null }` and `{ unread: 0, activeUnread: 0 }`. Import the store's handler; if it cannot be imported under `node --test`, cover this with a manual demo-mode check in Step 5 instead.
-- [ ] **Step 2: Run** `node --test apps/web/src/widgets/roadmap-shell/notification-view.test.mjs` → FAIL.
-- [ ] **Step 3: Implement** `notification-view.ts`, the API and demo methods, and `NotificationBell.tsx`.
+- [x] **Step 2: Run** `node --test apps/web/src/widgets/roadmap-shell/notification-view.test.mjs` → FAIL.
+- [x] **Step 3: Implement** `notification-view.ts`, the API and demo methods, and `NotificationBell.tsx`.
   - Queries:
     - `useQuery(['roadmap','notifications','summary'], …, { refetchInterval: 60_000, refetchOnWindowFocus: true })`;
     - the list query is enabled only while the popover is open, and uses `useInfiniteQuery` for «Показать ещё».
@@ -372,15 +372,15 @@
     - the button uses the same classes as the neighbouring header buttons;
     - `aria-label="Уведомления"`;
     - the popover is `w-[min(24rem,calc(100vw-2rem))]`.
-- [ ] **Step 4: Run** the `node --test` file → PASS; `npm run lint -w @tracker/web` and `npx tsc --noEmit -p apps/web` → no new errors.
-- [ ] **Step 5: Verify in browser.**
+- [x] **Step 4: Run** the `node --test` file → PASS; `npm run lint -w @tracker/web` and `npx tsc --noEmit -p apps/web` → no new errors.
+- [x] **Step 5: Verify in browser.**
   - Run `npm run dev` via preview, log in as admin, and set an allocation's status with SQL: `update roadmap_allocations set azure_sync_status='error' where id='<id>'` on a project with write-back on.
   - Within ~1 min the bell shows `1` and the item reads «Ошибки отправки в Azure: 1 назначение · …». Clicking it opens `/roadmap/admin/integrations#azure-projects` and clears the badge.
   - Reset the status. After about 10 minutes, or by temporarily lowering `ALERT_CLEAR_DELAY_MS` locally and never committing that change, the item shows «исправлено».
   - At 375 px the bell fits and the popover has no horizontal scroll.
   - Demo mode renders the empty state.
   - Save screenshots to `output/`.
-- [ ] **Step 6: Commit** `feat(web): notification bell for sync health` (exclude `output/`).
+- [x] **Step 6: Commit** `feat(web): notification bell for sync health` (exclude `output/`).
 
 ---
 
@@ -389,11 +389,11 @@
 **Files:**
 - Modify: `docs/13-roadmap.md` (new section «Уведомления» after «Two-way sync»)
 
-- [ ] **Step 1: Write the section.** Cover:
+- [x] **Step 1: Write the section.** Cover:
   - the five kinds and who receives each;
   - the 15 / 10 / 30 minute thresholds and the 90-day retention;
   - the two closed labels;
   - that 403 does not count as a rejected PAT;
   - that only in-app delivery exists.
-- [ ] **Step 2: Run** `npm run build`, `npm run test`, `npm run lint` from the root → all pass.
-- [ ] **Step 3: Commit** `docs(roadmap): document sync health notifications`.
+- [x] **Step 2: Run** `npm run build`, `npm run test`, `npm run lint` from the root → all pass.
+- [x] **Step 3: Commit** `docs(roadmap): document sync health notifications`.

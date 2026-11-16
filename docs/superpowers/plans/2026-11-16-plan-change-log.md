@@ -93,18 +93,18 @@ export const ALLOCATION_SNAPSHOT_SELECT: Prisma.RoadmapAllocationSelect; // по
 }
 ```
 
-- [ ] **Step 1: Модель и миграция.** Поля и индексы — ровно §3 спеки плюс `azureTaskId varchar(100) null`. `projectId` — FK `onDelete: Cascade`; `allocationId`, `workItemId`, `actorUserId` — без FK. Таблица `roadmap_plan_changes`, колонки snake_case через `@map`. SQL миграции написать руками в стиле соседних миграций, затем `npm run db:generate`.
-- [ ] **Step 2: Проверка схемы.** Run: `npm run db:migrate:deploy && npm run db:status` → `Database schema is up to date`.
-- [ ] **Step 3: Тесты (падают).** В `roadmap-plan-change.spec.ts`:
+- [x] **Step 1: Модель и миграция.** Поля и индексы — ровно §3 спеки плюс `azureTaskId varchar(100) null`. `projectId` — FK `onDelete: Cascade`; `allocationId`, `workItemId`, `actorUserId` — без FK. Таблица `roadmap_plan_changes`, колонки snake_case через `@map`. SQL миграции написать руками в стиле соседних миграций, затем `npm run db:generate`.
+- [x] **Step 2: Проверка схемы.** Run: `npm run db:migrate:deploy && npm run db:status` → `Database schema is up to date`.
+- [x] **Step 3: Тесты (падают).** В `roadmap-plan-change.spec.ts`:
   - `actionOf`: `(null, s) → 'created'`, `(s, null) → 'deleted'`, `(s, s) → null`, `(s, {...s, estimatedHours: 24}) → 'updated'`, `(null, null) → null`.
   - `sameSnapshot` не зависит от порядка `months` и от `Decimal`-представления (`8` vs `'8.00'` после `snapshotOf`).
   - `record` пропускает неизменённые и возвращает `1` для пачки `[unchanged, changed]`; `createMany` вызван с одной строкой, у которой `batchId`, `source`, `action: 'updated'`, снимки, `roleName`, `workItemTitle`.
   - `record` берёт `actorName` из `tx.user.findUnique({ where: { id }, select: { fullName } })`; при `actor: null` — `actorUserId/actorEmail/actorName` равны `null` и пользователь не читается.
   - `record` с пустым списком не обращается к БД.
-- [ ] **Step 4:** Run: `npm test -w @tracker/api -- roadmap-plan-change.spec` → FAIL (модуль не найден).
-- [ ] **Step 5: Реализация** по Interfaces. `record` пишет одним `tx.roadmapPlanChange.createMany`. Сервис регистрируется в `providers` и `exports` модуля roadmap.
-- [ ] **Step 6:** Run: тот же тест → PASS; `npx tsc --noEmit -p apps/api` → без ошибок.
-- [ ] **Step 7: Commit** `feat(api): add plan change log table and recorder` (schema, миграция, три файла, module).
+- [x] **Step 4:** Run: `npm test -w @tracker/api -- roadmap-plan-change.spec` → FAIL (модуль не найден).
+- [x] **Step 5: Реализация** по Interfaces. `record` пишет одним `tx.roadmapPlanChange.createMany`. Сервис регистрируется в `providers` и `exports` модуля roadmap.
+- [x] **Step 6:** Run: тот же тест → PASS; `npx tsc --noEmit -p apps/api` → без ошибок.
+- [x] **Step 7: Commit** `feat(api): add plan change log table and recorder` (schema, миграция, три файла, module).
 
 ---
 
@@ -124,17 +124,17 @@ rebalanceAllocations(ids: string[], context: PlanChangeContext)
 ```
 Точный порядок параметров у `saveAllocation` — сохранить существующие, `context` добавить последним. Все вызовы в контроллере передают `planChangeContext(actor, 'plan')`.
 
-- [ ] **Step 1: Тесты (падают):**
+- [x] **Step 1: Тесты (падают):**
   - `saveAllocation создаёт назначение и пишет created` — `before: null`, `after.estimatedHours: 8`, `source: 'plan'`.
   - `saveAllocation меняет часы и пишет updated с before 8 / after 16`.
   - `saveAllocation без изменений не пишет журнал` (Review Focus 1).
   - `saveAllocationQuarter пишет одну запись с months до и после`.
   - `rebalanceAllocations пишет по записи на изменённое назначение с одним batchId`; неизменённые не пишутся.
   - `agent.apply пишет source ai с одним batchId на все применённые предложения; отклонённое предложение записи не даёт`.
-- [ ] **Step 2:** Run: `npm test -w @tracker/api -- roadmap-plan-change-paths` → FAIL.
-- [ ] **Step 3: Реализация.** В каждой транзакции: `planChanges.read(tx, ids)` до записи → изменение → `read` после → `record`. `agent.apply` создаёт `planChangeContext(actor, 'ai')` один раз до цикла и передаёт во все `saveAllocation`. Существующие вызовы `saveAllocation` вне контроллера и агента (найти `grep -rn "saveAllocation(" apps/api/src`) получают контекст по смыслу вызова.
-- [ ] **Step 4:** Run: тест → PASS; `npm test -w @tracker/api` → все старые тесты зелёные (поправить моки старых тестов под новый параметр и `planChanges`).
-- [ ] **Step 5: Commit** `feat(api): log plan, assistant, quarter and rebalance allocation changes`.
+- [x] **Step 2:** Run: `npm test -w @tracker/api -- roadmap-plan-change-paths` → FAIL.
+- [x] **Step 3: Реализация.** В каждой транзакции: `planChanges.read(tx, ids)` до записи → изменение → `read` после → `record`. `agent.apply` создаёт `planChangeContext(actor, 'ai')` один раз до цикла и передаёт во все `saveAllocation`. Существующие вызовы `saveAllocation` вне контроллера и агента (найти `grep -rn "saveAllocation(" apps/api/src`) получают контекст по смыслу вызова.
+- [x] **Step 4:** Run: тест → PASS; `npm test -w @tracker/api` → все старые тесты зелёные (поправить моки старых тестов под новый параметр и `planChanges`).
+- [x] **Step 5: Commit** `feat(api): log plan, assistant, quarter and rebalance allocation changes`.
 
 ---
 
@@ -152,15 +152,15 @@ setRoleHours(actorId: string, workItemId: string, roleId: string, hours: number,
 deleteAllocation(actor: Actor, allocationId: string, context: PlanChangeContext)
 ```
 
-- [ ] **Step 1: Тесты (падают):**
+- [x] **Step 1: Тесты (падают):**
   - `setRoleHours пишет updated на каждое назначение роли с одним batchId и details.roleHours { from: 40, to: 60 }`.
   - `setRoleHours без назначений не пишет журнал` (ветка ~`:1826`, решение спеки).
   - `deleteAllocation пишет deleted с before-снимком и details.task = 'state'` (политика `state`).
   - `deleteAllocation при ошибке Azure не пишет журнал и не удаляет` (существующее поведение сохраняется).
-- [ ] **Step 2:** Run → FAIL.
-- [ ] **Step 3: Реализация.** `setRoleHours`: снимки до — из уже прочитанных `current`, `record` внутри существующей `$transaction` (~`:1879`). `deleteAllocation`: `read` до `applyRemoval`; затем `$transaction([delete, record])` с `details: { task }`.
-- [ ] **Step 4:** Run → PASS, весь `npm test -w @tracker/api` зелёный.
-- [ ] **Step 5: Commit** `feat(api): log role-cell hours and allocation removal`.
+- [x] **Step 2:** Run → FAIL.
+- [x] **Step 3: Реализация.** `setRoleHours`: снимки до — из уже прочитанных `current`, `record` внутри существующей `$transaction` (~`:1879`). `deleteAllocation`: `read` до `applyRemoval`; затем `$transaction([delete, record])` с `details: { task }`.
+- [x] **Step 4:** Run → PASS, весь `npm test -w @tracker/api` зелёный.
+- [x] **Step 5: Commit** `feat(api): log role-cell hours and allocation removal`.
 
 ---
 
@@ -179,17 +179,17 @@ applyAzure(allocation, task, policy, force: boolean, context: PlanChangeContext)
 ```
 `reconcile` создаёт `planChangeContext(null, 'azure')` один на вызов (один импорт = один `batchId`).
 
-- [ ] **Step 1: Тесты (падают):**
+- [x] **Step 1: Тесты (падают):**
   - `acceptFromAzure пишет updated с source azure и автором — нажавшим пользователем`.
   - `reconcile пишет updated без автора при смене оценки в Task` (`actorUserId: null`, `azureTaskId` заполнен).
   - `reconcile без изменений не пишет журнал` (Review Focus 2).
   - `applyAzure при count 0 не пишет журнал` (Review Focus 3).
   - `finish с acceptedHours пишет updated с месяцами после shrinkPeriods`; `finish без применения не пишет журнал` (Review Focus 3).
   - `ошибка shrinkPeriods не роняет отправку`, запись пишется с фактически сохранёнными месяцами.
-- [ ] **Step 2:** Run → FAIL.
-- [ ] **Step 3: Реализация.** `applyAzure`: `record` внутри транзакции `:379`, только при `updated.count > 0`, снимок после — повторным `read(tx, [id])`. Путь 9: после успешного `finish` (вернуть из `finish` `count`, если сейчас не возвращает) и `shrinkPeriods` — отдельная короткая транзакция `read` + `record`; ошибка записи журнала здесь логируется `logger.warn` и не роняет отправку (Task уже создан в Azure — это решение плана, т.к. откатить нечего).
-- [ ] **Step 4:** Run → PASS, весь набор зелёный.
-- [ ] **Step 5: Commit** `feat(api): log allocation changes coming from Azure DevOps`.
+- [x] **Step 2:** Run → FAIL.
+- [x] **Step 3: Реализация.** `applyAzure`: `record` внутри транзакции `:379`, только при `updated.count > 0`, снимок после — повторным `read(tx, [id])`. Путь 9: после успешного `finish` (вернуть из `finish` `count`, если сейчас не возвращает) и `shrinkPeriods` — отдельная короткая транзакция `read` + `record`; ошибка записи журнала здесь логируется `logger.warn` и не роняет отправку (Task уже создан в Azure — это решение плана, т.к. откатить нечего).
+- [x] **Step 4:** Run → PASS, весь набор зелёный.
+- [x] **Step 5: Commit** `feat(api): log allocation changes coming from Azure DevOps`.
 
 ---
 
@@ -197,9 +197,9 @@ applyAzure(allocation, task, policy, force: boolean, context: PlanChangeContext)
 
 **Files:** Create: `apps/api/src/modules/roadmap/roadmap-plan-change-guard.spec.ts`
 
-- [ ] **Step 1: Тест.** Читает все `apps/api/src/modules/**/*.ts` кроме `*.spec.ts`, находит вызовы `roadmapAllocation.(create|createMany|update|updateMany|upsert|delete|deleteMany)` и `roadmapPeriodAllocation.(…те же…)`, у которых в ближайших ~25 строках аргумента встречаются `estimatedHours`, `personExternalId`, `quarterKey` или `hours:` (для периодов — любой вызов). Каждое такое место (файл + имя окружающего метода) должно быть в явном списке `LOGGED` (методы путей 1–9) или `SYNC_ONLY` (claim, `finish` без `acceptedHours`, `pushProject`, `pushAllocation`, `recoverPending`, `handleDeletedWorkItem`, `shrinkPeriods` — с комментарием, почему). Неизвестное место → тест падает с сообщением `Новое изменение назначений без журнала: <файл>:<строка> (<метод>)`.
-- [ ] **Step 2:** Run: `npm test -w @tracker/api -- roadmap-plan-change-guard` → PASS. Проверить, что ловит: временно добавить в любой сервис `prisma.roadmapAllocation.update({ data: { estimatedHours: 1 } })` → FAIL с нужным сообщением; убрать.
-- [ ] **Step 3: Commit** `test(api): guard that allocation writes reach the plan change log`.
+- [x] **Step 1: Тест.** Читает все `apps/api/src/modules/**/*.ts` кроме `*.spec.ts`, находит вызовы `roadmapAllocation.(create|createMany|update|updateMany|upsert|delete|deleteMany)` и `roadmapPeriodAllocation.(…те же…)`, у которых в ближайших ~25 строках аргумента встречаются `estimatedHours`, `personExternalId`, `quarterKey` или `hours:` (для периодов — любой вызов). Каждое такое место (файл + имя окружающего метода) должно быть в явном списке `LOGGED` (методы путей 1–9) или `SYNC_ONLY` (claim, `finish` без `acceptedHours`, `pushProject`, `pushAllocation`, `recoverPending`, `handleDeletedWorkItem`, `shrinkPeriods` — с комментарием, почему). Неизвестное место → тест падает с сообщением `Новое изменение назначений без журнала: <файл>:<строка> (<метод>)`.
+- [x] **Step 2:** Run: `npm test -w @tracker/api -- roadmap-plan-change-guard` → PASS. Проверить, что ловит: временно добавить в любой сервис `prisma.roadmapAllocation.update({ data: { estimatedHours: 1 } })` → FAIL с нужным сообщением; убрать.
+- [x] **Step 3: Commit** `test(api): guard that allocation writes reach the plan change log`.
 
 ---
 
@@ -220,14 +220,14 @@ list(projectId: string, query: PlanChangeQuery): Promise<{ items: PlanChangeDto[
 ```
 Фильтр карточки — по `workItemExternalId` (карточка знает `externalId`; колонка есть в §3) — это отклонение от формулировки §5.1 спеки в пользу простоты, смысл тот же. `limit` по умолчанию 50, максимум 200; DTO-валидация `class-validator` по образцу соседних DTO в контроллере. Курсор — base64url от `createdAt|id`, сортировка `createdAt desc, id desc`.
 
-- [ ] **Step 1: Тесты (падают):**
+- [x] **Step 1: Тесты (падают):**
   - `список отдаёт записи удалённого назначения` (Review Focus 4).
   - `фильтр по человеку ищет в before и after` (Review Focus 5; JSON-путь `before->>'personExternalId'` или `OR` по `path` в Prisma).
   - `пагинация: limit 2 из 3 записей даёт nextCursor, вторая страница — оставшуюся, без повторов при одинаковом createdAt`.
   - `limit 500 обрезается до 200`.
   - e2e: viewer своего проекта получает 200, чужого — 403.
-- [ ] **Step 2:** Run → FAIL. **Step 3:** реализация, `access.require(actor, { projectId }, 'read')`. **Step 4:** Run → PASS, `npm run test:e2e -w @tracker/api -- roadmap-access` зелёный.
-- [ ] **Step 5: Commit** `feat(api): list plan changes per project`.
+- [x] **Step 2:** Run → FAIL. **Step 3:** реализация, `access.require(actor, { projectId }, 'read')`. **Step 4:** Run → PASS, `npm run test:e2e -w @tracker/api -- roadmap-access` зелёный.
+- [x] **Step 5: Commit** `feat(api): list plan changes per project`.
 
 ---
 
@@ -249,8 +249,8 @@ PlanChangeEntry({ group, onOpenWorkItem? }: { group: { batchId; items: PlanChang
 ```
 Тексты — §5.3 спеки: «Создал назначение», «Изменил часы: 16 → 24 ч (окт 8 → 12, ноя 8 → 12)», «Сменил исполнителя: Иванов И. → Сидоров С.», «Удалил назначение … задача в Azure закрыта/удалена/оставлена» (по `details.task`: `state`/`deleted`/`kept`), префикс «Ассистент (применил X)» для `ai`, «Из Azure DevOps (задача #N)» для `azure`. Группа из >1 записи: «X перераспределил часы — N назначений» (для `ai` — «применил предложения ассистента», для `azure` — «изменения из Azure DevOps»), раскрывается.
 
-- [ ] **Step 1:** реализация. **Step 2:** Run: `npx tsc --noEmit -p apps/web` и `npm run lint -w @tracker/web` → без ошибок.
-- [ ] **Step 3: Commit** `feat(web): plan change client and entry rendering`.
+- [x] **Step 1:** реализация. **Step 2:** Run: `npx tsc --noEmit -p apps/web` и `npm run lint -w @tracker/web` → без ошибок.
+- [x] **Step 3: Commit** `feat(web): plan change client and entry rendering`.
 
 ---
 
@@ -258,9 +258,9 @@ PlanChangeEntry({ group, onOpenWorkItem? }: { group: { batchId; items: PlanChang
 
 **Files:** Modify: `apps/web/src/views/roadmap/ui/WorkItemCardSheet.tsx` (`HistoryTab:642`, вкладки `:286`)
 
-- [ ] **Step 1: Реализация.** Для типов Feature и Epic — отдельный `useQuery(['plan-changes', projectId, externalId], …)` с `workItemExternalId`; записи сливаются с `item.history` по времени, новые сверху. У записей Roadmap — значок «Roadmap» / «Ассистент». Ошибка истории Azure не скрывает записи Roadmap, и наоборот. Пустое состояние — только если пусто в обоих. После успешных мутаций назначений в карточке и в плане — `invalidateQueries(['plan-changes'])`.
-- [ ] **Step 2: Проверка в браузере.** `preview_start` (`.claude/launch.json`), открыть план, изменить часы назначения, открыть карточку Feature → «История»: запись «Изменил часы: … → … ч» с вашим именем сверху. Скриншот в `output/`.
-- [ ] **Step 3:** `npx tsc --noEmit -p apps/web`, lint → чисто. **Commit** `feat(web): show plan changes in the work item history`.
+- [x] **Step 1: Реализация.** Для типов Feature и Epic — отдельный `useQuery(['plan-changes', projectId, externalId], …)` с `workItemExternalId`; записи сливаются с `item.history` по времени, новые сверху. У записей Roadmap — значок «Roadmap» / «Ассистент». Ошибка истории Azure не скрывает записи Roadmap, и наоборот. Пустое состояние — только если пусто в обоих. После успешных мутаций назначений в карточке и в плане — `invalidateQueries(['plan-changes'])`.
+- [x] **Step 2: Проверка в браузере.** `preview_start` (`.claude/launch.json`), открыть план, изменить часы назначения, открыть карточку Feature → «История»: запись «Изменил часы: … → … ч» с вашим именем сверху. Скриншот в `output/`.
+- [x] **Step 3:** `npx tsc --noEmit -p apps/web`, lint → чисто. **Commit** `feat(web): show plan changes in the work item history`.
 
 ---
 
@@ -270,14 +270,14 @@ PlanChangeEntry({ group, onOpenWorkItem? }: { group: { batchId; items: PlanChang
 
 **Interfaces — Consumes:** `planChangesApi.list`, `groupByBatch`, `PlanChangeEntry` (Task 7).
 
-- [ ] **Step 1: Реализация.** Кнопка-иконка `History` с подписью/подсказкой «Журнал изменений» открывает боковую панель в стиле `WorkItemCardSheet` (тот же `dialog`, анимации, `roadmap-scrollbar`). Фильтры: человек (участники ролей проекта из уже загруженного плана) и период (с/по). `useInfiniteQuery` по `nextCursor`, подгрузка при прокрутке. Клик по записи → закрыть панель и открыть карточку элемента. Кнопка видна и в демо (пустой журнал: «Изменений пока нет»).
-- [ ] **Step 2: Проверка в браузере.** Сделать перераспределение → в ленте одна группа «перераспределил часы — N назначений», раскрывается; фильтр по человеку оставляет только его записи; клик открывает карточку. Ширина 375px — панель без горизонтальной прокрутки. Тёмная тема — читаемо. Скриншоты в `output/`.
-- [ ] **Step 3:** tsc, lint → чисто. **Commit** `feat(web): add the project plan change feed`.
+- [x] **Step 1: Реализация.** Кнопка-иконка `History` с подписью/подсказкой «Журнал изменений» открывает боковую панель в стиле `WorkItemCardSheet` (тот же `dialog`, анимации, `roadmap-scrollbar`). Фильтры: человек (участники ролей проекта из уже загруженного плана) и период (с/по). `useInfiniteQuery` по `nextCursor`, подгрузка при прокрутке. Клик по записи → закрыть панель и открыть карточку элемента. Кнопка видна и в демо (пустой журнал: «Изменений пока нет»).
+- [x] **Step 2: Проверка в браузере.** Сделать перераспределение → в ленте одна группа «перераспределил часы — N назначений», раскрывается; фильтр по человеку оставляет только его записи; клик открывает карточку. Ширина 375px — панель без горизонтальной прокрутки. Тёмная тема — читаемо. Скриншоты в `output/`.
+- [x] **Step 3:** tsc, lint → чисто. **Commit** `feat(web): add the project plan change feed`.
 
 ---
 
 ### Task 10: Документация и финальная проверка
 
-- [ ] Дописать в `docs/13-roadmap.md` раздел «Журнал изменений» (что пишется, где смотреть, что не пишется) — 5–8 строк.
-- [ ] Run: `npm test -w @tracker/api`, `npm run test:e2e -w @tracker/api`, `npm run lint`, `npm run build` → всё зелёное.
-- [ ] Commit `docs: describe the plan change log`.
+- [x] Дописать в `docs/13-roadmap.md` раздел «Журнал изменений» (что пишется, где смотреть, что не пишется) — 5–8 строк.
+- [x] Run: `npm test -w @tracker/api`, `npm run test:e2e -w @tracker/api`, `npm run lint`, `npm run build` → всё зелёное.
+- [x] Commit `docs: describe the plan change log`.

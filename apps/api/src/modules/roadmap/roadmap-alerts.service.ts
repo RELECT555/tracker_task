@@ -201,25 +201,31 @@ export class RoadmapAlertsService {
     }
   }
 
-  /** Stores the latest details; only the instance whose write lands journals them. */
+  /**
+   * Stores the latest details on the open alert and journals them in its current episode.
+   * Every instance's write may land (the peak count only ever rises), so the generation is
+   * read in the same transaction as the write to journal the episode that was refreshed.
+   */
   private async refresh(condition: AlertCondition): Promise<void> {
     const { key } = condition;
     const details = condition.details as Prisma.InputJsonObject;
-    const won = await this.prisma.roadmapAlert.updateMany({
-      where: { key, state: 'open' },
-      data: { details, clearSince: null },
+    await this.prisma.$transaction(async (tx) => {
+      const won = await tx.roadmapAlert.updateMany({
+        where: { key, state: 'open' },
+        data: { details, clearSince: null },
+      });
+      if (won.count !== 1) return;
+      const alert = await tx.roadmapAlert.findUnique({
+        where: { key },
+        select: episodeAlertSelect,
+      });
+      if (!alert?.openedAt) return;
+      await touchEpisode(
+        tx,
+        { ...alert, openedAt: alert.openedAt },
+        condition.details,
+      );
     });
-    if (won.count !== 1) return;
-    const alert = await this.prisma.roadmapAlert.findUnique({
-      where: { key },
-      select: episodeAlertSelect,
-    });
-    if (!alert?.openedAt) return;
-    await touchEpisode(
-      this.prisma,
-      { ...alert, openedAt: alert.openedAt },
-      condition.details,
-    );
   }
 
   /**
@@ -237,6 +243,19 @@ export class RoadmapAlertsService {
         select: { ...episodeAlertSelect, clearSince: true, details: true },
       });
       if (!alert) return;
+      // A `fixed` problem ends when the condition went away (`clearSince`), not when the
+      // clear delay ran out. The alert and its episode share this time, so the page sorts
+      // "Исправленные" by the same moment it shows.
+      let endedAt = now;
+      if (resolution === 'fixed') {
+        if (alert.clearSince) {
+          endedAt = alert.clearSince;
+        } else {
+          this.logger.warn(
+            `Sync health alert ${key} resolved as fixed without clearSince; ending its episode now`,
+          );
+        }
+      }
       const won = await tx.roadmapAlert.updateMany({
         where:
           resolution === 'fixed'
@@ -250,20 +269,9 @@ export class RoadmapAlertsService {
                 },
               }
             : { key, state: 'open', generation: alert.generation },
-        data: { state: 'resolved', resolvedAt: now, resolution },
+        data: { state: 'resolved', resolvedAt: endedAt, resolution },
       });
       if (won.count !== 1) return;
-
-      let endedAt = now;
-      if (resolution === 'fixed') {
-        if (alert.clearSince) {
-          endedAt = alert.clearSince;
-        } else {
-          this.logger.warn(
-            `Sync health alert ${key} resolved as fixed without clearSince; ending its episode now`,
-          );
-        }
-      }
       await closeEpisode(
         tx,
         {

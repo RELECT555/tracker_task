@@ -54,10 +54,15 @@ export async function touchEpisode(
   alert: EpisodeAlert,
   details: RoadmapAlertDetails,
 ): Promise<void> {
-  await db.roadmapAlertEpisode.upsert({
-    where: episodeKey(alert),
-    create: newEpisode(alert, details),
-    update: { details: details as Prisma.InputJsonObject },
+  // createMany + skipDuplicates instead of upsert: two instances creating the missing row
+  // at once must not raise P2002, which would abort the surrounding transaction.
+  await db.roadmapAlertEpisode.createMany({
+    data: [newEpisode(alert, details)],
+    skipDuplicates: true,
+  });
+  await db.roadmapAlertEpisode.updateMany({
+    where: { alertId: alert.id, generation: alert.generation },
+    data: { details: details as Prisma.InputJsonObject },
   });
   const { count } = details;
   if (count === undefined) return;
