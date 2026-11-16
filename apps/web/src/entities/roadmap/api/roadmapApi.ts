@@ -1,6 +1,7 @@
 import { apiFetch } from '@/shared/api/client';
 import type {
   RoadmapNotificationPage, RoadmapNotificationSummary, RoadmapPortfolio, RoadmapPortfolioInput, SyncSettingsV2,
+  SyncProblemHistory, SyncProblemPage, SyncProblemQuery,
 } from '@tracker/shared';
 import { isRoadmapDemoMode, roadmapDemoApi } from './roadmapDemo';
 
@@ -307,6 +308,14 @@ const liveRoadmapApi = {
   markNotificationRead: (id: string) =>
     apiFetch<void>(`/roadmap/notifications/${encodeURIComponent(id)}/read`, { method: 'POST', body: '{}' }),
   markAllNotificationsRead: () => apiFetch<void>('/roadmap/notifications/read-all', { method: 'POST', body: '{}' }),
+  syncProblems: ({ status, projectId, cursor }: SyncProblemQuery) => {
+    const search = new URLSearchParams({ status });
+    if (projectId) search.set('projectId', projectId);
+    if (cursor) search.set('cursor', cursor);
+    return apiFetch<SyncProblemPage>(`/roadmap/sync-problems?${search.toString()}`);
+  },
+  syncProblemHistory: (alertId: string) =>
+    apiFetch<SyncProblemHistory>(`/roadmap/sync-problems/${encodeURIComponent(alertId)}/history`),
   projects: () => apiFetch<RoadmapProjectsResult>('/roadmap/projects'),
   localProjects: () => apiFetch<RoadmapProjectsResult>('/roadmap/projects/local'),
   projectSummaries: (input: RoadmapPortfolioInput, signal?: AbortSignal) =>

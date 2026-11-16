@@ -4,6 +4,7 @@ export const routes = {
   roadmap: '/roadmap',
   roadmapAnalytics: '/roadmap/analytics',
   roadmapAnalyticsProgress: '/roadmap/analytics/progress',
+  roadmapSync: '/roadmap/sync',
   roadmapAdminHome: '/roadmap/admin',
   roadmapAdmin: '/roadmap/admin/integrations',
   roadmapAdminUsers: '/roadmap/admin/users',

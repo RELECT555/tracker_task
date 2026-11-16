@@ -254,7 +254,10 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
     case 'syncSettingsV2': return clone(DEMO_SYNC_SETTINGS);
     // The demo has no Azure sync to watch: reads are empty, writes are no-ops.
     case 'notifications': return { items: [], nextCursor: null };
-    case 'notificationSummary': return { unread: 0, activeUnread: 0 };
+    // The demo route is admin-only, so the sync problems page is open there.
+    case 'notificationSummary': return { unread: 0, activeUnread: 0, canViewSyncProblems: true };
+    case 'syncProblems': return { items: [], nextCursor: null, counts: { active: 0 }, projects: [] };
+    case 'syncProblemHistory': return { items: [] };
     case 'markNotificationRead': case 'markAllNotificationsRead': return null;
     case 'workItemTypes': return [] as RoadmapWorkItemType[];
     case 'azureFields': return [] as RoadmapAzureField[];

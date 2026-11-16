@@ -69,3 +69,10 @@ export const syncProblemListQuerySchema = z.object({
 export const syncProblemHistoryQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
+
+/** Client-side parameters of the sync problems list. */
+export interface SyncProblemQuery {
+  status: SyncProblemStatusFilter;
+  projectId?: string;
+  cursor?: string;
+}

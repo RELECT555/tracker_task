@@ -21,6 +21,7 @@ import type {
 } from './roadmapApi';
 import type {
   RoadmapNotificationPage, RoadmapNotificationSummary, RoadmapPortfolio, RoadmapPortfolioInput, SyncSettingsV2,
+  SyncProblemHistory, SyncProblemPage, SyncProblemQuery,
 } from '@tracker/shared';
 import { apiFetch } from '@/shared/api/client';
 
@@ -32,7 +33,8 @@ type DemoMethod =
   | 'saveAllocationQuarter' | 'rebalanceAllocations' | 'saveWriteBackSettings' | 'writeBackOverview' | 'checkWriteBack'
   | 'syncSettingsV2' | 'saveSyncSettingsV2' | 'workItemTypes' | 'azureFields' | 'azureStates'
   | 'webhookSecret' | 'rotateWebhookSecret' | 'previewAzurePush' | 'pushProjectToAzure' | 'pushAllocationToAzure'
-  | 'notifications' | 'notificationSummary' | 'markNotificationRead' | 'markAllNotificationsRead';
+  | 'notifications' | 'notificationSummary' | 'markNotificationRead' | 'markAllNotificationsRead'
+  | 'syncProblems' | 'syncProblemHistory';
 
 async function call<T>(method: DemoMethod, args: unknown[] = [], signal?: AbortSignal): Promise<T> {
   const response = await apiFetch<{ data: T }>('/api/roadmap-demo', {
@@ -66,6 +68,8 @@ export const roadmapDemoApi = {
   notificationSummary: () => call<RoadmapNotificationSummary>('notificationSummary'),
   markNotificationRead: (id: string) => call<null>('markNotificationRead', [id]).then(() => undefined),
   markAllNotificationsRead: () => call<null>('markAllNotificationsRead').then(() => undefined),
+  syncProblems: (params: SyncProblemQuery) => call<SyncProblemPage>('syncProblems', [params]),
+  syncProblemHistory: (alertId: string) => call<SyncProblemHistory>('syncProblemHistory', [alertId]),
   projects: () => call<RoadmapProjectsResult>('projects'),
   localProjects: () => call<RoadmapProjectsResult>('projects'),
   projectSummaries: (input: RoadmapPortfolioInput, signal?: AbortSignal) =>

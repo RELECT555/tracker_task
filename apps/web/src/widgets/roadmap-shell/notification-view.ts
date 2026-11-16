@@ -16,17 +16,46 @@ export function badgeOf(summary: RoadmapNotificationSummary | undefined): Notifi
   return summary.unread > 0 ? { kind: 'dot' } : null;
 }
 
-export function statusLabel(item: Pick<RoadmapNotificationDto, 'active' | 'resolution'>): string | null {
-  if (item.active) return null;
-  if (item.resolution === 'fixed') return 'исправлено';
-  if (item.resolution === 'obsolete') return 'больше не актуально';
-  return null;
+export type ProblemTone = 'active' | 'fixed' | 'obsolete';
+
+/** Status label and colours shared by the popover and the sync problems page. */
+export const PROBLEM_STATUS_META: Record<ProblemTone, { label: string; dotClass: string; textClass: string; bgClass: string }> = {
+  active: { label: 'Активна', dotClass: 'bg-destructive', textClass: 'text-destructive', bgClass: 'bg-destructive/10' },
+  fixed: {
+    label: 'Исправлено',
+    dotClass: 'bg-emerald-500',
+    textClass: 'text-emerald-700 dark:text-emerald-400',
+    bgClass: 'bg-emerald-500/10',
+  },
+  obsolete: { label: 'Больше не актуально', dotClass: 'bg-muted-foreground', textClass: 'text-muted-foreground', bgClass: 'bg-muted' },
+};
+
+export function notificationTone(item: Pick<RoadmapNotificationDto, 'active' | 'resolution'>): ProblemTone {
+  if (item.active) return 'active';
+  return item.resolution === 'obsolete' ? 'obsolete' : 'fixed';
 }
 
-/** Live figure of a still-open problem; the stored title keeps the count from when it was raised. */
-export function currentLabel(item: Pick<RoadmapNotificationDto, 'active' | 'current'>): string | null {
+/** Live figure of a still-open problem, shown only once it differs from the count it was raised with. */
+export function currentLabel(item: Pick<RoadmapNotificationDto, 'active' | 'current' | 'openedCount'>): string | null {
   const count = item.active ? item.current?.count : undefined;
-  return count === undefined ? null : `сейчас: ${count}`;
+  if (count === undefined || count === item.openedCount) return null;
+  return `сейчас: ${count}`;
+}
+
+/** '<1 мин', '25 мин', '2 ч 5 мин', '3 дн'. */
+export function durationLabel(openedAt: string, endedAt: string): string {
+  const ms = Math.max(new Date(endedAt).getTime() - new Date(openedAt).getTime(), 0);
+  if (ms < 60_000) return '<1 мин';
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 60) return `${minutes} мин`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return minutes % 60 ? `${hours} ч ${minutes % 60} мин` : `${hours} ч`;
+  return `${Math.floor(hours / 24)} дн`;
+}
+
+/** Shown from the second occurrence: '2-й раз за 7 дней'. */
+export function recurrenceLabel(n: number): string | null {
+  return n >= 2 ? `${n}-й раз за 7 дней` : null;
 }
 
 const MINUTE = 60_000;

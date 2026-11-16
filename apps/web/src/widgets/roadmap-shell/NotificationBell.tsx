@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Check } from 'lucide-react';
+import { ArrowRight, Bell, Check } from 'lucide-react';
 import type { RoadmapNotificationDto } from '@tracker/shared';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { Button } from '@/shared/ui/button';
@@ -11,9 +12,12 @@ import { ErrorNotice, QueryErrorNotice } from '@/shared/ui/error-notice';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 import { Skeleton, SkeletonStatus } from '@/shared/ui/skeleton';
 import { cn } from '@/shared/lib/utils';
-import { badgeOf, currentLabel, relativeTime, statusLabel } from './notification-view';
+import { routes } from '@/shared/config/routes';
+import { ALERT_KIND_ICON } from './notification-icons';
+import { PROBLEM_STATUS_META, badgeOf, currentLabel, notificationTone, relativeTime } from './notification-view';
 
-const SUMMARY_KEY = ['roadmap', 'notifications', 'summary'] as const;
+export const NOTIFICATION_SUMMARY_KEY = ['roadmap', 'notifications', 'summary'] as const;
+const SUMMARY_KEY = NOTIFICATION_SUMMARY_KEY;
 const LIST_KEY = ['roadmap', 'notifications', 'list'] as const;
 const SUMMARY_POLL_MS = 60_000;
 
@@ -131,6 +135,18 @@ export function NotificationBell() {
             </div>
           ) : null}
         </div>
+        {summary.data?.canViewSyncProblems ? (
+          <div className="border-t border-border px-4 py-2.5 text-right">
+            <Link
+              href={routes.roadmapSync}
+              onClick={() => setOpen(false)}
+              className="inline-flex items-center gap-1 rounded text-sm font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              Все уведомления
+              <ArrowRight aria-hidden="true" className="size-3.5" />
+            </Link>
+          </div>
+        ) : null}
       </PopoverContent>
     </Popover>
   );
@@ -138,26 +154,33 @@ export function NotificationBell() {
 
 function NotificationRow({ item, onOpen }: { item: RoadmapNotificationDto; onOpen: () => void }) {
   const unread = !item.readAt;
-  const status = statusLabel(item);
+  const tone = notificationTone(item);
+  const meta = PROBLEM_STATUS_META[tone];
   const current = currentLabel(item);
+  const Icon = ALERT_KIND_ICON[item.kind];
   return (
     <li>
-      <button type="button" onClick={onOpen} className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none">
-        <span aria-hidden="true" className={cn('mt-1.5 size-2 shrink-0 rounded-full', unread ? 'bg-primary' : 'bg-transparent')} />
+      <button type="button" onClick={onOpen} className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none">
+        <span aria-hidden="true" className={cn('mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full', meta.bgClass, meta.textClass)}>
+          <Icon className="size-4" />
+        </span>
         <span className="min-w-0 flex-1 space-y-1">
-          <span className={cn('block text-pretty wrap-anywhere text-sm leading-5', unread ? 'font-medium text-foreground' : 'text-muted-foreground')}>
-            {unread ? <span className="sr-only">Не прочитано: </span> : null}
-            {item.title}
+          <span className="flex items-start gap-2">
+            <span className={cn('min-w-0 flex-1 text-pretty wrap-anywhere text-sm leading-5 text-foreground', unread ? 'font-semibold' : 'font-normal')}>
+              {unread ? <span className="sr-only">Не прочитано: </span> : null}
+              {item.title}
+            </span>
+            {unread ? <span aria-hidden="true" className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" /> : null}
           </span>
           {item.body ? <span className="block text-pretty wrap-anywhere text-xs leading-4 text-muted-foreground">{item.body}</span> : null}
-          <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-            <span>{[item.projectName, relativeTime(item.createdAt)].filter(Boolean).join(' · ')}</span>
-            {status ? (
-              <span className="inline-flex items-center gap-1">
-                {item.resolution === 'fixed' ? <Check aria-hidden="true" className="size-3" /> : null}
-                {status}
-              </span>
-            ) : current ? <span className="tabular-nums">{current}</span> : null}
+          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+            {[item.projectName, relativeTime(item.createdAt)].filter(Boolean).join(' · ')}
+            <span aria-hidden="true">·</span>
+            <span className={cn('inline-flex items-center gap-1 font-medium', meta.textClass)}>
+              {tone === 'fixed' ? <Check aria-hidden="true" className="size-3" /> : null}
+              {meta.label}
+            </span>
+            {current ? <span className="ml-auto tabular-nums">{current}</span> : null}
           </span>
         </span>
       </button>
