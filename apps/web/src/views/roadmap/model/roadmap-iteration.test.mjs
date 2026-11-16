@@ -75,6 +75,20 @@ test('a card just created from the plan stays visible without a badge, and shows
   assert.equal(result.visibleIds.has('e'), true);
 });
 
+test('show-all keeps every card and marks each one outside the iteration', () => {
+  const items = [item('e', 'Epic', 'P\\2026\\Q3'), item('f', 'Feature', 'P\\2026\\Q3', 'e'), item('g', 'Feature', Q4), item('t', 'Task', 'P')];
+  const result = getRoadmapIterationVisibility(items, Q4, new Set(), new Set(), true);
+  assert.equal(result.filtered, true);
+  assert.deepEqual([...result.visibleIds].sort(), ['e', 'f', 'g']);
+  assert.deepEqual([...result.outsideIds].sort(), ['e', 'f']);
+});
+
+test('show-all without a quarter iteration marks nothing', () => {
+  const result = getRoadmapIterationVisibility([item('f', 'Feature', 'P\\2026\\Q3')], null, new Set(), new Set(), true);
+  assert.equal(result.filtered, false);
+  assert.equal(result.outsideIds.size, 0);
+});
+
 test('tasks never take part', () => {
   const result = visibility([item('t', 'Task', Q4), item('f', 'Feature', Q4)], ['t']);
   assert.equal(result.visibleIds.has('t'), false);

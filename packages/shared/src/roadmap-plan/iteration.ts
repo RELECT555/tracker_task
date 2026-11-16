@@ -37,6 +37,8 @@ export function getRoadmapIterationVisibility(
   activeItemIds: ReadonlySet<string>,
   /** External ids of cards just created from the plan: Azure puts them at its default iteration, so keep them in view. */
   keptExternalIds: ReadonlySet<string> = new Set(),
+  /** «Показать все карточки»: nothing is hidden, every card outside the quarter's iteration is marked. */
+  showAll = false,
 ): RoadmapIterationVisibility {
   const typeOf = (item: RoadmapIterationItem) => item.type.toLowerCase();
   const planItems = items.filter((item) => typeOf(item) === 'epic' || typeOf(item) === 'feature');
@@ -46,8 +48,17 @@ export function getRoadmapIterationVisibility(
     for (const item of planItems) visibleIds.add(item.id);
     return { filtered: false, visibleIds, outsideIds };
   }
+  const inIteration = (item: RoadmapIterationItem) =>
+    roadmapIterationContains(quarterIterationPath, item.iterationPath) || keptExternalIds.has(item.externalId);
+  if (showAll) {
+    for (const item of planItems) {
+      visibleIds.add(item.id);
+      if (!inIteration(item)) outsideIds.add(item.id);
+    }
+    return { filtered: true, visibleIds, outsideIds };
+  }
   const place = (item: RoadmapIterationItem) => {
-    if (roadmapIterationContains(quarterIterationPath, item.iterationPath) || keptExternalIds.has(item.externalId)) visibleIds.add(item.id);
+    if (inIteration(item)) visibleIds.add(item.id);
     else if (activeItemIds.has(item.id)) {
       visibleIds.add(item.id);
       outsideIds.add(item.id);

@@ -944,9 +944,11 @@ export function RoadmapPage() {
   const quarterIterationPath = quarterIterationQuery.data?.iterationPath ?? null;
   // Azure files a card created here under its default iteration; it must not vanish from the table it was created in.
   const [createdExternalIds, setCreatedExternalIds] = useState<ReadonlySet<string>>(() => new Set());
+  // Lets a planner find cards of other iterations (e.g. work carried over but not moved in Azure) to plan them.
+  const [showAllCards, setShowAllCards] = useState(false);
   const iteration = useMemo(
-    () => getRoadmapIterationVisibility(plannedItems, quarterIterationPath, summary?.activeItemIds ?? new Set<string>(), createdExternalIds),
-    [plannedItems, quarterIterationPath, summary, createdExternalIds],
+    () => getRoadmapIterationVisibility(plannedItems, quarterIterationPath, summary?.activeItemIds ?? new Set<string>(), createdExternalIds, showAllCards),
+    [plannedItems, quarterIterationPath, summary, createdExternalIds, showAllCards],
   );
   const hiddenByIteration = iteration.filtered && plannedItems.some((item) => ['epic', 'feature'].includes(item.type.toLowerCase()));
   const epics = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'epic' && iteration.visibleIds.has(item.id)), [plannedItems, iteration]);
@@ -1529,6 +1531,15 @@ export function RoadmapPage() {
                     {view === 'periods' && focusMode ? <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => expandEverything(!allEpicsExpanded)}>{allEpicsExpanded ? 'Свернуть всё' : 'Развернуть всё'}</Button> : null}
                     {view === 'periods' ? <Button type="button" variant={showUnassignedPeriods ? 'secondary' : 'outline'} size="sm" className="h-8" onClick={() => setShowUnassignedPeriods((value) => !value)}>{showUnassignedPeriods ? 'Скрыть без назначений' : 'Показать без назначений'}</Button> : null}
                     {periodControls}
+                    {iteration.filtered ? <div role="group" aria-label="Итерация" className={switchGroupClass}>
+                      <RoadmapToolbarSwitch
+                        label="Все карточки"
+                        icon={<Layers />}
+                        hint={`Показать и карточки других итераций, у которых нет плана или факта в периоде. Итерация квартала: ${quarterIterationPath}. Карточки вне неё отмечены «вне итерации».`}
+                        checked={showAllCards}
+                        onChange={setShowAllCards}
+                      />
+                    </div> : null}
                     {appearanceSettings}
                     {canPushToAzure ? <Popover open={pushPreviewOpen} onOpenChange={setPushPreviewOpen}>
                       <PopoverTrigger asChild>
