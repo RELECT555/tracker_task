@@ -35,6 +35,8 @@ export interface RoadmapNotificationDto {
   resolution: RoadmapAlertResolution | null;
   /** Current figures of the problem while the episode is active. */
   current: RoadmapAlertDetails | null;
+  /** Count when this episode opened; null when unknown (opened before the journal). */
+  openedCount: number | null;
 }
 
 export interface RoadmapNotificationPage {
@@ -45,6 +47,8 @@ export interface RoadmapNotificationPage {
 export interface RoadmapNotificationSummary {
   unread: number;
   activeUnread: number;
+  /** Admins and project planners may open the sync problems page. */
+  canViewSyncProblems: boolean;
 }
 
 export const roadmapNotificationListQuerySchema = z.object({

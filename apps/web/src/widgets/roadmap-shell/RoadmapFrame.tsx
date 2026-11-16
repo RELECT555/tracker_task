@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useTheme } from 'next-themes';
-import { ChartNoAxesCombined, ChevronDown, ChevronUp, GitBranch, House, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Settings2, Sun, type LucideIcon } from 'lucide-react';
+import { ChartNoAxesCombined, ChevronDown, ChevronsUpDown, GitBranch, House, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Settings2, Sun, type LucideIcon } from 'lucide-react';
 import { RoadmapProjectSelection } from '@/entities/roadmap/model/roadmap-project-selection';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { ProductTour } from '@/features/product-tour/ui/ProductTour';
@@ -13,6 +13,7 @@ import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { roadmapAdminSections } from '@/shared/config/roadmap-admin-sections';
 import { routes } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
+import { NotificationBell } from './NotificationBell';
 
 const SIDEBAR_STORAGE_KEY = 'roadmap:sidebar-collapsed';
 const ADMIN_LABEL = 'Администрирование';
@@ -59,13 +60,13 @@ function ProfileMenu({ auth, mobile = false, collapsed = false }: {
         }
       }}
     >
-      <button ref={trigger} type="button" onClick={() => setMenuOpen((open) => !open)} aria-label="Профиль пользователя" aria-expanded={menuOpen} aria-controls={menuOpen ? menuId : undefined} title={collapsed ? displayName : undefined} className={cn('flex items-center gap-3 rounded-lg border border-sidebar-border/50 bg-sidebar-accent/30 text-left transition-colors hover:bg-sidebar-accent/50 focus-visible:outline-2 focus-visible:outline-sidebar-primary', mobile ? 'size-9 justify-center' : collapsed ? 'h-10 w-full justify-center' : 'w-full px-3 py-2.5')}>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-sidebar-accent text-xs font-semibold text-sidebar-primary">{initials(displayName)}</div>
-        {!compact ? <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-sidebar-foreground">{displayName}</p>
-          <p className="truncate text-xs text-sidebar-muted">{displayEmail}</p>
-        </div> : null}
-        {!compact ? <ChevronUp className={cn('h-4 w-4 shrink-0 text-sidebar-muted transition-transform', menuOpen && 'rotate-180')} strokeWidth={1.5} aria-hidden="true" /> : null}
+      <button ref={trigger} type="button" onClick={() => setMenuOpen((open) => !open)} aria-label="Профиль пользователя" aria-expanded={menuOpen} aria-controls={menuOpen ? menuId : undefined} title={collapsed ? displayName : undefined} className={cn('flex items-center text-left transition-colors focus-visible:outline-2 focus-visible:outline-sidebar-primary', mobile ? 'size-9 justify-center rounded-full border border-border bg-card hover:bg-muted' : cn('rounded-lg hover:bg-sidebar-accent/60', menuOpen && 'bg-sidebar-accent/60', collapsed ? 'h-11 w-full justify-center' : 'w-full gap-2.5 px-2 py-2'))}>
+        <span className={cn('flex shrink-0 items-center justify-center rounded-full font-semibold', mobile ? 'size-7 bg-primary/15 text-[11px] text-primary' : 'size-8 bg-sidebar-primary/15 text-xs text-sidebar-primary ring-1 ring-sidebar-primary/25')}>{initials(displayName)}</span>
+        {!compact ? <span className="min-w-0 flex-1 leading-tight">
+          <span className="block truncate text-[13px] font-medium text-sidebar-foreground">{displayName}</span>
+          <span className="mt-0.5 block truncate text-xs text-sidebar-muted">{displayEmail}</span>
+        </span> : null}
+        {!compact ? <ChevronsUpDown className="size-4 shrink-0 text-sidebar-muted" strokeWidth={1.5} aria-hidden="true" /> : null}
       </button>
       {menuOpen ? <div id={menuId} className={cn('absolute z-50 max-h-[min(24rem,70vh)] roadmap-scrollbar overflow-y-auto rounded-lg border border-sidebar-border/50 bg-sidebar shadow-lg', mobile ? 'right-0 top-full mt-2 w-72' : collapsed ? 'bottom-0 left-full ml-2 w-72' : 'bottom-full left-0 right-0 mb-1')}>
         {compact ? <div className="border-b border-sidebar-border/40 px-3 py-2">
@@ -96,15 +97,24 @@ function RoadmapNavLink({ href, label, icon: Icon, active, collapsed, className 
       aria-current={active ? 'page' : undefined}
       data-nav-current={active ? '' : undefined}
       className={cn(
-        'relative flex h-10 items-center rounded-lg text-sm transition-colors duration-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sidebar-primary',
+        'group/nav relative flex h-9 items-center rounded-lg text-sm transition-colors duration-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sidebar-primary',
         collapsed ? 'justify-center' : 'gap-3 px-3',
-        active ? 'font-medium text-sidebar-primary' : 'text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+        active ? 'font-medium text-sidebar-foreground' : 'text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
         className,
       )}
     >
-      <Icon className="size-[18px] shrink-0" strokeWidth={1.5} aria-hidden="true" />
-      {!collapsed && <span>{label}</span>}
+      <Icon className={cn('size-[18px] shrink-0 transition-colors duration-200', active ? 'text-sidebar-primary' : 'text-sidebar-muted group-hover/nav:text-sidebar-foreground')} strokeWidth={active ? 1.8 : 1.5} aria-hidden="true" />
+      {!collapsed && <span className="truncate">{label}</span>}
     </Link>
+  );
+}
+
+function NavSectionLabel({ label, collapsed, first = false }: { label: string; collapsed: boolean; first?: boolean }) {
+  if (collapsed) return first ? null : <li role="presentation" aria-hidden="true" className="mx-auto my-3 h-px w-6 bg-sidebar-border" />;
+  return (
+    <li role="presentation" className={cn('px-3 pb-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-sidebar-section/80', !first && 'pt-5')}>
+      {label}
+    </li>
   );
 }
 
@@ -238,26 +248,31 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
     <div className="roadmap-frame relative flex h-dvh overflow-clip bg-sidebar dark:bg-background">
       <ProductTour enabled={Boolean(auth.user)} isAdmin={isAdmin} />
       <aside id="roadmap-sidebar" className={cn('hidden h-full shrink-0 flex-col border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground md:flex', sidebarCollapsed ? 'w-16' : 'w-64')}>
-        <div className={cn('flex h-16 shrink-0 items-center gap-2', sidebarCollapsed ? 'justify-center' : 'justify-between pl-5 pr-3')}>
-          <button
-            type="button"
-            title={sidebarToggleLabel}
-            aria-label={sidebarToggleLabel}
-            aria-expanded={!sidebarCollapsed}
-            aria-controls="roadmap-sidebar"
-            onClick={toggleSidebar}
-            className="flex items-center gap-3 rounded-lg text-left focus-visible:outline-2 focus-visible:outline-sidebar-primary"
-          >
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-sidebar-border/60 bg-sidebar-accent text-sidebar-primary transition-colors hover:bg-sidebar-accent/70">
-              <GitBranch className="size-5" strokeWidth={1.7} aria-hidden="true" />
-            </span>
-            {!sidebarCollapsed ? (
-              <span>
-                <span className="block text-sm font-semibold tracking-tight">Roadmap</span>
-                <span className="block text-[10px] uppercase tracking-[0.13em] text-sidebar-muted">Планирование</span>
+        <div className={cn('flex h-16 shrink-0 items-center gap-2 border-b border-sidebar-border/60', sidebarCollapsed ? 'justify-center' : 'justify-between pl-4 pr-2.5')}>
+          {sidebarCollapsed ? (
+            <button
+              type="button"
+              title={sidebarToggleLabel}
+              aria-label={sidebarToggleLabel}
+              aria-expanded={false}
+              aria-controls="roadmap-sidebar"
+              onClick={toggleSidebar}
+              className="group/brand relative flex size-9 items-center justify-center rounded-lg bg-sidebar-primary/15 text-sidebar-primary ring-1 ring-sidebar-primary/25 transition-colors hover:bg-sidebar-primary/25 focus-visible:outline-2 focus-visible:outline-sidebar-primary"
+            >
+              <GitBranch className="size-5 transition-opacity group-hover/brand:opacity-0 group-focus-visible/brand:opacity-0" strokeWidth={1.7} aria-hidden="true" />
+              <SidebarToggleIcon className="absolute size-5 opacity-0 transition-opacity group-hover/brand:opacity-100 group-focus-visible/brand:opacity-100" strokeWidth={1.6} aria-hidden="true" />
+            </button>
+          ) : (
+            <Link href={routes.home} className="flex min-w-0 items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-sidebar-primary">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary/15 text-sidebar-primary ring-1 ring-sidebar-primary/25">
+                <GitBranch className="size-5" strokeWidth={1.7} aria-hidden="true" />
               </span>
-            ) : null}
-          </button>
+              <span className="min-w-0 leading-tight">
+                <span className="block text-sm font-semibold tracking-tight text-sidebar-foreground">Roadmap</span>
+                <span className="mt-0.5 block text-[10px] uppercase tracking-[0.13em] text-sidebar-muted">Планирование</span>
+              </span>
+            </Link>
+          )}
           {!sidebarCollapsed ? (
             <button
               type="button"
@@ -266,22 +281,26 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
               aria-expanded={!sidebarCollapsed}
               aria-controls="roadmap-sidebar"
               onClick={toggleSidebar}
-              className="flex size-10 shrink-0 items-center justify-center rounded-lg text-sidebar-muted transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-sidebar-primary"
+              className="flex size-8 shrink-0 items-center justify-center rounded-lg text-sidebar-muted transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-sidebar-primary"
             >
-              <SidebarToggleIcon className="size-5" strokeWidth={1.5} aria-hidden="true" />
+              <SidebarToggleIcon className="size-[18px]" strokeWidth={1.5} aria-hidden="true" />
             </button>
           ) : null}
         </div>
 
         <nav aria-label="Навигация Roadmap" data-tour="nav" className={cn('min-h-0 flex-1 roadmap-scrollbar overflow-auto py-5', sidebarCollapsed ? 'px-2.5' : 'px-3')}>
           <div ref={navList} className="relative">
-            <span ref={navIndicator} aria-hidden="true" className="roadmap-nav-indicator rounded-lg bg-sidebar-accent" />
-            <ul className="space-y-1">
+            <span ref={navIndicator} aria-hidden="true" className="roadmap-nav-indicator rounded-lg bg-sidebar-accent">
+              <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-sidebar-primary" />
+            </span>
+            <ul className="space-y-0.5">
+              <NavSectionLabel label="Рабочее пространство" collapsed={sidebarCollapsed} first />
               {roadmapLinks.map((link) => (
                 <li key={link.href}>
                   <RoadmapNavLink {...link} active={navPath === link.href || (link.href === routes.roadmapAnalytics && isAnalyticsPath(navPath))} collapsed={sidebarCollapsed} />
                 </li>
               ))}
+              {isAdmin ? <NavSectionLabel label="Управление" collapsed={sidebarCollapsed} /> : null}
               {isAdmin ? (
                 <li>
                   <div data-tour="nav-admin" className={cn('flex items-center rounded-lg transition-colors duration-200', isNavAdminSection && 'bg-sidebar-accent/50')}>
@@ -300,7 +319,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
                         aria-expanded={adminMenuOpen}
                         aria-controls="roadmap-admin-navigation"
                         onClick={() => setAdminMenuOpen((open) => !open)}
-                        className="flex h-10 w-9 shrink-0 items-center justify-center rounded-lg text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sidebar-primary"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sidebar-primary"
                       >
                         <ChevronDown className={cn('size-4 motion-safe:transition-transform', adminMenuOpen && 'rotate-180')} strokeWidth={1.7} aria-hidden="true" />
                       </button>
@@ -309,10 +328,10 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
                   {!sidebarCollapsed ? (
                     <div inert={!adminMenuOpen} className={cn('grid motion-safe:transition-[grid-template-rows,opacity] motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.23,1,0.32,1)]', adminMenuOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
                       <div className="min-h-0 overflow-hidden">
-                        <ul id="roadmap-admin-navigation" className="ml-5 mt-1 space-y-0.5 border-l border-sidebar-border pl-2">
+                        <ul id="roadmap-admin-navigation" className="ml-[1.3rem] mt-0.5 space-y-0.5 border-l border-sidebar-border/80 pl-2">
                           {roadmapAdminSections.map(({ id, href, title, icon }) => (
                             <li key={id}>
-                              <RoadmapNavLink href={href} label={title} icon={icon} active={navPath === href} className="h-9 gap-2.5 px-2.5" />
+                              <RoadmapNavLink href={href} label={title} icon={icon} active={navPath === href} className="h-8 gap-2.5 px-2.5 text-[13px]" />
                             </li>
                           ))}
                         </ul>
@@ -325,7 +344,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
           </div>
         </nav>
 
-        <div className={cn('shrink-0 border-t border-sidebar-border/60 py-3', sidebarCollapsed ? 'px-2.5' : 'px-3')}>
+        <div className="shrink-0 border-t border-sidebar-border/60 px-2.5 py-2.5">
           <ProfileMenu auth={auth} collapsed={sidebarCollapsed} />
         </div>
       </aside>
@@ -356,6 +375,7 @@ export function RoadmapFrame({ children }: { children: ReactNode }) {
                 <Settings2 className="size-4" strokeWidth={1.7} aria-hidden="true" />
               </Link>
             ) : null}
+            <NotificationBell />
             <TourLauncherIcon />
             <button type="button" data-tour="theme" onClick={cycleTheme} title={`Тема: ${themeLabel}`} aria-label={`Тема: ${themeLabel}. Нажмите, чтобы переключить`} className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
               <ThemeIcon className="size-4" aria-hidden="true" />

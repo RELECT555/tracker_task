@@ -39,7 +39,7 @@ export function AzurePushPreview({ projectId, onDone }: { projectId: string; onD
     },
   });
 
-  if (previewQuery.isLoading) return <p className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><LoaderCircle className="h-4 w-4 animate-spin" />Собираем изменения…</p>;
+  if (previewQuery.isLoading) return <p className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><LoaderCircle aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" />Собираем изменения…</p>;
   const error = previewQuery.error ?? pushMutation.error;
   if (!preview) return error ? <p role="alert" className="p-4 text-sm text-destructive">{error instanceof Error ? error.message : 'Не удалось загрузить изменения'}</p> : null;
 
@@ -99,7 +99,7 @@ export function AzurePushPreview({ projectId, onDone }: { projectId: string; onD
       <div className="flex items-center justify-between gap-3 border-t border-border bg-muted/20 px-4 py-3">
         <p className="text-[11px] text-muted-foreground">Отправка идёт в фоне, статусы обновятся на странице плана.</p>
         <Button type="button" size="sm" className="shrink-0 gap-1.5" disabled={!selected.size || pushMutation.isPending || preview.mode === 'off' || !preview.projectAllowed} onClick={() => pushMutation.mutate()}>
-          {pushMutation.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowUpFromLine className="h-4 w-4" />}
+          {pushMutation.isPending ? <LoaderCircle aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" /> : <ArrowUpFromLine className="h-4 w-4" />}
           Отправить ({selected.size})
         </Button>
       </div>

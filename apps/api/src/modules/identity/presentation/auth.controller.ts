@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post } from '@nestjs/common';
 import { CurrentUser } from '../../../shared/presentation/decorators/current-user.decorator';
 import { LoginHandler } from '../application/commands/login.handler';
 import { RefreshTokenHandler } from '../application/commands/refresh-token.handler';
+import { GetAuthConfigHandler } from '../application/queries/get-auth-config.handler';
 import { GetMeHandler } from '../application/queries/get-me.handler';
 import { LoginDto, RefreshTokenDto } from './dto/auth.dto';
 
@@ -11,15 +12,23 @@ export class AuthController {
     private readonly loginHandler: LoginHandler,
     private readonly refreshHandler: RefreshTokenHandler,
     private readonly getMeHandler: GetMeHandler,
+    private readonly authConfig: GetAuthConfigHandler,
   ) {}
+
+  @Get('config')
+  config() {
+    return this.authConfig.execute();
+  }
 
   @Post('login')
   login(@Body() dto: LoginDto) {
+    this.authConfig.assertLocal();
     return this.loginHandler.execute(dto);
   }
 
   @Post('refresh')
   refresh(@Body() dto: RefreshTokenDto) {
+    this.authConfig.assertLocal();
     return this.refreshHandler.execute(dto.refreshToken);
   }
 

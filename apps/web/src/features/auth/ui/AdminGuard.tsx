@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { isAdminUser } from '@/features/auth/lib/is-admin';
 import { routes } from '@/shared/config/routes';
-import { hasAccessToken } from '@/shared/lib/auth-storage';
+import { getSessionId } from '@/shared/lib/auth';
 
 export function AdminGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -13,7 +13,7 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
   const allowed = isAdminUser(user);
 
   useEffect(() => {
-    if (!isLoading && !allowed && hasAccessToken()) {
+    if (!isLoading && !allowed && getSessionId() !== null) {
       router.replace(routes.roadmap);
     }
   }, [allowed, isLoading, router]);

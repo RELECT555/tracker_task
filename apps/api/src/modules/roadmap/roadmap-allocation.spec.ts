@@ -1,13 +1,10 @@
 import type { Prisma } from '@prisma/client';
 import { rebalanceAllocations } from '@tracker/shared';
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
-import type { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
 import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
-import type { RoadmapIntegrationService } from './roadmap-integration.service';
+import { RoadmapAllocationService } from './roadmap-allocation.service';
 import { planChangeContext } from './roadmap-plan-change';
 import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
-import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
-import { RoadmapService } from './roadmap.service';
 
 const input = {
   workItemId: 'work-item',
@@ -76,15 +73,12 @@ function setup() {
       return Promise.resolve(1);
     }),
   };
-  const service = new RoadmapService(
+  const service = new RoadmapAllocationService(
     { $transaction: transaction } as unknown as PrismaService,
-    {} as RoadmapIntegrationService,
-    {} as RoadmapWorkItemImportService,
     {
       pendingUpdate: { azureSyncStatus: 'pending' },
       onAllocationSaved,
     } as unknown as RoadmapAzureSyncService,
-    {} as RoadmapAzureCatalogService,
     planChanges as unknown as RoadmapPlanChangeService,
   );
   return { service, tx, transaction, onAllocationSaved, events };

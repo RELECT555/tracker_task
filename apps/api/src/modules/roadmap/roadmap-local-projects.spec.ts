@@ -7,6 +7,13 @@ import type { RoadmapWorkItemCreateService } from './roadmap-work-item-create.se
 import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import { RoadmapController } from './roadmap.controller';
 import type { RoadmapService } from './roadmap.service';
+import type { RoadmapProjectImportService } from './roadmap-project-import.service';
+import type { RoadmapPeopleService } from './roadmap-people.service';
+import type { RoadmapRolesService } from './roadmap-roles.service';
+import type { RoadmapAllocationService } from './roadmap-allocation.service';
+import type { RoadmapAzureSyncStatusService } from './roadmap-azure-sync-status.service';
+import type { RoadmapAzureProcessService } from './roadmap-azure-process.service';
+import type { RoadmapAzureFeatureFieldsService } from './roadmap-azure-feature-fields.service';
 
 describe('Local Roadmap projects', () => {
   it.each([
@@ -32,12 +39,19 @@ describe('Local Roadmap projects', () => {
       } as unknown as PrismaService);
       const listAzureProjects = jest.fn();
       const controller = new RoadmapController(
-        { listAzureProjects } as unknown as RoadmapService,
+        {} as RoadmapService,
         {} as RoadmapAzureSyncService,
         {} as RoadmapWorkItemCreateService,
         access,
         {} as RoadmapWorkItemCardService,
         {} as RoadmapAllocationAzureService,
+        { listAzureProjects } as unknown as RoadmapProjectImportService,
+        {} as RoadmapPeopleService,
+        {} as RoadmapRolesService,
+        {} as RoadmapAllocationService,
+        {} as RoadmapAzureSyncStatusService,
+        {} as RoadmapAzureProcessService,
+        {} as RoadmapAzureFeatureFieldsService,
         {} as RoadmapPlanChangeService,
       );
 

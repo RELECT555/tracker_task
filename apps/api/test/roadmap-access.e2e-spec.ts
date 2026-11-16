@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { TokenService } from '../src/modules/identity/infrastructure/token.service';
 import { RoadmapPlanChangeService } from '../src/modules/roadmap/roadmap-plan-change.service';
 import { RoadmapService } from '../src/modules/roadmap/roadmap.service';
+import { RoadmapAllocationService } from '../src/modules/roadmap/roadmap-allocation.service';
 import { PrismaService } from '../src/shared/infrastructure/prisma/prisma.service';
 import { DomainExceptionFilter } from '../src/shared/presentation/filters/domain-exception.filter';
 
@@ -120,7 +121,9 @@ describe('Roadmap authentication and project scope (e2e)', () => {
         },
       })
       .overrideProvider(RoadmapService)
-      .useValue({ getProjectPlan, saveAllocation })
+      .useValue({ getProjectPlan })
+      .overrideProvider(RoadmapAllocationService)
+      .useValue({ saveAllocation })
       .overrideProvider(RoadmapPlanChangeService)
       .useValue({ list: listChanges })
       .compile();
@@ -147,6 +150,12 @@ describe('Roadmap authentication and project scope (e2e)', () => {
       .get('/api/v1/auth/me')
       .set('X-User-Id', adminId)
       .expect(401);
+  });
+
+  it('serves the sign-in provider without a session', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/auth/config')
+      .expect(200, { provider: 'local' });
   });
 
   it('issues a session only for the local administrator using the configured password', async () => {

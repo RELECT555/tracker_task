@@ -1,8 +1,7 @@
 import { BadGatewayException, BadRequestException } from '@nestjs/common';
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
-import type { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
-import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
-import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import type { RoadmapRolesService } from './roadmap-roles.service';
+import type { RoadmapWriteBackAccessService } from './roadmap-write-back-access.service';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import { RoadmapService } from './roadmap.service';
 import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
@@ -52,9 +51,8 @@ function setup(workItems: ReturnType<typeof workItem>[] = []) {
     prisma,
     integration,
     importer,
-    {} as RoadmapAzureSyncService,
-    {} as RoadmapAzureCatalogService,
-    {} as RoadmapPlanChangeService,
+    {} as RoadmapWriteBackAccessService,
+    {} as RoadmapRolesService,
   );
   return { service, importer, requestJson, getCredentials, findUnique };
 }

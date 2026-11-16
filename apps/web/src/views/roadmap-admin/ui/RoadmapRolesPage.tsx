@@ -4,16 +4,16 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useId, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, Plus } from 'lucide-react';
+import { ArrowLeft, Building2, Plus } from 'lucide-react';
 import { roadmapApi, type RoadmapRole, type RoadmapRoleTemplate } from '@/entities/roadmap/api/roadmapApi';
 import { ApiError } from '@/shared/api/client';
 import { routes } from '@/shared/config/routes';
 import { getErrorMessage } from '@/shared/lib/error-message';
-import { Button } from '@/shared/ui/button';
+import { Button, buttonVariants } from '@/shared/ui/button';
 import { QueryErrorNotice } from '@/shared/ui/error-notice';
 import { SearchableSelect } from '@/shared/ui/searchable-select';
 import { normalizeRoleName } from '../model/role-name';
-import { AdminPage } from './AdminLayout';
+import { AdminPage, AdminPageHeader } from './AdminLayout';
 import { RemoveRoleDialog } from './roles/RemoveRoleDialog';
 import { RoleAssignmentBoard } from './roles/RoleAssignmentBoard';
 import { RoleEditorDialog } from './roles/RoleEditorDialog';
@@ -132,6 +132,15 @@ export function RoadmapRolesPage({ initialProjectId }: { initialProjectId?: stri
 
   return (
     <AdminPage>
+      <AdminPageHeader
+        title="Роли и участники"
+        actions={
+          <Link href={routes.roadmap} className={buttonVariants({ variant: 'outline', className: 'focus-visible:ring-ring' })}>
+            <ArrowLeft className="size-4" aria-hidden="true" />
+            К плану
+          </Link>
+        }
+      />
       <QueryErrorNotice
         title={addError ? 'Не удалось добавить роль' : 'Не удалось загрузить роли и проекты'}
         queries={[rolesQuery, projectsQuery, catalogQuery]}

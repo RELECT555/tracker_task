@@ -252,6 +252,10 @@ export async function runDemoOperation(state: DemoState, operation: Operation): 
     case 'testIntegrationConnection': throw new Error('Подключение Azure DevOps недоступно в демо. Данные проекта уже загружены.');
     case 'writeBackOverview': return { settings: DEMO_WRITE_BACK, projects: [], errors: [] };
     case 'syncSettingsV2': return clone(DEMO_SYNC_SETTINGS);
+    // The demo has no Azure sync to watch: reads are empty, writes are no-ops.
+    case 'notifications': return { items: [], nextCursor: null };
+    case 'notificationSummary': return { unread: 0, activeUnread: 0 };
+    case 'markNotificationRead': case 'markAllNotificationsRead': return null;
     case 'workItemTypes': return [] as RoadmapWorkItemType[];
     case 'azureFields': return [] as RoadmapAzureField[];
     case 'azureStates': return [] as RoadmapAzureState[];

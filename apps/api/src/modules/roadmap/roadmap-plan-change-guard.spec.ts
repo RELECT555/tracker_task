@@ -13,11 +13,11 @@ import { join, relative, sep } from 'node:path';
 /** `<file relative to modules/>#<method>` of places whose writes reach the journal. */
 const LOGGED = new Set([
   // Paths 1, 2: PUT /roadmap/allocations and AI apply.
-  'roadmap/roadmap.service.ts#saveAllocation',
+  'roadmap/roadmap-allocation.service.ts#saveAllocation',
   // Path 3: monthly split of a quarter.
-  'roadmap/roadmap.service.ts#saveAllocationQuarter',
+  'roadmap/roadmap-allocation.service.ts#saveAllocationQuarter',
   // Path 4: rebalance.
-  'roadmap/roadmap.service.ts#rebalanceAllocations',
+  'roadmap/roadmap-allocation.service.ts#rebalanceAllocations',
   // Path 5: role hours of a Feature cell, divided between the role allocations.
   'roadmap/roadmap-azure-sync.service.ts#setRoleHours',
   // Path 6: DELETE /roadmap/allocations/:id.
@@ -148,7 +148,7 @@ describe('plan change log guard', () => {
   it('finds the known write sites (the scan itself works)', () => {
     expect(sites.length).toBeGreaterThan(0);
     expect(sites.map((site) => site.key)).toContain(
-      'roadmap/roadmap.service.ts#saveAllocation',
+      'roadmap/roadmap-allocation.service.ts#saveAllocation',
     );
   });
 

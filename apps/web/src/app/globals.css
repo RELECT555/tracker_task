@@ -39,14 +39,6 @@
   --status-progress-fg: 243 55% 35%;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
 .dark {
   /* Content — soft charcoal (not pure black) */
   /* Surface steps: page 3.5% < field 5.5% < card 8% < popover 11% < muted 13% < secondary 15% < accent 17% */

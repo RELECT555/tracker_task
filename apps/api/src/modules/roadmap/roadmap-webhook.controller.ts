@@ -7,9 +7,9 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import {
-  RoadmapAzureSyncService,
+  RoadmapAzureWebhookService,
   type AzureWebhookPayload,
-} from './roadmap-azure-sync.service';
+} from './roadmap-azure-webhook.service';
 import {
   AZURE_WEBHOOK_SECRET_HEADER,
   RoadmapIntegrationService,
@@ -20,7 +20,7 @@ import {
 export class RoadmapWebhookController {
   constructor(
     private readonly integration: RoadmapIntegrationService,
-    private readonly azureSync: RoadmapAzureSyncService,
+    private readonly webhooks: RoadmapAzureWebhookService,
   ) {}
 
   @Post('azure-devops')
@@ -32,6 +32,6 @@ export class RoadmapWebhookController {
     if (!(await this.integration.verifyWebhookSecret(secret))) {
       throw new UnauthorizedException('Invalid Roadmap webhook secret');
     }
-    return this.azureSync.handleWebhook(payload);
+    return this.webhooks.handleWebhook(payload);
   }
 }

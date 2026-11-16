@@ -22,7 +22,8 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { AdminRoleGuard } from '../admin/presentation/guards/admin-role.guard';
-import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import { RoadmapAzureSyncStatusService } from './roadmap-azure-sync-status.service';
+import { RoadmapAzureProcessService } from './roadmap-azure-process.service';
 import { RoadmapIntegrationService } from './roadmap-integration.service';
 import { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 
@@ -65,7 +66,8 @@ class TestAzureDevOpsSettingsDto {
 export class RoadmapSettingsController {
   constructor(
     private readonly integration: RoadmapIntegrationService,
-    private readonly azureSync: RoadmapAzureSyncService,
+    private readonly syncStatus: RoadmapAzureSyncStatusService,
+    private readonly azureProcess: RoadmapAzureProcessService,
     private readonly importer: RoadmapWorkItemImportService,
   ) {}
 
@@ -103,13 +105,13 @@ export class RoadmapSettingsController {
 
   @Get('azure-devops/write-back/overview')
   writeBackOverview() {
-    return this.azureSync.overview();
+    return this.syncStatus.overview();
   }
 
   @Get('azure-devops/work-item-types')
   workItemTypes(@Query('projectId') projectId: string) {
     if (!projectId) throw new BadRequestException('Укажите projectId');
-    return this.azureSync.workItemTypes(projectId);
+    return this.azureProcess.workItemTypes(projectId);
   }
 
   @Get('azure-devops/fields')
@@ -120,7 +122,7 @@ export class RoadmapSettingsController {
   ) {
     if (!projectId || !workItemType)
       throw new BadRequestException('Укажите projectId и workItemType');
-    return this.azureSync.fields(projectId, workItemType, refresh === '1');
+    return this.azureProcess.fields(projectId, workItemType, refresh === '1');
   }
 
   @Get('azure-devops/states')
@@ -130,12 +132,12 @@ export class RoadmapSettingsController {
   ) {
     if (!projectId || !workItemType)
       throw new BadRequestException('Укажите projectId и workItemType');
-    return this.azureSync.states(projectId, workItemType);
+    return this.azureProcess.states(projectId, workItemType);
   }
 
   @Post('azure-devops/write-back/check/:projectId')
   checkWriteBack(@Param('projectId') projectId: string) {
-    return this.azureSync.checkProject(projectId);
+    return this.syncStatus.checkProject(projectId);
   }
 
   @Get('azure-devops/webhook-secret')

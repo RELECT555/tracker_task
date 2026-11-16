@@ -372,7 +372,7 @@ function ProjectPlanDetails({
               aria-expanded={expanded}
               data-plan-toggle
               onClick={() => onToggleEpic(key)}
-              className="-mt-1 size-7 text-muted-foreground hover:text-foreground motion-reduce:transition-none motion-reduce:active:scale-100"
+              className="-mt-1 size-7 text-muted-foreground hover:text-foreground motion-reduce:transition-none"
             >{expanded ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronRight aria-hidden="true" className="size-4" />}</Button> : <span aria-hidden="true" />}
             <AzureWorkItemIcon type={item.type} className="mt-0.5" />
             <div data-plan-name className="min-w-0">
@@ -431,7 +431,7 @@ function ProjectPlanDetails({
               aria-expanded={expanded}
               data-plan-toggle
               onClick={() => onToggleEpic(key)}
-              className="-mt-1 size-7 text-muted-foreground hover:text-foreground motion-reduce:transition-none motion-reduce:active:scale-100"
+              className="-mt-1 size-7 text-muted-foreground hover:text-foreground motion-reduce:transition-none"
             >{expanded ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronRight aria-hidden="true" className="size-4" />}</Button>
             <Layers aria-hidden="true" className="mt-0.5 size-4 text-muted-foreground" />
             <div data-plan-name className="min-w-0">
@@ -674,7 +674,7 @@ export function AllProjectsPlanTable({
                     disabled={!expanded && !summary?.canExpand}
                     data-plan-toggle
                     onClick={() => setExpandedProjects((current) => toggle(current, project.id))}
-                    className="-mt-1 size-7 text-muted-foreground hover:text-foreground motion-reduce:transition-none motion-reduce:active:scale-100"
+                    className="-mt-1 size-7 text-muted-foreground hover:text-foreground motion-reduce:transition-none"
                   >{expanded ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronRight aria-hidden="true" className="size-4" />}</Button>
                   <FolderOpen aria-hidden="true" className="mt-0.5 size-4 text-primary" />
                   <div data-plan-name className="min-w-0">

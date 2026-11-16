@@ -1,5 +1,7 @@
 import { apiFetch } from '@/shared/api/client';
-import type { RoadmapPortfolio, RoadmapPortfolioInput, SyncSettingsV2 } from '@tracker/shared';
+import type {
+  RoadmapNotificationPage, RoadmapNotificationSummary, RoadmapPortfolio, RoadmapPortfolioInput, SyncSettingsV2,
+} from '@tracker/shared';
 import { isRoadmapDemoMode, roadmapDemoApi } from './roadmapDemo';
 
 export interface AzureProject {
@@ -101,6 +103,8 @@ export interface RoadmapWorkItem {
   /** Completed Work stored on this card, before descendant roll-up. */
   ownActualHours?: number | string | null;
   azureCustomFields: Record<string, unknown> | null;
+  /** Azure DevOps iteration, e.g. "Project\2026\Q4"; null for cards imported before it was stored. */
+  iterationPath?: string | null;
   allocations: RoadmapAllocation[];
 }
 
@@ -297,6 +301,12 @@ const liveRoadmapApi = {
   webhookSecret: () => apiFetch<{ secret: string }>('/roadmap/settings/azure-devops/webhook-secret'),
   rotateWebhookSecret: () =>
     apiFetch<{ secret: string }>('/roadmap/settings/azure-devops/webhook-secret/rotate', { method: 'POST', body: '{}' }),
+  notifications: (cursor?: string) =>
+    apiFetch<RoadmapNotificationPage>(`/roadmap/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
+  notificationSummary: () => apiFetch<RoadmapNotificationSummary>('/roadmap/notifications/summary'),
+  markNotificationRead: (id: string) =>
+    apiFetch<void>(`/roadmap/notifications/${encodeURIComponent(id)}/read`, { method: 'POST', body: '{}' }),
+  markAllNotificationsRead: () => apiFetch<void>('/roadmap/notifications/read-all', { method: 'POST', body: '{}' }),
   projects: () => apiFetch<RoadmapProjectsResult>('/roadmap/projects'),
   localProjects: () => apiFetch<RoadmapProjectsResult>('/roadmap/projects/local'),
   projectSummaries: (input: RoadmapPortfolioInput, signal?: AbortSignal) =>
@@ -311,6 +321,9 @@ const liveRoadmapApi = {
     ),
   plan: (projectId: string, includeChildEpics = false) =>
     apiFetch<RoadmapProjectPlan>(`/roadmap/projects/${projectId}/plan${includeChildEpics ? '?includeChildEpics=1' : ''}`),
+  /** Azure iteration of a `YYYY-Qn` quarter; null means the plan is not filtered by iteration. */
+  quarterIteration: (projectId: string, quarterKey: string, signal?: AbortSignal) =>
+    apiFetch<{ iterationPath: string | null }>(`/roadmap/projects/${encodeURIComponent(projectId)}/iteration?quarterKey=${encodeURIComponent(quarterKey)}`, { signal }),
   createWorkItem: (externalProjectId: string, input: CreateAzureWorkItemInput) =>
     apiFetch<CreatedAzureWorkItem>(`/roadmap/azure-projects/${encodeURIComponent(externalProjectId)}/work-items`, {
       method: 'POST',

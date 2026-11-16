@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { LoginDto } from '@tracker/shared';
 import { authApi } from '@/entities/user/api/authApi';
-import { AUTH_EXPIRED_EVENT } from '@/shared/lib/auth-session';
-import { clearTokens, getAccessToken, setTokens } from '@/shared/lib/auth-storage';
+import { AUTH_EXPIRED_EVENT, isEntraProvider, loadAuthProvider, type AuthProvider } from '@/shared/lib/auth';
+import { setTokens } from '@/shared/lib/auth-storage';
 import { ApiError } from '@/shared/api/client';
 import { routes } from '@/shared/config/routes';
 
@@ -14,9 +14,24 @@ export function useAuth() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const [hasToken, setHasToken] = useState<boolean | null>(null);
+  const [provider, setProvider] = useState<AuthProvider | null>(null);
+  const [configError, setConfigError] = useState<unknown>(null);
 
   useEffect(() => {
-    setHasToken(Boolean(getAccessToken()));
+    let active = true;
+    loadAuthProvider().then(
+      (loaded) => {
+        if (!active) return;
+        setProvider(loaded);
+        setHasToken(loaded.getSessionId() !== null);
+      },
+      (error: unknown) => {
+        if (active) setConfigError(error);
+      },
+    );
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -61,7 +76,7 @@ export function useAuth() {
   });
 
   const logout = () => {
-    clearTokens();
+    void provider?.signOut();
     setHasToken(false);
     queryClient.clear();
     router.push(routes.login);
@@ -72,12 +87,17 @@ export function useAuth() {
     user: meQuery.data?.user ?? null,
     isLoading: hasToken === null || (hasToken && meQuery.isLoading),
     hasToken,
+    provider: provider?.kind ?? null,
+    configError,
+    signInError: isEntraProvider(provider) ? provider.signInError : null,
     profileError: meQuery.error,
     isAuthenticated: hasToken === true && Boolean(meQuery.data?.user),
     login: (dto: LoginDto, redirectTo?: string) =>
       loginMutation.mutateAsync({ dto, redirectTo }),
     loginError: loginMutation.error,
     isLoggingIn: loginMutation.isPending,
+    signInWithMicrosoft: (redirectTo: string) =>
+      isEntraProvider(provider) ? provider.signInRedirect(redirectTo) : Promise.resolve(),
     logout,
   };
 }

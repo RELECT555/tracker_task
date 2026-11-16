@@ -1,4 +1,8 @@
-import type { RoadmapAlertDetails, RoadmapAlertKind } from '@tracker/shared';
+import type {
+  RoadmapAlertDetails,
+  RoadmapAlertKind,
+  SyncProblemAction,
+} from '@tracker/shared';
 
 const REDACTED = '[redacted]';
 const ALERT_BODY_MAX = 300;
@@ -74,8 +78,11 @@ export function formatAlert(
 /** Relative web-app URL an alert leads to; routes are kept here so they live in one place. */
 export function alertLink(
   kind: RoadmapAlertKind,
-  _projectId: string | null,
+  projectId: string | null,
 ): string {
+  // Every kind currently links to a global admin tab; the project id is kept in
+  // the signature for a future per-project plan link.
+  void projectId;
   switch (kind) {
     case 'azure_auth':
       return `${INTEGRATIONS_PAGE}#azure-connection`;
@@ -86,4 +93,52 @@ export function alertLink(
     case 'import_failing':
       return `${INTEGRATIONS_PAGE}#azure-projects`;
   }
+}
+
+const ALERT_HINTS: Record<RoadmapAlertKind, string> = {
+  sync_errors:
+    'Откройте назначения с ошибкой, проверьте текст ошибки и отправьте снова.',
+  sync_conflicts:
+    'Назначение изменили вручную в Azure. Решите, чья версия верна, и отправьте снова или примите значение из Azure.',
+  import_failing:
+    'Проверьте, что у PAT есть доступ к проекту, и обновите проект из Azure.',
+  azure_auth:
+    'Azure не принимает PAT. Выпустите новый PAT и сохраните его в подключении.',
+  webhook_silent:
+    'Изменения в Azure находит только опрос. Проверьте service hook в Azure DevOps.',
+};
+
+const ADMIN_ACTION_LABELS: Record<RoadmapAlertKind, string> = {
+  sync_errors: 'Интеграции → Проекты',
+  sync_conflicts: 'Интеграции → Проекты',
+  import_failing: 'Интеграции → Проекты',
+  azure_auth: 'Подключение',
+  webhook_silent: 'Webhook',
+};
+
+const GLOBAL_KINDS: ReadonlySet<RoadmapAlertKind> = new Set([
+  'azure_auth',
+  'webhook_silent',
+]);
+
+/** «Что сделать» for a sync problem (sync problems page spec §6). */
+export function alertHint(kind: RoadmapAlertKind): string {
+  return ALERT_HINTS[kind];
+}
+
+/** The button of a sync problem; planners cannot open admin pages, so they get the plan. */
+export function alertAction(
+  kind: RoadmapAlertKind,
+  projectId: string | null,
+  isAdmin: boolean,
+): SyncProblemAction | null {
+  if (isAdmin) {
+    return {
+      label: ADMIN_ACTION_LABELS[kind],
+      link: alertLink(kind, projectId),
+    };
+  }
+  return GLOBAL_KINDS.has(kind)
+    ? null
+    : { label: 'Открыть план', link: '/roadmap' };
 }

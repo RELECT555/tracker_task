@@ -43,7 +43,14 @@ import { AdminRoleGuard } from '../admin/presentation/guards/admin-role.guard';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import { planChangeContext, type PlanChangeQuery } from './roadmap-plan-change';
 import { RoadmapPlanChangeService } from './roadmap-plan-change.service';
+import { RoadmapAzureSyncStatusService } from './roadmap-azure-sync-status.service';
+import { RoadmapAzureProcessService } from './roadmap-azure-process.service';
+import { RoadmapAzureFeatureFieldsService } from './roadmap-azure-feature-fields.service';
 import { RoadmapService } from './roadmap.service';
+import { RoadmapProjectImportService } from './roadmap-project-import.service';
+import { RoadmapPeopleService } from './roadmap-people.service';
+import { RoadmapRolesService } from './roadmap-roles.service';
+import { RoadmapAllocationService } from './roadmap-allocation.service';
 import {
   ROADMAP_CREATE_WORK_ITEM_TYPES,
   RoadmapWorkItemCreateService,
@@ -189,6 +196,13 @@ export class RoadmapController {
     private readonly access: RoadmapProjectAccessService,
     private readonly workItemCard: RoadmapWorkItemCardService,
     private readonly allocationAzure: RoadmapAllocationAzureService,
+    private readonly projectImport: RoadmapProjectImportService,
+    private readonly peopleService: RoadmapPeopleService,
+    private readonly rolesService: RoadmapRolesService,
+    private readonly allocations: RoadmapAllocationService,
+    private readonly syncStatus: RoadmapAzureSyncStatusService,
+    private readonly azureProcess: RoadmapAzureProcessService,
+    private readonly featureFields: RoadmapAzureFeatureFieldsService,
     private readonly planChanges: RoadmapPlanChangeService,
   ) {}
 
@@ -266,7 +280,7 @@ export class RoadmapController {
   @Get('projects')
   projects(@CurrentUser() actor: AuthenticatedUser) {
     return actor.isAdmin
-      ? this.roadmap.listAzureProjects()
+      ? this.projectImport.listAzureProjects()
       : this.access.localProjects(actor.email);
   }
 
@@ -290,7 +304,7 @@ export class RoadmapController {
   @Post('projects/:externalId/sync')
   @UseGuards(AdminRoleGuard)
   syncProject(@Param('externalId') externalId: string) {
-    return this.roadmap.syncProject(externalId);
+    return this.projectImport.syncProject(externalId);
   }
 
   @Post('projects/:projectId/azure-push')
@@ -327,7 +341,7 @@ export class RoadmapController {
     @Param('projectId', ParseUUIDPipe) projectId: string,
   ) {
     await this.access.require(actor, { projectId }, 'edit');
-    return this.azureSync.previewProject(actor.id, projectId);
+    return this.syncStatus.previewProject(actor.id, projectId);
   }
 
   @Get('projects/:projectId/plan')
@@ -344,6 +358,17 @@ export class RoadmapController {
       queryFlag(includeChildEpics),
     );
     return { ...plan, canEditPlan };
+  }
+
+  /** Azure iteration of a quarter; the plan shows the cards of this iteration. */
+  @Get('projects/:projectId/iteration')
+  async projectQuarterIteration(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Query('quarterKey') quarterKey?: string,
+  ) {
+    await this.access.require(actor, { projectId }, 'read');
+    return this.azureProcess.findQuarterIteration(projectId, quarterKey ?? '');
   }
 
   @Get('projects/:projectId/fact')
@@ -364,7 +389,7 @@ export class RoadmapController {
   @Get('people')
   @UseGuards(AdminRoleGuard)
   people() {
-    return this.roadmap.listAzurePeople();
+    return this.peopleService.listAzurePeople();
   }
 
   @Get('roles')
@@ -373,7 +398,7 @@ export class RoadmapController {
     @Query('projectId', ParseUUIDPipe) projectId: string,
   ) {
     await this.access.require(actor, { projectId }, 'read');
-    return this.roadmap.listRoles(projectId);
+    return this.rolesService.listRoles(projectId);
   }
 
   @Put('allocations')
@@ -382,7 +407,7 @@ export class RoadmapController {
     @Body() dto: SaveAllocationDto,
   ) {
     await this.access.require(actor, { workItemId: dto.workItemId }, 'edit');
-    const saved = await this.roadmap.saveAllocation(
+    const saved = await this.allocations.saveAllocation(
       dto,
       { skipSync: dto.createTask },
       planChangeContext({ id: actor.id, email: actor.email }, 'plan'),
@@ -423,7 +448,7 @@ export class RoadmapController {
       { allocationIds: dto.allocationIds },
       'edit',
     );
-    return this.roadmap.rebalanceAllocations(
+    return this.allocations.rebalanceAllocations(
       dto.allocationIds,
       planChangeContext({ id: actor.id, email: actor.email }, 'plan'),
     );
@@ -485,7 +510,7 @@ export class RoadmapController {
         planChangeContext({ id: actor.id, email: actor.email }, 'plan'),
       );
     // The deleted hours leave the role field of the feature too, as the Task leaves Azure DevOps.
-    await this.azureSync.refreshFeatureField(workItemId, roleId);
+    await this.featureFields.refreshFeatureField(workItemId, roleId);
     return result;
   }
 
@@ -507,7 +532,7 @@ export class RoadmapController {
     @Body() dto: SaveQuarterAllocationDto,
   ) {
     await this.access.require(actor, { allocationIds: [allocationId] }, 'edit');
-    return this.roadmap.saveAllocationQuarter(
+    return this.allocations.saveAllocationQuarter(
       allocationId,
       quarterKey,
       dto.months,

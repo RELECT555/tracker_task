@@ -1,13 +1,11 @@
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import type { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
-import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
-import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import {
   AzureDevOpsHttpError,
   type RoadmapIntegrationService,
 } from './roadmap-integration.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
-import { RoadmapService } from './roadmap.service';
+import { RoadmapProjectImportService } from './roadmap-project-import.service';
 
 const cachedProject = {
   id: 'roadmap-id',
@@ -32,13 +30,11 @@ function serviceWithAzureError(
   };
   return {
     error,
-    service: new RoadmapService(
+    service: new RoadmapProjectImportService(
       prisma as unknown as PrismaService,
       integration as unknown as RoadmapIntegrationService,
       {} as RoadmapWorkItemImportService,
-      {} as RoadmapAzureSyncService,
       {} as RoadmapAzureCatalogService,
-      {} as RoadmapPlanChangeService,
     ),
   };
 }

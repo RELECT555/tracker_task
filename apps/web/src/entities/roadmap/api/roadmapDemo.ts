@@ -19,7 +19,9 @@ import type {
   RoadmapAzureState,
   RoadmapWorkItemType,
 } from './roadmapApi';
-import type { RoadmapPortfolio, RoadmapPortfolioInput, SyncSettingsV2 } from '@tracker/shared';
+import type {
+  RoadmapNotificationPage, RoadmapNotificationSummary, RoadmapPortfolio, RoadmapPortfolioInput, SyncSettingsV2,
+} from '@tracker/shared';
 import { apiFetch } from '@/shared/api/client';
 
 type DemoMethod =
@@ -29,7 +31,8 @@ type DemoMethod =
   | 'updateRole' | 'setRoleMembers' | 'setRoleDefaultPerson' | 'deleteRole' | 'saveAllocation'
   | 'saveAllocationQuarter' | 'rebalanceAllocations' | 'saveWriteBackSettings' | 'writeBackOverview' | 'checkWriteBack'
   | 'syncSettingsV2' | 'saveSyncSettingsV2' | 'workItemTypes' | 'azureFields' | 'azureStates'
-  | 'webhookSecret' | 'rotateWebhookSecret' | 'previewAzurePush' | 'pushProjectToAzure' | 'pushAllocationToAzure';
+  | 'webhookSecret' | 'rotateWebhookSecret' | 'previewAzurePush' | 'pushProjectToAzure' | 'pushAllocationToAzure'
+  | 'notifications' | 'notificationSummary' | 'markNotificationRead' | 'markAllNotificationsRead';
 
 async function call<T>(method: DemoMethod, args: unknown[] = [], signal?: AbortSignal): Promise<T> {
   const response = await apiFetch<{ data: T }>('/api/roadmap-demo', {
@@ -59,12 +62,18 @@ export const roadmapDemoApi = {
   azureStates: (projectId: string, workItemType: string) => call<RoadmapAzureState[]>('azureStates', [projectId, workItemType]),
   webhookSecret: () => call<{ secret: string }>('webhookSecret'),
   rotateWebhookSecret: () => call<{ secret: string }>('rotateWebhookSecret'),
+  notifications: (cursor?: string) => call<RoadmapNotificationPage>('notifications', cursor ? [cursor] : []),
+  notificationSummary: () => call<RoadmapNotificationSummary>('notificationSummary'),
+  markNotificationRead: (id: string) => call<null>('markNotificationRead', [id]).then(() => undefined),
+  markAllNotificationsRead: () => call<null>('markAllNotificationsRead').then(() => undefined),
   projects: () => call<RoadmapProjectsResult>('projects'),
   localProjects: () => call<RoadmapProjectsResult>('projects'),
   projectSummaries: (input: RoadmapPortfolioInput, signal?: AbortSignal) =>
     call<RoadmapPortfolio>('projectSummaries', [input], signal),
   syncProject: (project: AzureProject) => call<RoadmapProjectSyncResult>('syncProject', [project]),
   plan: (projectId: string) => call<RoadmapProjectPlan>('plan', [projectId]),
+  // Demo cards have no Azure iterations, so the demo plan is never filtered by iteration.
+  quarterIteration: (): Promise<{ iterationPath: string | null }> => Promise.resolve({ iterationPath: null }),
   createWorkItem: (): Promise<CreatedAzureWorkItem> =>
     Promise.reject(new Error('Создание карточек в Azure DevOps недоступно в демо.')),
   previewAzurePush: (projectId: string) => call<RoadmapAzurePushPreview>('previewAzurePush', [projectId]),

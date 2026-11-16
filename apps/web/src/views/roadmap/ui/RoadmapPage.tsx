@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { aggregateRoadmapSummaries, azureRoleEstimate, getRoadmapFactRoots, getRoadmapRolePlan, getRoadmapSummary } from '@tracker/shared';
+import { aggregateRoadmapSummaries, azureRoleEstimate, getRoadmapFactRoots, getRoadmapIterationVisibility, getRoadmapRolePlan, getRoadmapSummary } from '@tracker/shared';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { AlertCircle, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Cloud, Equal, History, Layers, ListChecks, Maximize2, Minimize2, Pencil, Plus, RefreshCw, UserRoundPlus, Users, X } from 'lucide-react';
@@ -110,8 +110,8 @@ function memberParticipation(role: RoadmapRole, personExternalId: string) {
 }
 
 function AzureSyncMark({ allocation }: { allocation: RoadmapAllocation }) {
-  if (allocation.azureSyncStatus === 'pending') return <RefreshCw className="h-3 w-3 shrink-0 animate-spin text-amber-600 dark:text-amber-300" aria-label="Отправляется в Azure DevOps" />;
-  if (allocation.azureSyncStatus === 'sending') return <RefreshCw className="h-3 w-3 shrink-0 animate-spin text-sky-600 dark:text-sky-300" aria-label="Задача отправляется в Azure DevOps" />;
+  if (allocation.azureSyncStatus === 'pending') return <RefreshCw className="h-3 w-3 shrink-0 motion-safe:animate-spin text-amber-600 dark:text-amber-300" aria-label="Отправляется в Azure DevOps" />;
+  if (allocation.azureSyncStatus === 'sending') return <RefreshCw className="h-3 w-3 shrink-0 motion-safe:animate-spin text-sky-600 dark:text-sky-300" aria-label="Задача отправляется в Azure DevOps" />;
   if (allocation.azureSyncStatus === 'error') return <AlertCircle className="h-3 w-3 shrink-0 text-destructive" aria-label="Ошибка отправки в Azure DevOps" />;
   if (allocation.azureSyncStatus === 'conflict') return <AlertTriangle className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-300" aria-label="Конфликт с изменением в Azure DevOps" />;
   if (allocation.azureSyncStatus === 'synced') return null;
@@ -943,8 +943,29 @@ export function RoadmapPage() {
     !overviewLoading && !projectsQuery.isError && !overviewProjects.length ? EMPTY_OVERVIEW : undefined
   );
   const plannedItems = useMemo(() => summary?.items ?? [], [summary]);
-  const epics = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'epic'), [plannedItems]);
-  const features = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'feature'), [plannedItems]);
+  // Rows follow the quarter's Azure iteration. Until it loads, or when Azure has none, every card is shown.
+  const quarterIterationQuery = useQuery({
+    queryKey: ['roadmap', 'iteration', roadmapProjectId, currentQuarterKey],
+    queryFn: ({ signal }) => roadmapApi.quarterIteration(roadmapProjectId, currentQuarterKey, signal),
+    enabled: Boolean(plan && !isAllProjects),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const quarterIterationPath = quarterIterationQuery.data?.iterationPath ?? null;
+  // Azure files a card created here under its default iteration; it must not vanish from the table it was created in.
+  const [createdExternalIds, setCreatedExternalIds] = useState<ReadonlySet<string>>(() => new Set());
+  // Lets a planner find cards of other iterations (e.g. work carried over but not moved in Azure) to plan them.
+  const [showAllCards, setShowAllCards] = useState(false);
+  const iteration = useMemo(
+    () => getRoadmapIterationVisibility(plannedItems, quarterIterationPath, summary?.activeItemIds ?? new Set<string>(), createdExternalIds, showAllCards),
+    [plannedItems, quarterIterationPath, summary, createdExternalIds, showAllCards],
+  );
+  const hiddenByIteration = iteration.filtered && plannedItems.some((item) => ['epic', 'feature'].includes(item.type.toLowerCase()));
+  const epics = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'epic' && iteration.visibleIds.has(item.id)), [plannedItems, iteration]);
+  const features = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'feature' && iteration.visibleIds.has(item.id)), [plannedItems, iteration]);
+  const outsideIterationBadge = (item: RoadmapWorkItem, className?: string) => iteration.outsideIds.has(item.id)
+    ? <span data-plan-outside-iteration title={item.iterationPath ? `Итерация: ${item.iterationPath}` : 'Итерация не задана'} className={cn('justify-self-start rounded-full bg-amber-500/10 px-2 py-px text-[10.5px] leading-4 whitespace-nowrap text-amber-800 ring-1 ring-inset ring-amber-500/30 dark:text-amber-200', className)}>вне итерации</span>
+    : null;
   const stateOptions = useMemo(() => Array.from(new Set([...epics, ...features].map((item) => item.state?.trim()).filter((state): state is string => Boolean(state)))).sort((a, b) => a.localeCompare(b, 'ru')), [epics, features]);
   const stateCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1080,7 +1101,7 @@ export function RoadmapPage() {
                 disabled={!childCount}
                 onClick={onToggle}
                 data-plan-toggle
-                className="-mt-1 size-7 text-muted-foreground hover:text-foreground focus-visible:ring-ring motion-reduce:transition-none motion-reduce:active:scale-100"
+                className="-mt-1 size-7 text-muted-foreground hover:text-foreground focus-visible:ring-ring motion-reduce:transition-none"
               >
                 {collapsed ? <ChevronRight aria-hidden="true" className="size-4" /> : <ChevronDown aria-hidden="true" className="size-4" />}
               </Button>
@@ -1095,6 +1116,7 @@ export function RoadmapPage() {
                   <span className="justify-self-start rounded-full px-2 py-px text-[10.5px] leading-4 whitespace-nowrap tabular-nums text-muted-foreground ring-1 ring-inset ring-border">
                     {childCount} {featureCountForm === 'one' ? 'фича' : featureCountForm === 'few' ? 'фичи' : 'фич'}
                   </span>
+                  {outsideIterationBadge(item, 'col-span-3')}
                 </div>
               </div>
               {canCreateWorkItem ? <IconButton
@@ -1121,6 +1143,7 @@ export function RoadmapPage() {
               <div data-plan-meta className="mt-1 grid grid-cols-[3.25rem_auto] items-center justify-start gap-x-1.5 gap-y-1 pl-6 text-[11px] text-muted-foreground">
                 <span className="whitespace-nowrap tabular-nums" title={`Feature #${item.externalId}`}><span className="sr-only">Feature </span>#{item.externalId}</span>
                 <WorkItemStateBadge state={item.state} variant="dot" className="justify-self-start" />
+                {outsideIterationBadge(item, 'col-span-2')}
               </div>
             </div>
           )}
@@ -1241,7 +1264,7 @@ export function RoadmapPage() {
               aria-label={`${standaloneExpanded ? 'Свернуть' : 'Развернуть'}: ${label}`}
               onClick={() => setStandaloneExpanded((value) => !value)}
               data-plan-toggle
-              className="-mt-1 size-7 text-muted-foreground hover:text-foreground focus-visible:ring-ring motion-reduce:transition-none motion-reduce:active:scale-100"
+              className="-mt-1 size-7 text-muted-foreground hover:text-foreground focus-visible:ring-ring motion-reduce:transition-none"
             >
               {standaloneExpanded ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronRight aria-hidden="true" className="size-4" />}
             </Button>
@@ -1526,6 +1549,15 @@ export function RoadmapPage() {
                     {view === 'periods' && focusMode ? <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => expandEverything(!allEpicsExpanded)}>{allEpicsExpanded ? 'Свернуть всё' : 'Развернуть всё'}</Button> : null}
                     {view === 'periods' ? <Button type="button" variant={showUnassignedPeriods ? 'secondary' : 'outline'} size="sm" className="h-8" onClick={() => setShowUnassignedPeriods((value) => !value)}>{showUnassignedPeriods ? 'Скрыть без назначений' : 'Показать без назначений'}</Button> : null}
                     {periodControls}
+                    {iteration.filtered ? <div role="group" aria-label="Итерация" className={switchGroupClass}>
+                      <RoadmapToolbarSwitch
+                        label="Все карточки"
+                        icon={<Layers />}
+                        hint={`Показать и карточки других итераций, у которых нет плана или факта в периоде. Итерация квартала: ${quarterIterationPath}. Карточки вне неё отмечены «вне итерации».`}
+                        checked={showAllCards}
+                        onChange={setShowAllCards}
+                      />
+                    </div> : null}
                     {appearanceSettings}
                     {roadmapProjectId ? <IconButton
                       variant="outline"
@@ -1572,6 +1604,10 @@ export function RoadmapPage() {
                   {!demoMode && monthlyFactQuery.isError ? <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => void monthlyFactQuery.refetch()}>Повторить</Button> : null}
                 </div> : null}
 
+                {!demoMode && configured && quarterIterationQuery.isSuccess && quarterIterationPath === null ? <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+                  <p role="status">Итерация квартала в Azure не найдена — показаны все карточки</p>
+                </div> : null}
+
                 {roles.length > 0 && needsPeopleSync && (configured || (canEditPlan && !selectedMonth)) ? (
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
                     <span>Чтобы назначать участников, синхронизируйте список пользователей Azure DevOps.</span>
@@ -1581,7 +1617,9 @@ export function RoadmapPage() {
 
                 {!epics.length && !features.length ? (
                   <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-                    <p>В проекте пока нет эпиков или фич.{canImportProject ? ' Загрузите проект из Azure DevOps.' : ''}</p>
+                    <p>{hiddenByIteration
+                      ? `В итерации ${quarterIterationPath} пока нет эпиков и фич, и у карточек других итераций нет плана или факта в этом периоде.`
+                      : `В проекте пока нет эпиков или фич.${canImportProject ? ' Загрузите проект из Azure DevOps.' : ''}`}</p>
                     {canCreateWorkItem ? <Button ref={createEpicTrigger} type="button" variant="outline" size="sm" className="mt-4" aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)}><Plus aria-hidden="true" className="size-4" />Создать эпик</Button> : null}
                   </div>
                 ) : (
@@ -1763,6 +1801,7 @@ export function RoadmapPage() {
                   initialType={createTarget.type}
                   parentExternalId={createTarget.parentExternalId}
                   onCreated={(item, parentExternalId) => {
+                    setCreatedExternalIds((current) => new Set(current).add(item.externalId));
                     if (item.type !== 'Feature') return;
                     if (!parentExternalId) {
                       setStandaloneExpanded(true);

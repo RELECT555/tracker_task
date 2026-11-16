@@ -4,14 +4,15 @@ import { AgentService } from '../agent/agent.service';
 import type { PlanInput } from '../agent/agent-plan';
 import type { IsActiveAdminHandler } from '../identity/application/queries/is-active-admin.handler';
 import { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
-import type { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
-import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import { RoadmapAllocationService } from './roadmap-allocation.service';
+import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import { createAzureSyncServices } from './roadmap-azure-sync.testing';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import { planChangeContext } from './roadmap-plan-change';
 import { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import type { RoadmapProjectAccessService } from './roadmap-project-access.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
-import { RoadmapService } from './roadmap.service';
+import type { RoadmapService } from './roadmap.service';
 
 type Period = {
   id?: string;
@@ -282,15 +283,12 @@ function setup(initial: Row[] = []) {
         run(tx as unknown as Prisma.TransactionClient),
     ),
   };
-  const service = new RoadmapService(
+  const service = new RoadmapAllocationService(
     prisma as unknown as PrismaService,
-    {} as RoadmapIntegrationService,
-    {} as RoadmapWorkItemImportService,
     {
       pendingUpdate: { azureSyncStatus: 'pending' },
       onAllocationSaved: jest.fn(),
     } as unknown as RoadmapAzureSyncService,
-    {} as RoadmapAzureCatalogService,
     new RoadmapPlanChangeService({} as never),
   );
   /** Every journal row written, in order. */
@@ -316,7 +314,7 @@ function azureSetup(initial: Row[], settings: Record<string, unknown> = {}) {
     request: jest.fn().mockResolvedValue(undefined),
     requestJson: jest.fn(),
   };
-  const sync = new RoadmapAzureSyncService(
+  const { sync, featureFields } = createAzureSyncServices(
     env.prisma as unknown as PrismaService,
     integration as unknown as RoadmapIntegrationService,
     {} as RoadmapWorkItemImportService,
@@ -331,7 +329,7 @@ function azureSetup(initial: Row[], settings: Record<string, unknown> = {}) {
     {} as IsActiveAdminHandler,
     new RoadmapPlanChangeService({} as never),
   );
-  return { ...env, integration, sync, allocations };
+  return { ...env, integration, sync, featureFields, allocations };
 }
 
 const dto = {
@@ -563,14 +561,20 @@ describe('Plan change log: AI assistant', () => {
   };
 
   it('agent.apply пишет source ai с одним batchId на все применённые предложения; отклонённое предложение записи не даёт', async () => {
-    const { service: roadmap, journal } = setup([
+    const { service: allocations, journal } = setup([
       row('a1'),
       row('a2', { personExternalId: 'p2' }),
     ]);
-    jest.spyOn(roadmap, 'getProjectPlan').mockResolvedValue(plan as never);
-    const agent = new AgentService(roadmap, {
-      require: jest.fn().mockResolvedValue(true),
-    } as unknown as RoadmapProjectAccessService);
+    const roadmap = {
+      getProjectPlan: jest.fn().mockResolvedValue(plan),
+    };
+    const agent = new AgentService(
+      roadmap as unknown as RoadmapService,
+      {
+        require: jest.fn().mockResolvedValue(true),
+      } as unknown as RoadmapProjectAccessService,
+      allocations,
+    );
     const change = (
       workItemId: string,
       personExternalId: string,
@@ -633,10 +637,10 @@ describe('Plan change log: role cell hours', () => {
         periods: [{ ...october(10), id: 'oct-a2' }],
       }),
     ];
-    const { sync, tx, journal } = azureSetup(initial);
+    const { sync, featureFields, tx, journal } = azureSetup(initial);
     tx.roadmapWorkItem.findUnique.mockResolvedValueOnce(featureWith(initial));
     jest
-      .spyOn(sync as never, 'writeFeatureAggregates')
+      .spyOn(featureFields as never, 'writeFeatureAggregates')
       .mockResolvedValue(undefined as never);
     const context = planChangeContext(actor, 'plan');
 
@@ -684,10 +688,10 @@ describe('Plan change log: role cell hours', () => {
   });
 
   it('setRoleHours без назначений не пишет журнал', async () => {
-    const { sync, tx } = azureSetup([]);
+    const { sync, featureFields, tx } = azureSetup([]);
     tx.roadmapWorkItem.findUnique.mockResolvedValueOnce(featureWith([]));
     const writeFields = jest
-      .spyOn(sync as never, 'writeFeatureFields')
+      .spyOn(featureFields as never, 'writeFeatureFields')
       .mockResolvedValue(undefined as never);
 
     await expect(
@@ -1005,7 +1009,7 @@ function pushSetup() {
         run(client as unknown as Prisma.TransactionClient),
     ),
   };
-  const sync = new RoadmapAzureSyncService(
+  const services = createAzureSyncServices(
     prisma as unknown as PrismaService,
     {
       getWriteBackSettings: jest
@@ -1022,16 +1026,24 @@ function pushSetup() {
     {} as RoadmapAllocationAzureService,
     new RoadmapPlanChangeService({} as never),
   );
-  const spy = (name: string) => jest.spyOn(sync as never, name as never);
-  spy('fetchTask').mockResolvedValue({
+  const { sync } = services;
+  const spy = (name: string, on: object = sync) =>
+    jest.spyOn(on as never, name as never);
+  spy('fetchTask', services.tasks).mockResolvedValue({
     id: 42,
     rev: 1,
     url: '',
     fields: { 'System.WorkItemType': 'Task', [ORIGINAL_ESTIMATE]: 6 },
   } as never);
-  spy('typeFields').mockResolvedValue(new Set() as never);
-  const updateTask = spy('updateTask').mockResolvedValue(undefined as never);
-  spy('writeFeatureAggregates').mockResolvedValue(undefined as never);
+  spy('typeFields', services.azureProcess).mockResolvedValue(
+    new Set() as never,
+  );
+  const updateTask = spy('updateTask', services.tasks).mockResolvedValue(
+    undefined as never,
+  );
+  spy('writeFeatureAggregates', services.featureFields).mockResolvedValue(
+    undefined as never,
+  );
   // A released row is queued again; the test drives a single run.
   spy('enqueue').mockReturnValue(undefined as never);
   const warn = jest

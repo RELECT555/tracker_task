@@ -1,11 +1,7 @@
 import { BadGatewayException } from '@nestjs/common';
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
-import type { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
-import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
-import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
-import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
-import { RoadmapService } from './roadmap.service';
+import { RoadmapPeopleService } from './roadmap-people.service';
 
 function setup(pages: { value?: unknown[]; token?: string }[]) {
   const prisma = {
@@ -20,7 +16,7 @@ function setup(pages: { value?: unknown[]; token?: string }[]) {
       headers: { get: () => page.token ?? null },
     });
   }
-  const service = new RoadmapService(
+  const service = new RoadmapPeopleService(
     prisma as unknown as PrismaService,
     {
       getCredentials: jest
@@ -28,10 +24,6 @@ function setup(pages: { value?: unknown[]; token?: string }[]) {
         .mockResolvedValue({ organization: 'org', pat: 'pat' }),
       request,
     } as unknown as RoadmapIntegrationService,
-    {} as RoadmapWorkItemImportService,
-    {} as RoadmapAzureSyncService,
-    {} as RoadmapAzureCatalogService,
-    {} as RoadmapPlanChangeService,
   );
   return { service, prisma, request };
 }

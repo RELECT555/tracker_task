@@ -32,6 +32,8 @@ export interface RoadmapSummaryTotals {
 
 export interface RoadmapSummary<Item extends RoadmapMetricsItem, Role extends RoadmapMetricsRole> extends RoadmapSummaryTotals {
   items: Item[];
+  /** Epics and features with plan or fact in the period; an epic's plan and fact include its features'. */
+  activeItemIds: Set<string>;
   visibleRoles: Role[];
   rolePlan: ReturnType<typeof getRoadmapRolePlan>;
 }
@@ -154,6 +156,7 @@ export function getRoadmapSummary<Item extends RoadmapMetricsItem, Role extends 
     participantIds: [...participants],
     roleKeys,
     items,
+    activeItemIds: new Set(items.filter((item) => isPlanItem(item) && hasActivity(item)).map((item) => item.id)),
     visibleRoles,
     rolePlan,
   };

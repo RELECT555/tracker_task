@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { escapeHtml, htmlToText, isPlainHtml, textToHtml } from './azure-html';
 import { importWorkItemsRecorded } from './roadmap-import-health';
-import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import { RoadmapWriteBackAccessService } from './roadmap-write-back-access.service';
 import {
   AzureDevOpsCredentials,
   AzureDevOpsHttpError,
@@ -172,7 +172,7 @@ export class RoadmapWorkItemCardService {
     private readonly prisma: PrismaService,
     private readonly integration: RoadmapIntegrationService,
     private readonly importer: RoadmapWorkItemImportService,
-    private readonly azureSync: RoadmapAzureSyncService,
+    private readonly writeBackAccess: RoadmapWriteBackAccessService,
   ) {}
 
   async getCard(
@@ -564,7 +564,7 @@ export class RoadmapWorkItemCardService {
         canEdit: false,
         reason: 'Проект не включён в запись в Azure DevOps.',
       };
-    if (!(await this.azureSync.canManuallyPush(actorId, settings)))
+    if (!(await this.writeBackAccess.canManuallyPush(actorId, settings)))
       return {
         canEdit: false,
         reason: 'Изменять Azure DevOps из Roadmap могут только администраторы.',

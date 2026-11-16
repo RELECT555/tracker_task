@@ -1,7 +1,7 @@
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import type { IsActiveAdminHandler } from '../identity/application/queries/is-active-admin.handler';
 import type { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
-import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import { createAzureSyncServices } from './roadmap-azure-sync.testing';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import { planChangeContext } from './roadmap-plan-change';
 import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
@@ -127,25 +127,25 @@ function setup(type = 'Feature') {
     recordAfter: jest.fn().mockResolvedValue(0),
   };
   const worker = (createTask = true) => {
-    const service = new RoadmapAzureSyncService(
+    const service = createAzureSyncServices(
       prisma as unknown as PrismaService,
       integration as unknown as RoadmapIntegrationService,
       importer as unknown as RoadmapWorkItemImportService,
       {} as IsActiveAdminHandler,
       {} as RoadmapAllocationAzureService,
       planChanges as unknown as RoadmapPlanChangeService,
-    );
+    ).sync;
     return () => service['syncAllocation']('allocation', createTask);
   };
   const roleHours = () => {
-    const service = new RoadmapAzureSyncService(
+    const service = createAzureSyncServices(
       prisma as unknown as PrismaService,
       integration as unknown as RoadmapIntegrationService,
       importer as unknown as RoadmapWorkItemImportService,
       {} as IsActiveAdminHandler,
       {} as RoadmapAllocationAzureService,
       planChanges as unknown as RoadmapPlanChangeService,
-    );
+    ).sync;
     return (hours: number, quarterKey?: string) =>
       service.setRoleHours(
         'user',
@@ -157,14 +157,14 @@ function setup(type = 'Feature') {
       );
   };
   const refreshField = () => {
-    const service = new RoadmapAzureSyncService(
+    const service = createAzureSyncServices(
       prisma as unknown as PrismaService,
       integration as unknown as RoadmapIntegrationService,
       importer as unknown as RoadmapWorkItemImportService,
       {} as IsActiveAdminHandler,
       {} as RoadmapAllocationAzureService,
       planChanges as unknown as RoadmapPlanChangeService,
-    );
+    ).featureFields;
     return () => service.refreshFeatureField('feature-id', 'role');
   };
   const createPosts = () =>

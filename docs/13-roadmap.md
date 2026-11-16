@@ -86,6 +86,27 @@ Roadmap records every change to an assignment together with the change itself: c
 Open the **История** tab of a Feature or Epic card to see the entries for that work item, or click **Журнал изменений** on the plan page for the whole project. The project feed can be filtered by person and period; entries from one action (for example a rebalance) are grouped. The same data is available at `GET /roadmap/projects/:projectId/changes` for anyone with read access to the project.
 
 The log does not record sync statuses, time logging, role hours entered on a Feature that has no assignments for that role, or changes to roles, role members and settings. Saving without a change and an import that changes nothing leave no entries. There is no undo yet.
+## Notifications
+
+The bell in the Roadmap header (**Уведомления**) tells the people responsible for an Azure DevOps integration that synchronization has a problem, once per problem, with a link to the place where it is fixed. Delivery is in-app only: there is no email, Telegram or browser push. The bell polls the unread counter every minute and when the window regains focus; the list loads when the popover opens. The badge counts unread notifications whose problem is still open; if only unread resolved ones remain, it shows a dot without a number.
+
+A background check runs every minute on each API instance and opens or closes a *problem* per kind and project. A notification is a per-person copy of a problem created when it opens, so one problem produces at most one notification per person, however many import cycles or API instances see it. The title is a snapshot taken at that moment; the count shown for an open problem is live.
+
+| Kind | Condition | Recipients | Leads to |
+|---|---|---|---|
+| Ошибки отправки в Azure (`sync_errors`) | At least one assignment of the project is in `error` | Administrators and the project's planners | **Интеграции → Проекты** |
+| Конфликты с Azure (`sync_conflicts`) | At least one assignment is in `conflict` | Administrators and the project's planners | **Интеграции → Проекты** |
+| Не удаётся обновить проект из Azure (`import_failing`) | Project imports have been failing continuously for 15 minutes; the last error is shown in the notification | Administrators and the project's planners | **Интеграции → Проекты** |
+| Azure DevOps отклоняет PAT (`azure_auth`) | The PAT was rejected (HTTP 401) or could not be decrypted, and no request has succeeded since | Administrators only | Azure connection panel on **Интеграции** |
+| Webhook из Azure не приходит (`webhook_silent`) | The project has received a webhook before, the scheduled import found changes, and the last webhook is more than 30 minutes older than those changes | Administrators only | **Интеграции → Webhook** |
+
+Planners are matched by the email on the project's access list, ignoring case; inactive users are skipped, and a person who is both an administrator and a planner gets one notification. Viewers get none. Recipients are fixed when the problem opens: someone granted access later is notified about the next problem, not the current one.
+
+- **Thresholds.** A problem opens for `import_failing` after 15 minutes of failures and for `webhook_silent` after a 30-minute lag. It is closed only after its condition has been false for 10 minutes in a row, so resending an assignment that fails again does not produce "fixed" followed by a new problem. A quiet project with no changes in Azure is never reported as a silent webhook. When a closed problem returns it opens a new episode and notifies again. Notifications are kept for 90 days.
+- **Closed labels.** A notification of a closed problem is marked **исправлено** when the condition went away by itself, and **больше не актуально** when the problem lost its meaning: the project was removed, write-back was turned off for it or removed from the write-back scope, or the integration was disconnected. Obsolete problems close at once, without the 10-minute wait.
+- **HTTP 403 is not a rejected PAT.** It means the PAT lacks rights on a project or area, so it shows up as `import_failing` or `sync_errors` for that project and never as `azure_auth`.
+- **One cause, one notification.** While an `azure_auth` problem is open, new `import_failing`, `sync_errors` and `webhook_silent` problems are held back (conflicts are not, because they are not caused by the PAT); problems that were already open stay as they are. Assignments left in `error` do not fix themselves after the PAT is repaired, so `sync_errors` opens once `azure_auth` closes. That notification is the reminder to send them again. For `sync_errors` and `sync_conflicts`, only projects where write-back is on (manual or automatic) and in scope are counted.
+- Error text in a notification is cut to 300 characters and stripped of the PAT, webhook secret and authorization headers.
 
 ## Local demo data
 
