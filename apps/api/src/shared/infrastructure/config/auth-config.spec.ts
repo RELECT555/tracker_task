@@ -1,4 +1,4 @@
-import { validateAuthConfig } from './auth-config';
+import { authProviderOf, validateAuthConfig } from './auth-config';
 
 describe('Authentication configuration', () => {
   const jwtSecret = 'strict-test-secret-'.repeat(3);
@@ -69,5 +69,56 @@ describe('Authentication configuration', () => {
         LOCAL_ADMIN_PASSWORD: 'roadmap',
       }),
     ).toThrow('LOCAL_ADMIN_PASSWORD');
+  });
+});
+
+describe('Auth provider selection', () => {
+  const jwtSecret = 'strict-test-secret-'.repeat(3);
+  const entra = {
+    AUTH_PROVIDER: 'entra',
+    JWT_SECRET: jwtSecret,
+    ENTRA_TENANT_ID: '11111111-2222-4333-8444-555555555555',
+    ENTRA_CLIENT_ID: '66666666-7777-4888-9999-000000000000',
+    ENTRA_API_AUDIENCE: 'api://tracker-roadmap',
+  };
+
+  it('defaults to the local provider', () => {
+    expect(authProviderOf({})).toBe('local');
+    expect(authProviderOf({ AUTH_PROVIDER: '' })).toBe('local');
+  });
+
+  it('reads the provider case-insensitively', () => {
+    expect(authProviderOf({ AUTH_PROVIDER: 'ENTRA' })).toBe('entra');
+  });
+
+  it('rejects an unknown provider', () => {
+    expect(() => authProviderOf({ AUTH_PROVIDER: 'okta' })).toThrow(
+      'AUTH_PROVIDER',
+    );
+  });
+
+  it('does not require the local admin password in entra mode', () => {
+    expect(validateAuthConfig(entra).AUTH_PROVIDER).toBe('entra');
+  });
+
+  it.each(['ENTRA_TENANT_ID', 'ENTRA_CLIENT_ID', 'ENTRA_API_AUDIENCE'])(
+    'requires %s in entra mode',
+    (name) => {
+      expect(() => validateAuthConfig({ ...entra, [name]: undefined })).toThrow(
+        name,
+      );
+    },
+  );
+
+  it('requires a tenant GUID in entra mode', () => {
+    expect(() =>
+      validateAuthConfig({ ...entra, ENTRA_TENANT_ID: 'contoso' }),
+    ).toThrow('ENTRA_TENANT_ID');
+  });
+
+  it('still requires JWT_SECRET in entra mode', () => {
+    expect(() =>
+      validateAuthConfig({ ...entra, JWT_SECRET: undefined }),
+    ).toThrow('JWT_SECRET');
   });
 });
