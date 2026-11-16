@@ -29,6 +29,8 @@ import {
   hoursField,
   scalePeriods,
 } from './roadmap-allocation-reconcile';
+import type { PlanChangeContext } from './roadmap-plan-change';
+import { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import {
   quarterLabel,
   renderWriteBackTags,
@@ -140,6 +142,7 @@ export class RoadmapAzureSyncService {
     private readonly importer: RoadmapWorkItemImportService,
     private readonly isActiveAdmin: IsActiveAdminHandler,
     private readonly allocationAzure: RoadmapAllocationAzureService,
+    private readonly planChanges: RoadmapPlanChangeService,
   ) {}
 
   /** Status written by plan edits: the allocation must be sent to Azure DevOps again. */
@@ -1785,7 +1788,8 @@ export class RoadmapAzureSyncService {
     workItemId: string,
     roleId: string,
     hours: number,
-    quarterKey?: string,
+    quarterKey: string | undefined,
+    context: PlanChangeContext,
   ) {
     const settings = await this.assertWriteBackEnabled(actorId);
     const item = await this.prisma.roadmapWorkItem.findUnique({
@@ -1882,7 +1886,9 @@ export class RoadmapAzureSyncService {
       rest = Math.round((rest - share) * 100) / 100;
       return { allocation, hours: Math.max(0, share) };
     });
+    const ids = shares.map(({ allocation }) => allocation.id);
     await this.prisma.$transaction(async (tx) => {
+      const before = await this.planChanges.read(tx, ids);
       for (const { allocation, hours: share } of shares) {
         const hasTask = Boolean(
           allocation.azureTaskId || allocation.azureCreateAttemptId,
@@ -1913,6 +1919,21 @@ export class RoadmapAzureSyncService {
             data: { hours: period.hours },
           });
       }
+      const after = await this.planChanges.read(tx, ids);
+      const roleHours = {
+        from: Math.round(currentTotal * 100) / 100,
+        to: target,
+      };
+      await this.planChanges.record(
+        tx,
+        context,
+        [...after.values()].map(({ ref, snapshot }) => ({
+          ref,
+          before: before.get(ref.allocationId)?.snapshot ?? null,
+          after: snapshot,
+          details: { roleHours },
+        })),
+      );
     });
     const withTask = shares
       .filter(

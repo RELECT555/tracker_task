@@ -28,6 +28,8 @@ import {
   AzureWorkItem,
   RoadmapWorkItemImportService,
 } from './roadmap-work-item-import.service';
+import type { PlanChangeContext } from './roadmap-plan-change';
+import { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import type { WriteBackSettings } from './roadmap-write-back.settings';
 
 const API = '7.1';
@@ -68,6 +70,7 @@ export class RoadmapAllocationAzureService implements OnModuleInit {
     private readonly integration: RoadmapIntegrationService,
     private readonly importer: RoadmapWorkItemImportService,
     private readonly isActiveAdmin: IsActiveAdminHandler,
+    private readonly planChanges: RoadmapPlanChangeService,
   ) {}
 
   onModuleInit() {
@@ -220,12 +223,20 @@ export class RoadmapAllocationAzureService implements OnModuleInit {
   }
 
   /** Deletes an allocation; its Task is kept, moved to a state, or deleted as the policy says. */
-  async deleteAllocation(actor: Actor, allocationId: string) {
+  async deleteAllocation(
+    actor: Actor,
+    allocationId: string,
+    context: PlanChangeContext,
+  ) {
     const allocation = await this.allocation(allocationId);
     if (allocation.azureSyncClaimId)
       throw new ConflictException(
         'Назначение сейчас отправляется в Azure DevOps. Повторите через минуту.',
       );
+    // Read before the Task is touched: what the plan held is what the log keeps.
+    const before = (
+      await this.planChanges.read(this.prisma, [allocationId])
+    ).get(allocationId);
     const settings = await this.integration.getWriteBackSettings();
     let task: 'kept' | 'state' | 'deleted' | null = null;
     if (allocation.azureTaskId && settings.mode !== 'off') {
@@ -237,7 +248,19 @@ export class RoadmapAllocationAzureService implements OnModuleInit {
         await this.actorName(actor),
       );
     }
-    await this.prisma.roadmapAllocation.delete({ where: { id: allocationId } });
+    // The Task in Azure has already been handled; the row and its log entry go together.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.roadmapAllocation.delete({ where: { id: allocationId } });
+      if (before)
+        await this.planChanges.record(tx, context, [
+          {
+            ref: before.ref,
+            before: before.snapshot,
+            after: null,
+            details: { task },
+          },
+        ]);
+    });
     return {
       deleted: true,
       task,

@@ -386,6 +386,7 @@ export class RoadmapController {
       roleId,
       dto.hours,
       dto.quarterKey,
+      planChangeContext({ id: actor.id, email: actor.email }, 'plan'),
     );
   }
 
@@ -452,7 +453,11 @@ export class RoadmapController {
   ) {
     await this.access.require(actor, { allocationIds: [allocationId] }, 'edit');
     const { workItemId, roleId, ...result } =
-      await this.allocationAzure.deleteAllocation(actor, allocationId);
+      await this.allocationAzure.deleteAllocation(
+        actor,
+        allocationId,
+        planChangeContext({ id: actor.id, email: actor.email }, 'plan'),
+      );
     // The deleted hours leave the role field of the feature too, as the Task leaves Azure DevOps.
     await this.azureSync.refreshFeatureField(workItemId, roleId);
     return result;

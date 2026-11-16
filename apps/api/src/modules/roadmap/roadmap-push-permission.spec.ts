@@ -4,6 +4,7 @@ import type { IsActiveAdminHandler } from '../identity/application/queries/is-ac
 import type { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
 import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
+import type { RoadmapPlanChangeService } from './roadmap-plan-change.service';
 import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.service';
 import {
   DEFAULT_WRITE_BACK_SETTINGS,
@@ -32,6 +33,7 @@ function setup(
     {} as RoadmapWorkItemImportService,
     { execute } as unknown as IsActiveAdminHandler,
     {} as RoadmapAllocationAzureService,
+    {} as RoadmapPlanChangeService,
   );
   return { service, execute, allocations };
 }

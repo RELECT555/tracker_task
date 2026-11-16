@@ -2,8 +2,10 @@ import { Prisma } from '@prisma/client';
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import { AgentService } from '../agent/agent.service';
 import type { PlanInput } from '../agent/agent-plan';
+import type { IsActiveAdminHandler } from '../identity/application/queries/is-active-admin.handler';
+import { RoadmapAllocationAzureService } from './roadmap-allocation-azure.service';
 import type { RoadmapAzureCatalogService } from './roadmap-azure-catalog.service';
-import type { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
+import { RoadmapAzureSyncService } from './roadmap-azure-sync.service';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import { planChangeContext } from './roadmap-plan-change';
 import { RoadmapPlanChangeService } from './roadmap-plan-change.service';
@@ -12,6 +14,7 @@ import type { RoadmapWorkItemImportService } from './roadmap-work-item-import.se
 import { RoadmapService } from './roadmap.service';
 
 type Period = {
+  id?: string;
   monthKey: string | null;
   label: string;
   startsAt: Date;
@@ -43,6 +46,7 @@ const workItem = {
   title: 'Фича A',
   projectId: 'project',
   type: 'Feature',
+  project: { externalId: 'azure-project' },
 };
 const role = { id: 'role', name: 'Dev' };
 const actor = { id: 'user-1', email: 'user@example.com' };
@@ -169,6 +173,24 @@ function setup(initial: Row[] = []) {
           return Promise.resolve(view(r));
         },
       ),
+      updateMany: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: Record<string, unknown>;
+        }) => {
+          const r = rows.get(where.id);
+          if (r) apply(r, data);
+          return Promise.resolve({ count: r ? 1 : 0 });
+        },
+      ),
+      delete: jest.fn(({ where }: { where: { id: string } }) => {
+        const r = rows.get(where.id)!;
+        rows.delete(where.id);
+        return Promise.resolve(view(r));
+      }),
       upsert: jest.fn(
         ({
           where,
@@ -194,6 +216,21 @@ function setup(initial: Row[] = []) {
       ),
     },
     roadmapPeriodAllocation: {
+      update: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: { hours: number };
+        }) => {
+          const period = [...rows.values()]
+            .flatMap((r) => r.periods)
+            .find((p) => p.id === where.id)!;
+          period.hours = Number(data.hours);
+          return Promise.resolve({});
+        },
+      ),
       deleteMany: jest.fn(
         ({
           where,
@@ -232,6 +269,16 @@ function setup(initial: Row[] = []) {
     },
   };
   const prisma = {
+    ...tx,
+    roadmapRole: {
+      findFirst: jest
+        .fn()
+        .mockResolvedValue({
+          name: role.name,
+          azureEstimateField: 'Custom.Dev',
+        }),
+    },
+    roadmapPerson: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn(
       (run: (client: Prisma.TransactionClient) => Promise<unknown>) =>
         run(tx as unknown as Prisma.TransactionClient),
@@ -253,7 +300,39 @@ function setup(initial: Row[] = []) {
     tx.roadmapPlanChange.createMany.mock.calls.flatMap(
       ([{ data }]) => data as Record<string, unknown>[],
     );
-  return { service, tx, journal };
+  return { service, prisma, rows, tx, journal };
+}
+
+/** Azure-side services over the same in-memory table. */
+function azureSetup(initial: Row[], settings: Record<string, unknown> = {}) {
+  const env = setup(initial);
+  const integration = {
+    getWriteBackSettings: jest.fn().mockResolvedValue({
+      mode: 'manual',
+      pushPermission: 'all',
+      ...settings,
+    }),
+    getCredentials: jest
+      .fn()
+      .mockResolvedValue({ organizationUrl: 'https://dev.azure.com/org' }),
+    request: jest.fn().mockResolvedValue(undefined),
+  };
+  const sync = new RoadmapAzureSyncService(
+    env.prisma as unknown as PrismaService,
+    integration as unknown as RoadmapIntegrationService,
+    {} as RoadmapWorkItemImportService,
+    {} as IsActiveAdminHandler,
+    {} as RoadmapAllocationAzureService,
+    new RoadmapPlanChangeService(),
+  );
+  const allocations = new RoadmapAllocationAzureService(
+    env.prisma as unknown as PrismaService,
+    integration as unknown as RoadmapIntegrationService,
+    {} as RoadmapWorkItemImportService,
+    {} as IsActiveAdminHandler,
+    new RoadmapPlanChangeService(),
+  );
+  return { ...env, integration, sync, allocations };
 }
 
 const dto = {
@@ -522,5 +601,161 @@ describe('Plan change log: AI assistant', () => {
     expect(new Set(entries.map((entry) => entry.batchId)).size).toBe(1);
     expect(entries.every((entry) => entry.source === 'ai')).toBe(true);
     expect(entries.every((entry) => entry.actorUserId === actor.id)).toBe(true);
+  });
+});
+
+describe('Plan change log: role cell hours', () => {
+  /** What `setRoleHours` reads from the feature: the role's allocations. */
+  const featureWith = (rows: Row[]) => ({
+    externalId: workItem.externalId,
+    projectId: workItem.projectId,
+    type: 'Feature',
+    allocations: rows.map((r) => ({
+      id: r.id,
+      quarterKey: r.quarterKey,
+      personExternalId: r.personExternalId,
+      estimatedHours: r.estimatedHours,
+      azureTaskId: r.azureTaskId,
+      azureCreateAttemptId: null,
+      azureSyncClaimId: null,
+      periods: r.periods.map((p) => ({ id: p.id!, hours: p.hours })),
+    })),
+  });
+
+  it('setRoleHours пишет updated на каждое назначение роли с одним batchId и details.roleHours { from: 40, to: 60 }', async () => {
+    const initial = [
+      row('a1', {
+        estimatedHours: 30,
+        periods: [{ ...october(30), id: 'oct-a1' }],
+      }),
+      row('a2', {
+        personExternalId: 'p2',
+        estimatedHours: 10,
+        periods: [{ ...october(10), id: 'oct-a2' }],
+      }),
+    ];
+    const { sync, tx, journal } = azureSetup(initial);
+    tx.roadmapWorkItem.findUnique.mockResolvedValueOnce(featureWith(initial));
+    jest
+      .spyOn(sync as never, 'writeFeatureAggregates')
+      .mockResolvedValue(undefined as never);
+    const context = planChangeContext(actor, 'plan');
+
+    await sync.setRoleHours(
+      actor.id,
+      workItem.id,
+      role.id,
+      60,
+      '2026-Q4',
+      context,
+    );
+
+    const entries = journal();
+    expect(entries).toEqual([
+      expect.objectContaining({
+        action: 'updated',
+        source: 'plan',
+        allocationId: 'a1',
+        before: expect.objectContaining({
+          estimatedHours: 30,
+          months: [{ monthKey: '2026-10', hours: 30 }],
+        }),
+        // More hours leave the month split as it is: it still fits.
+        after: expect.objectContaining({
+          estimatedHours: 45,
+          months: [{ monthKey: '2026-10', hours: 30 }],
+        }),
+      }),
+      expect.objectContaining({
+        action: 'updated',
+        allocationId: 'a2',
+        before: expect.objectContaining({ estimatedHours: 10 }),
+        after: expect.objectContaining({ estimatedHours: 15 }),
+      }),
+    ]);
+    expect(
+      entries.every(
+        (entry) =>
+          entry.batchId === context.batchId &&
+          entry.actorUserId === actor.id &&
+          JSON.stringify(entry.details) ===
+            JSON.stringify({ roleHours: { from: 40, to: 60 } }),
+      ),
+    ).toBe(true);
+  });
+
+  it('setRoleHours без назначений не пишет журнал', async () => {
+    const { sync, tx } = azureSetup([]);
+    tx.roadmapWorkItem.findUnique.mockResolvedValueOnce(featureWith([]));
+    const writeFields = jest
+      .spyOn(sync as never, 'writeFeatureFields')
+      .mockResolvedValue(undefined as never);
+
+    await expect(
+      sync.setRoleHours(
+        actor.id,
+        workItem.id,
+        role.id,
+        12,
+        '2026-Q4',
+        planChangeContext(actor, 'plan'),
+      ),
+    ).resolves.toEqual({ field: 'Custom.Dev', hours: 12 });
+
+    expect(writeFields).toHaveBeenCalled();
+    expect(tx.roadmapPlanChange.createMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('Plan change log: delete allocation', () => {
+  const removable = () => row('a1', { azureTaskId: '42' });
+
+  it("deleteAllocation пишет deleted с before-снимком и details.task = 'state'", async () => {
+    const { allocations, rows, journal } = azureSetup([removable()], {
+      removalPolicy: { action: 'state', state: 'Removed' },
+    });
+    const context = planChangeContext(actor, 'plan');
+
+    const result = await allocations.deleteAllocation(actor, 'a1', context);
+
+    expect(result).toEqual(expect.objectContaining({ task: 'state' }));
+    expect(rows.has('a1')).toBe(false);
+    expect(journal()).toEqual([
+      expect.objectContaining({
+        action: 'deleted',
+        source: 'plan',
+        batchId: context.batchId,
+        actorUserId: actor.id,
+        allocationId: 'a1',
+        azureTaskId: '42',
+        quarterKey: '2026-Q4',
+        before: expect.objectContaining({
+          personExternalId: 'p1',
+          estimatedHours: 8,
+          months: [{ monthKey: '2026-10', hours: 8 }],
+        }),
+        after: Prisma.DbNull,
+        details: { task: 'state' },
+      }),
+    ]);
+  });
+
+  it('deleteAllocation при ошибке Azure не пишет журнал и не удаляет', async () => {
+    const { allocations, integration, rows, tx } = azureSetup([removable()], {
+      removalPolicy: { action: 'state', state: 'Removed' },
+    });
+    integration.request.mockRejectedValueOnce(new Error('Azure 503'));
+
+    await expect(
+      allocations.deleteAllocation(
+        actor,
+        'a1',
+        planChangeContext(actor, 'plan'),
+      ),
+    ).rejects.toThrow('Azure 503');
+
+    expect(rows.has('a1')).toBe(true);
+    expect(tx.roadmapAllocation.delete).not.toHaveBeenCalled();
+    expect(tx.roadmapPlanChange.createMany).not.toHaveBeenCalled();
   });
 });
