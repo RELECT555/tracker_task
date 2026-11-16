@@ -14,8 +14,15 @@ type Box = { top: number; left: number; width: number; height: number };
 const SPOTLIGHT_PADDING = 6;
 const CARD_GAP = 14;
 const VIEWPORT_MARGIN = 16;
-/** Сколько ждём появления элемента (страница могла ещё не загрузиться), прежде чем показать шаг по центру. */
-const TARGET_WAIT_MS = 3500;
+/**
+ * Сколько ждём появления элемента, прежде чем показать шаг по центру. Карточка скрыта только это время;
+ * если элемент появится позже (данные ещё грузятся), она сама переедет к нему.
+ */
+const TARGET_WAIT_MS = 700;
+const MISSING_POLL_MS = 100;
+/** Сколько кадров подряд подсветка должна простоять неподвижно, чтобы перестать измерять каждый кадр. */
+const STABLE_FRAMES = 20;
+const IDLE_RECHECK_MS = 250;
 const AUTO_START_DELAY_MS = 900;
 
 function findTarget(target: string | undefined) {
@@ -90,33 +97,85 @@ function TourOverlay({ isAdmin }: { isAdmin: boolean }) {
     if (step.route && pathnameRef.current !== step.route) router.push(step.route);
   }, [router, step.id, step.route]);
 
-  // Следим за элементом каждый кадр: он может появиться после загрузки данных, сдвинуться при прокрутке и ресайзе.
+  // Следим за элементом: он может появиться после загрузки данных, сдвинуться при прокрутке и ресайзе.
+  // Кадр за кадром измеряем только пока подсветка движется; когда она встала, засыпаем и просыпаемся по событию.
   useEffect(() => {
     let frame = 0;
+    let timer = 0;
+    let stableFrames = 0;
+    let lastBox: Box | null = null;
+    let observed: HTMLElement | null = null;
     let scrolledIntoView = false;
     const startedAt = performance.now();
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const resizeObserver = new ResizeObserver(() => wake());
 
-    const tick = () => {
+    const measure = () => {
       setViewport((current) => (current.width === window.innerWidth && current.height === window.innerHeight ? current : { width: window.innerWidth, height: window.innerHeight }));
       const element = findTarget(step.target);
-      if (element) {
-        if (!scrolledIntoView) {
-          scrolledIntoView = true;
-          element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
-        }
-        const { top, left, width, height } = element.getBoundingClientRect();
-        const box = { top: top - SPOTLIGHT_PADDING, left: left - SPOTLIGHT_PADDING, width: width + SPOTLIGHT_PADDING * 2, height: height + SPOTLIGHT_PADDING * 2 };
-        setTracked((previous) => (previous?.stepId === step.id && previous.settled && sameBox(previous.box, box) ? previous : { stepId: step.id, box, settled: true }));
-      } else {
+      if (element !== observed) {
+        resizeObserver.disconnect();
+        observed = element;
+        if (element) resizeObserver.observe(element);
+      }
+      if (!element) {
+        lastBox = null;
         const settledNow = performance.now() - startedAt > TARGET_WAIT_MS;
         setTracked((previous) => (previous?.stepId === step.id && !previous.box && previous.settled === settledNow ? previous : { stepId: step.id, box: null, settled: settledNow }));
+        return false;
       }
-      frame = requestAnimationFrame(tick);
+      if (!scrolledIntoView) {
+        scrolledIntoView = true;
+        element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+      }
+      const { top, left, width, height } = element.getBoundingClientRect();
+      const box = { top: top - SPOTLIGHT_PADDING, left: left - SPOTLIGHT_PADDING, width: width + SPOTLIGHT_PADDING * 2, height: height + SPOTLIGHT_PADDING * 2 };
+      const changed = !sameBox(lastBox, box);
+      lastBox = box;
+      setTracked((previous) => (previous?.stepId === step.id && previous.settled && sameBox(previous.box, box) ? previous : { stepId: step.id, box, settled: true }));
+      return changed;
     };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+
+    const run = () => {
+      frame = 0;
+      timer = 0;
+      const changed = measure();
+      if (!lastBox) {
+        // Элемента ещё нет (страница или данные грузятся): проверяем реже, чем каждый кадр.
+        timer = window.setTimeout(run, MISSING_POLL_MS);
+        return;
+      }
+      stableFrames = changed ? 0 : stableFrames + 1;
+      if (stableFrames < STABLE_FRAMES) frame = requestAnimationFrame(run);
+    };
+    function wake() {
+      stableFrames = 0;
+      if (!frame && !timer) frame = requestAnimationFrame(run);
+    }
+
+    wake();
+    // Прокрутка любого контейнера и ресайз окна сдвигают элемент; сдвиги вёрстки без событий ловит редкая проверка.
+    window.addEventListener('scroll', wake, { capture: true, passive: true });
+    window.addEventListener('resize', wake);
+    // Одно измерение без пробуждения цикла: будим его, только если элемент действительно сдвинулся.
+    const watchdog = window.setInterval(() => {
+      if (!frame && !timer && measure()) wake();
+    }, IDLE_RECHECK_MS);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+      window.clearInterval(watchdog);
+      window.removeEventListener('scroll', wake, true);
+      window.removeEventListener('resize', wake);
+      resizeObserver.disconnect();
+    };
   }, [step.id, step.target]);
+
+  // Подгружаем страницу следующего шага заранее, чтобы переход не ждал загрузки кода страницы.
+  const nextRoute = steps[stepIndex + 1]?.route;
+  useEffect(() => {
+    if (nextRoute && nextRoute !== pathnameRef.current) router.prefetch(nextRoute);
+  }, [router, nextRoute]);
 
   useLayoutEffect(() => {
     const element = card.current;
