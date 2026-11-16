@@ -59,10 +59,14 @@ export interface PlanChangeDto {
   batchId: string;
   action: PlanChangeAction;
   source: PlanChangeSource;
+  actorUserId: string | null;
   actorName: string | null;
   actorEmail: string | null;
+  allocationId: string;
+  workItemId: string | null;
   workItemExternalId: string;
   workItemTitle: string;
+  roleId: string;
   roleName: string;
   quarterKey: string;
   azureTaskId: string | null;
@@ -73,6 +77,8 @@ export interface PlanChangeDto {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Exactly what `Date#toISOString` writes, so the cursor round-trips without loss. */
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 export const PLAN_CHANGE_DEFAULT_LIMIT = 50;
 export const PLAN_CHANGE_MAX_LIMIT = 200;
@@ -101,6 +107,7 @@ export function decodeCursor(
     .split('|');
   const createdAt = new Date(time);
   if (
+    !ISO_INSTANT.test(time) ||
     !UUID.test(id ?? '') ||
     rest.length > 0 ||
     Number.isNaN(createdAt.getTime())

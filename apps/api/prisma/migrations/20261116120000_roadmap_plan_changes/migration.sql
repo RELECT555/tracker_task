@@ -28,7 +28,7 @@ CREATE TABLE "roadmap_plan_changes" (
 CREATE INDEX "roadmap_plan_changes_project_id_created_at_idx" ON "roadmap_plan_changes"("project_id", "created_at" DESC);
 
 -- CreateIndex
-CREATE INDEX "roadmap_plan_changes_work_item_id_created_at_idx" ON "roadmap_plan_changes"("work_item_id", "created_at" DESC);
+CREATE INDEX "roadmap_plan_changes_project_id_work_item_external_id_creat_idx" ON "roadmap_plan_changes"("project_id", "work_item_external_id", "created_at" DESC);
 
 -- CreateIndex
 CREATE INDEX "roadmap_plan_changes_allocation_id_created_at_idx" ON "roadmap_plan_changes"("allocation_id", "created_at");

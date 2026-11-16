@@ -71,7 +71,9 @@ function allocationRow(input: {
 function setup() {
   const tx = {
     roadmapPlanChange: {
-      createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      createMany: jest
+        .fn<Promise<{ count: number }>, [{ data: Record<string, unknown>[] }]>()
+        .mockResolvedValue({ count: 1 }),
     },
     user: {
       findUnique: jest.fn().mockResolvedValue({ fullName: 'Пётр Петров' }),
@@ -385,12 +387,7 @@ describe('RoadmapPlanChangeService.recordAfter', () => {
     // The mocked createMany reports count 1; what matters is the rows it was given.
     expect(written).toBe(1);
     const { data } = tx.roadmapPlanChange.createMany.mock.calls[0][0];
-    expect(
-      data.map((entry: { allocationId: string; action: string }) => [
-        entry.allocationId,
-        entry.action,
-      ]),
-    ).toEqual([
+    expect(data.map((entry) => [entry.allocationId, entry.action])).toEqual([
       ['allocation', 'updated'],
       ['fresh', 'created'],
       ['gone', 'deleted'],
@@ -523,10 +520,14 @@ describe('RoadmapPlanChangeService.list', () => {
         batchId: 'batch',
         action: 'deleted',
         source: 'plan',
+        actorUserId: 'user',
         actorName: 'Пётр Петров',
         actorEmail: 'user@example.com',
+        allocationId: 'allocation',
+        workItemId: 'work-item',
         workItemExternalId: '1001',
         workItemTitle: 'Feature title',
+        roleId: 'role',
         roleName: 'Backend',
         quarterKey: '2026-Q4',
         azureTaskId: '77',
@@ -649,5 +650,20 @@ describe('RoadmapPlanChangeService.list', () => {
     await expect(
       service.list('project', { cursor: 'not-a-cursor' }),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects a cursor whose time is not a strict ISO instant', async () => {
+    const { service } = listSetup([]);
+    const cursorOf = (time: string) =>
+      Buffer.from(`${time}|${uid('a')}`, 'utf8').toString('base64url');
+
+    for (const time of ['2026-11-16', '1763287200000', 'Mon Nov 16 2026']) {
+      await expect(
+        service.list('project', { cursor: cursorOf(time) }),
+      ).rejects.toThrow(BadRequestException);
+    }
+    await expect(
+      service.list('project', { cursor: cursorOf('2026-11-16T10:00:00.000Z') }),
+    ).resolves.toEqual({ items: [], nextCursor: null });
   });
 });

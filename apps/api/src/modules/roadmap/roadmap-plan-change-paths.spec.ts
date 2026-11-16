@@ -739,6 +739,31 @@ describe('Plan change log: delete allocation', () => {
     ]);
   });
 
+  it('deleteAllocation берёт before-снимок внутри транзакции удаления', async () => {
+    const { allocations, integration, rows, journal } = azureSetup(
+      [removable()],
+      { removalPolicy: { action: 'state', state: 'Removed' } },
+    );
+    // Someone edits the hours while the Task is being moved in Azure.
+    integration.request.mockImplementationOnce(() => {
+      rows.get('a1')!.estimatedHours = 12;
+      return Promise.resolve(undefined);
+    });
+
+    await allocations.deleteAllocation(
+      actor,
+      'a1',
+      planChangeContext(actor, 'plan'),
+    );
+
+    expect(journal()).toEqual([
+      expect.objectContaining({
+        action: 'deleted',
+        before: expect.objectContaining({ estimatedHours: 12 }),
+      }),
+    ]);
+  });
+
   it('deleteAllocation при ошибке Azure не пишет журнал и не удаляет', async () => {
     const { allocations, integration, rows, tx } = azureSetup([removable()], {
       removalPolicy: { action: 'state', state: 'Removed' },

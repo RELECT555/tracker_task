@@ -590,7 +590,7 @@ model RoadmapPlanChange {
   project            RoadmapProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt(sort: Desc)])
-  @@index([workItemId, createdAt(sort: Desc)])
+  @@index([projectId, workItemExternalId, createdAt(sort: Desc)])
   @@index([allocationId, createdAt])
   @@index([batchId])
   @@map("roadmap_plan_changes")

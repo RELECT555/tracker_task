@@ -245,8 +245,9 @@ export class RoadmapAllocationAzureService implements OnModuleInit {
       throw new ConflictException(
         'Назначение сейчас отправляется в Azure DevOps. Повторите через минуту.',
       );
-    // Read before the Task is touched: what the plan held is what the log keeps.
-    const before = (
+    // Read before the Task is touched, as a fallback; the transaction below reads again
+    // so an edit made while Azure was being called is not lost from the log.
+    const early = (
       await this.planChanges.read(this.prisma, [allocationId])
     ).get(allocationId);
     const settings = await this.integration.getWriteBackSettings();
@@ -262,16 +263,20 @@ export class RoadmapAllocationAzureService implements OnModuleInit {
     }
     // The Task in Azure has already been handled; the row and its log entry go together.
     await this.prisma.$transaction(async (tx) => {
+      const before =
+        (await this.planChanges.read(tx, [allocationId])).get(allocationId) ??
+        early;
       await tx.roadmapAllocation.delete({ where: { id: allocationId } });
-      if (before)
-        await this.planChanges.record(tx, context, [
-          {
-            ref: before.ref,
-            before: before.snapshot,
-            after: null,
-            details: { task },
-          },
-        ]);
+      // `allocation()` above found the row, so the early read has it unless it vanished in between.
+      if (!before) return;
+      await this.planChanges.record(tx, context, [
+        {
+          ref: before.ref,
+          before: before.snapshot,
+          after: null,
+          details: { task },
+        },
+      ]);
     });
     return {
       deleted: true,
