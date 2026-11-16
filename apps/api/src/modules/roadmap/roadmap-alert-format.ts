@@ -74,8 +74,11 @@ export function formatAlert(
 /** Relative web-app URL an alert leads to; routes are kept here so they live in one place. */
 export function alertLink(
   kind: RoadmapAlertKind,
-  _projectId: string | null,
+  projectId: string | null,
 ): string {
+  // Every kind currently links to a global admin tab; the project id is kept in
+  // the signature for a future per-project plan link.
+  void projectId;
   switch (kind) {
     case 'azure_auth':
       return `${INTEGRATIONS_PAGE}#azure-connection`;
