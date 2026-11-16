@@ -74,6 +74,19 @@ type RoadmapFactItem = RoadmapHierarchyItem & {
   allocations: { id: string; azureTaskId: string | null }[];
 };
 
+/** The three month keys (YYYY-MM) of a YYYY-Qn quarter. */
+function quarterMonthKeys(quarterKey: string) {
+  const match = /^(\d{4})-Q([1-4])$/.exec(quarterKey);
+  if (!match) throw new BadRequestException('Quarter must use YYYY-Qn format');
+  const year = Number(match[1]);
+  const quarter = Number(match[2]);
+  return Array.from(
+    { length: 3 },
+    (_, index) =>
+      `${year}-${String((quarter - 1) * 3 + index + 1).padStart(2, '0')}`,
+  );
+}
+
 function assertAssignableWorkItem(type: string) {
   if (type.toLowerCase() === 'epic') {
     throw new BadRequestException('На эпики нельзя назначать исполнителей.');
@@ -108,7 +121,10 @@ function rollUpActualHours<T extends RoadmapHierarchyItem>(
     while (ancestor && !visited.has(ancestor.externalId)) {
       visited.add(ancestor.externalId);
       if (ancestor.type.toLowerCase() === 'feature') underFeature = true;
-      if (isPlanItem(ancestor) && (underFeature || ancestor.type.toLowerCase() !== 'epic')) {
+      if (
+        isPlanItem(ancestor) &&
+        (underFeature || ancestor.type.toLowerCase() !== 'epic')
+      ) {
         workItems.set(ancestor.id, (workItems.get(ancestor.id) ?? 0) + hours);
         contributesToPlan = true;
       }
@@ -1305,21 +1321,21 @@ export class RoadmapService {
 
   async saveAllocation(
     dto: {
-    allocationId?: string;
-    workItemId: string;
-    roleId: string;
-    personExternalId: string;
-    personName: string;
-    personEmail?: string;
-    quarterKey: string;
-    estimatedHours: number;
-    periods: {
-      monthKey?: string;
-      label: string;
-      startsAt: string;
-      endsAt: string;
-      hours: number;
-    }[];
+      allocationId?: string;
+      workItemId: string;
+      roleId: string;
+      personExternalId: string;
+      personName: string;
+      personEmail?: string;
+      quarterKey: string;
+      estimatedHours: number;
+      periods: {
+        monthKey?: string;
+        label: string;
+        startsAt: string;
+        endsAt: string;
+        hours: number;
+      }[];
     },
     /** The caller sends the allocation to Azure DevOps itself (creating its Task). */
     options: { skipSync?: boolean } = {},
@@ -1331,8 +1347,26 @@ export class RoadmapService {
       throw new BadRequestException(
         'Only one plan value is allowed per allocation and month',
       );
+    const quarterMonths = quarterMonthKeys(dto.quarterKey);
     for (const period of dto.periods) {
+      const startsAt = Date.parse(period.startsAt);
+      const endsAt = Date.parse(period.endsAt);
+      if (
+        !Number.isFinite(period.hours) ||
+        Number.isNaN(startsAt) ||
+        Number.isNaN(endsAt) ||
+        startsAt > endsAt
+      ) {
+        throw new BadRequestException(
+          'A plan period must have valid dates that start before they end',
+        );
+      }
       if (period.monthKey) {
+        if (!quarterMonths.includes(period.monthKey)) {
+          throw new BadRequestException(
+            'A monthly plan must fall within the allocation quarter',
+          );
+        }
         const [year, month] = period.monthKey.split('-').map(Number);
         const monthStart = `${period.monthKey}-01`;
         const monthEnd = new Date(Date.UTC(year, month, 0))
@@ -1578,16 +1612,7 @@ export class RoadmapService {
     quarterKey: string,
     months: { monthKey: string; hours: number }[],
   ) {
-    const match = /^(\d{4})-Q([1-4])$/.exec(quarterKey);
-    if (!match)
-      throw new BadRequestException('Quarter must use YYYY-Qn format');
-    const year = Number(match[1]);
-    const quarter = Number(match[2]);
-    const expectedMonths = Array.from(
-      { length: 3 },
-      (_, index) =>
-        `${year}-${String((quarter - 1) * 3 + index + 1).padStart(2, '0')}`,
-    );
+    const expectedMonths = quarterMonthKeys(quarterKey);
     if (
       months.length !== 3 ||
       new Set(months.map((month) => month.monthKey)).size !== 3 ||
@@ -1613,7 +1638,7 @@ export class RoadmapService {
     }
 
     const normalized = months.map(({ monthKey, hours }) => {
-      const [, monthNumber] = monthKey.split('-').map(Number);
+      const [year, monthNumber] = monthKey.split('-').map(Number);
       const startsAt = new Date(Date.UTC(year, monthNumber - 1, 1));
       const endsAt = new Date(Date.UTC(year, monthNumber, 0));
       return {

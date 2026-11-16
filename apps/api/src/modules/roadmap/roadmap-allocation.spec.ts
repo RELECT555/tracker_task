@@ -135,6 +135,51 @@ describe('Allocation transaction', () => {
     ]);
   });
 
+  it('rejects a monthly plan outside the allocation quarter', async () => {
+    const { service, transaction } = setup();
+    const august = {
+      monthKey: '2026-08',
+      label: 'August',
+      startsAt: '2026-08-01',
+      endsAt: '2026-08-31',
+      hours: 8,
+    };
+
+    await expect(
+      service.saveAllocation({ ...input, periods: [august] }),
+    ).rejects.toThrow('A monthly plan must fall within the allocation quarter');
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects a legacy period that ends before it starts', async () => {
+    const { service, transaction } = setup();
+    const reversed = {
+      label: 'Legacy',
+      startsAt: '2026-12-31',
+      endsAt: '2026-10-01',
+      hours: 4,
+    };
+
+    await expect(
+      service.saveAllocation({ ...input, periods: [reversed] }),
+    ).rejects.toThrow('start before they end');
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it('keeps accepting a valid legacy period without a month', async () => {
+    const { service } = setup();
+    const legacy = {
+      label: 'Legacy',
+      startsAt: '2026-10-01',
+      endsAt: '2026-11-15',
+      hours: 4,
+    };
+
+    await expect(
+      service.saveAllocation({ ...input, periods: [legacy] }),
+    ).resolves.toMatchObject({ id: 'allocation' });
+  });
+
   it('does not commit or queue sync when writing the months fails', async () => {
     const { service, tx, onAllocationSaved, events } = setup();
     tx.roadmapPeriodAllocation.createMany.mockRejectedValueOnce(
