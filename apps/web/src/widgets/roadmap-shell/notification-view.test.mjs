@@ -8,8 +8,15 @@ import {
   notificationTone,
   recurrenceLabel,
   relativeTime,
+  titleWithoutProject,
 } from './notification-view.ts';
 import { createInitialDemoState, runDemoOperation } from '../../entities/roadmap/api/roadmapDemoStore.ts';
+
+test('title drops the trailing project name only when it matches', () => {
+  assert.equal(titleWithoutProject('Ошибки отправки в Azure: 1 назначение · OKR', 'OKR'), 'Ошибки отправки в Azure: 1 назначение');
+  assert.equal(titleWithoutProject('Ошибки отправки в Azure: 1 назначение · OKR', 'CRM'), 'Ошибки отправки в Azure: 1 назначение · OKR');
+  assert.equal(titleWithoutProject('Ошибки', null), 'Ошибки');
+});
 
 test('badge counts only active unread items, up to 9', () => {
   assert.equal(badgeOf(undefined), null);

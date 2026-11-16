@@ -35,6 +35,12 @@ export function notificationTone(item: Pick<RoadmapNotificationDto, 'active' | '
   return item.resolution === 'obsolete' ? 'obsolete' : 'fixed';
 }
 
+/** The backend appends "· Project" to titles; views that show the project separately drop that suffix. */
+export function titleWithoutProject(title: string, projectName: string | null | undefined): string {
+  const suffix = projectName ? ` · ${projectName}` : '';
+  return suffix && title.endsWith(suffix) ? title.slice(0, -suffix.length) : title;
+}
+
 /** Live figure of a still-open problem, shown only once it differs from the count it was raised with. */
 export function currentLabel(item: Pick<RoadmapNotificationDto, 'active' | 'current' | 'openedCount'>): string | null {
   const count = item.active ? item.current?.count : undefined;

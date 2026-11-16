@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Bell, Check } from 'lucide-react';
+import { ArrowRight, Bell, Check, FolderKanban } from 'lucide-react';
 import type { RoadmapNotificationDto } from '@tracker/shared';
 import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { Button } from '@/shared/ui/button';
@@ -14,7 +14,7 @@ import { Skeleton, SkeletonStatus } from '@/shared/ui/skeleton';
 import { cn } from '@/shared/lib/utils';
 import { routes } from '@/shared/config/routes';
 import { ALERT_KIND_ICON } from './notification-icons';
-import { PROBLEM_STATUS_META, badgeOf, currentLabel, notificationTone, relativeTime } from './notification-view';
+import { PROBLEM_STATUS_META, badgeOf, currentLabel, notificationTone, relativeTime, titleWithoutProject } from './notification-view';
 
 export const NOTIFICATION_SUMMARY_KEY = ['roadmap', 'notifications', 'summary'] as const;
 const SUMMARY_KEY = NOTIFICATION_SUMMARY_KEY;
@@ -142,7 +142,7 @@ export function NotificationBell() {
               onClick={() => setOpen(false)}
               className="inline-flex items-center gap-1 rounded text-sm font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring"
             >
-              Все уведомления
+              Все проблемы синхронизации
               <ArrowRight aria-hidden="true" className="size-3.5" />
             </Link>
           </div>
@@ -164,22 +164,27 @@ function NotificationRow({ item, onOpen }: { item: RoadmapNotificationDto; onOpe
         <span aria-hidden="true" className={cn('mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full', meta.bgClass, meta.textClass)}>
           <Icon className="size-4" />
         </span>
-        <span className="min-w-0 flex-1 space-y-1">
+        <span className="min-w-0 flex-1 space-y-1.5">
           <span className="flex items-start gap-2">
-            <span className={cn('min-w-0 flex-1 text-pretty wrap-anywhere text-sm leading-5 text-foreground', unread ? 'font-semibold' : 'font-normal')}>
+            <span className={cn('min-w-0 flex-1 text-pretty wrap-anywhere text-sm leading-5 text-foreground', unread ? 'font-semibold' : 'font-medium text-foreground/80')}>
               {unread ? <span className="sr-only">Не прочитано: </span> : null}
-              {item.title}
+              {titleWithoutProject(item.title, item.projectName)}
             </span>
             {unread ? <span aria-hidden="true" className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" /> : null}
           </span>
           {item.body ? <span className="block text-pretty wrap-anywhere text-xs leading-4 text-muted-foreground">{item.body}</span> : null}
-          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-            {[item.projectName, relativeTime(item.createdAt)].filter(Boolean).join(' · ')}
-            <span aria-hidden="true">·</span>
-            <span className={cn('inline-flex items-center gap-1 font-medium', meta.textClass)}>
-              {tone === 'fixed' ? <Check aria-hidden="true" className="size-3" /> : null}
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-medium', meta.bgClass, meta.textClass)}>
+              {tone === 'fixed' ? <Check aria-hidden="true" className="size-3" /> : <span aria-hidden="true" className={cn('size-1.5 rounded-full', meta.dotClass)} />}
               {meta.label}
             </span>
+            {item.projectName ? (
+              <span className="inline-flex min-w-0 items-center gap-1">
+                <FolderKanban aria-hidden="true" className="size-3.5 shrink-0" />
+                <span className="truncate">{item.projectName}</span>
+              </span>
+            ) : null}
+            <time dateTime={item.createdAt} className="whitespace-nowrap">{relativeTime(item.createdAt)}</time>
             {current ? <span className="ml-auto tabular-nums">{current}</span> : null}
           </span>
         </span>

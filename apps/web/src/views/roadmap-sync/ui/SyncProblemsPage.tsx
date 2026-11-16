@@ -10,10 +10,11 @@ import { roadmapApi } from '@/entities/roadmap/api/roadmapApi';
 import { ApiError } from '@/shared/api/client';
 import { buttonVariants } from '@/shared/ui/button';
 import { QueryErrorNotice } from '@/shared/ui/error-notice';
+import { SearchableSelect } from '@/shared/ui/searchable-select';
 import { Skeleton, SkeletonStatus } from '@/shared/ui/skeleton';
 import { cn } from '@/shared/lib/utils';
 import { ALERT_KIND_ICON } from '@/widgets/roadmap-shell/notification-icons';
-import { PROBLEM_STATUS_META, durationLabel, recurrenceLabel, relativeTime } from '@/widgets/roadmap-shell/notification-view';
+import { PROBLEM_STATUS_META, durationLabel, recurrenceLabel, relativeTime, titleWithoutProject } from '@/widgets/roadmap-shell/notification-view';
 import { parseSyncQuery, serializeSyncQuery, type SyncProblemsFilter } from '../model/sync-problems-query';
 
 const POLL_MS = 60_000;
@@ -54,25 +55,25 @@ export function SyncProblemsPage() {
 
   return (
     <main className="roadmap-scrollbar relative min-h-0 flex-1 space-y-4 overflow-auto overscroll-none px-4 py-4 sm:px-6 lg:px-8 lg:py-5">
-      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <div className="min-w-0 space-y-1">
+      <header className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <h1 className="text-xl font-semibold tracking-tight text-foreground">Проблемы синхронизации</h1>
-          <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
-            Что сломано в синхронизации с Azure DevOps сейчас и что было за последние 90 дней.
-          </p>
+          {firstPage ? (
+            <span
+              role="status"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
+                active ? 'bg-destructive/10 text-destructive' : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+              )}
+            >
+              <span aria-hidden="true" className={cn('size-1.5 rounded-full', active ? 'bg-destructive' : 'bg-emerald-500')} />
+              {active ? `Активных: ${active}` : 'Активных проблем нет'}
+            </span>
+          ) : null}
         </div>
-        {firstPage ? (
-          <span
-            role="status"
-            className={cn(
-              'inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium',
-              active ? 'bg-destructive/10 text-destructive' : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
-            )}
-          >
-            <span aria-hidden="true" className={cn('size-2 rounded-full', active ? 'bg-destructive' : 'bg-emerald-500')} />
-            {active ? `Активных: ${active}` : 'Активных проблем нет'}
-          </span>
-        ) : null}
+        <p className="mt-0.5 max-w-2xl text-pretty text-sm text-muted-foreground">
+          Что сломано в синхронизации с Azure DevOps сейчас и что было за последние 90 дней.
+        </p>
       </header>
 
       {forbidden ? (
@@ -118,21 +119,14 @@ export function SyncProblemsPage() {
                 );
               })}
             </div>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="shrink-0">Проект</span>
-              <select
-                value={filter.projectId ?? ''}
-                onChange={(event) => setFilter({ ...filter, projectId: event.target.value || null })}
-                className="h-9 w-full min-w-0 rounded-lg border border-border bg-card px-2 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:w-56"
-              >
-                <option value="">Все проекты</option>
-                {(firstPage?.projects ?? []).map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <SearchableSelect
+              ariaLabel="Проект"
+              value={filter.projectId ?? ''}
+              onChange={(value) => setFilter({ ...filter, projectId: value || null })}
+              options={[{ value: '', label: 'Все проекты' }, ...(firstPage?.projects ?? []).map((project) => ({ value: project.id, label: project.name }))]}
+              searchable={(firstPage?.projects.length ?? 0) > 8}
+              className="w-full sm:w-60"
+            />
           </div>
 
           {problems.isPending ? (
@@ -198,6 +192,9 @@ function ProblemRow({ item }: { item: SyncProblemDto }) {
       : `длилась ${durationLabel(item.openedAt, item.resolvedAt)} · ${item.status === 'fixed' ? 'исправлено' : 'закрыто'} ${relativeTime(item.resolvedAt)} в ${clockTime(item.resolvedAt)}`;
   const peak =
     item.peakCount !== null && item.currentCount !== null && item.peakCount > item.currentCount ? `макс. ${item.peakCount}` : null;
+  const title = titleWithoutProject(item.title, item.projectName);
+  // The hint and the shortcut tell how to fix an open problem; they are noise once it is resolved.
+  const isActive = item.status === 'active';
 
   return (
     <li className={cn('rounded-xl border border-border bg-card p-4', item.status === 'active' && 'border-l-2 border-l-destructive')}>
@@ -207,7 +204,7 @@ function ProblemRow({ item }: { item: SyncProblemDto }) {
         </span>
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
-            <h2 className="min-w-0 text-pretty wrap-anywhere text-sm font-semibold leading-5">{item.title}</h2>
+            <h2 className="min-w-0 text-pretty wrap-anywhere text-sm font-semibold leading-5">{title}</h2>
             <span className={cn('inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', meta.bgClass, meta.textClass)}>
               {item.status === 'fixed' ? <Check aria-hidden="true" className="size-3" /> : <span aria-hidden="true" className={cn('size-1.5 rounded-full', meta.dotClass)} />}
               {meta.label}
@@ -242,15 +239,17 @@ function ProblemRow({ item }: { item: SyncProblemDto }) {
               {item.body}
             </button>
           ) : null}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-foreground/80">{item.hint}</p>
-            {item.action ? (
-              <Link href={item.action.link} className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-full shrink-0 sm:w-auto')}>
-                {item.action.label}
-                <ArrowRight aria-hidden="true" className="size-3.5" />
-              </Link>
-            ) : null}
-          </div>
+          {isActive ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+              <p className="min-w-0 text-pretty text-sm text-foreground/80">{item.hint}</p>
+              {item.action ? (
+                <Link href={item.action.link} className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-full shrink-0 sm:w-auto')}>
+                  {item.action.label}
+                  <ArrowRight aria-hidden="true" className="size-3.5" />
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
           {item.historyCount > 0 ? (
             <div>
               <button
