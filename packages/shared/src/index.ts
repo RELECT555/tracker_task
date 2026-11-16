@@ -5,4 +5,5 @@ export * from './roadmap-sync/evaluate';
 export * from './roadmap-plan/rebalance';
 export * from './roadmap-plan/role-plan';
 export * from './roadmap-plan/summary';
+export * from './roadmap-plan/iteration';
 export * from './roadmap-table-preferences';
