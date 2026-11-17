@@ -22,7 +22,8 @@ export function RoadmapToolbarSwitch({ label, hint, icon, checked, onChange, dis
       className={cn(
         'group/switch relative inline-flex h-8 cursor-pointer items-center gap-2 px-2.5 text-xs font-medium text-foreground first:rounded-l-[5px] last:rounded-r-[5px] hover:bg-muted/60',
         'has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-ring',
-        disabled && 'cursor-default text-muted-foreground opacity-50 hover:bg-transparent',
+        // Dim only the visible controls: `opacity` on the label would also fade the tooltip and trap its z-index.
+        disabled && 'cursor-default text-muted-foreground hover:bg-transparent',
       )}
     >
       <input
@@ -34,13 +35,13 @@ export function RoadmapToolbarSwitch({ label, hint, icon, checked, onChange, dis
         onChange={(event) => onChange(event.target.checked)}
         className="peer sr-only"
       />
-      <span aria-hidden="true" className="shrink-0 text-muted-foreground [&>svg]:size-3.5">{icon}</span>
+      <span aria-hidden="true" className="shrink-0 text-muted-foreground peer-disabled:opacity-50 [&>svg]:size-3.5">{icon}</span>
       <span className="sr-only">{label}</span>
       <span
         aria-hidden="true"
         className={cn(
           "relative h-4 w-7 shrink-0 rounded-full bg-muted ring-1 ring-inset ring-border after:absolute after:left-0.5 after:top-0.5 after:size-3 after:rounded-full after:bg-muted-foreground after:content-['']",
-          'peer-checked:bg-primary peer-checked:ring-primary peer-checked:after:translate-x-3 peer-checked:after:bg-primary-foreground',
+          'peer-disabled:opacity-50 peer-checked:bg-primary peer-checked:ring-primary peer-checked:after:translate-x-3 peer-checked:after:bg-primary-foreground',
           'dark:ring-muted-foreground/50 forced-colors:outline forced-colors:outline-[ButtonText] forced-colors:after:bg-[ButtonText]',
         )}
       />
