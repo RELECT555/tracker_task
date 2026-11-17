@@ -78,6 +78,12 @@ export type LegacyWriteBackSettings = {
   projectIds?: string[] | null;
 };
 
+/** Description of a Task Roadmap creates; used by the built-in "Standard" template and the v1 migration. */
+export const DEFAULT_DESCRIPTION_TEMPLATE = 'Создано из Roadmap. Роль: {role}, квартал: {quarter}. Оценку и исполнителя меняйте в Roadmap — они перезаписываются при отправке плана. Фактическое время списывайте в Completed Work этой задачи.';
+
+/** The shorter text v1 migration used to write; the code kept adding the full text instead, so it is upgraded on read. */
+const SHORT_DESCRIPTION_TEMPLATE = 'Создано из Roadmap. Роль: {role}, квартал: {quarter}. Оценку и исполнителя меняйте в Roadmap.';
+
 const legacyDefaults = {
   mode: 'off' as const,
   workItemType: 'Task',
@@ -96,7 +102,7 @@ export function migrateWriteBackSettingsV1(stored: LegacyWriteBackSettings | und
     ['remainingWork', 'Microsoft.VSTS.Scheduling.RemainingWork', { kind: 'roadmap', value: 'remaining' }, source.remainingWorkPolicy === 'create-only' ? 'create' : 'always'],
     ['iteration', 'System.IterationPath', { kind: 'roadmap', value: 'iterationPath' }, 'create'],
     ['areaPath', 'System.AreaPath', { kind: 'roadmap', value: 'parentAreaPath' }, 'create'],
-    ['description', 'System.Description', { kind: 'template', template: 'Создано из Roadmap. Роль: {role}, квартал: {quarter}. Оценку и исполнителя меняйте в Roadmap.' }, 'create'],
+    ['description', 'System.Description', { kind: 'template', template: DEFAULT_DESCRIPTION_TEMPLATE }, 'create'],
   ].filter(([id]) => source.fields[id as keyof typeof source.fields])
     .map(([id, targetField, fieldSource, apply]) => ({ id: `v1-${id}`, targetField, source: fieldSource, apply, enabled: true } as WriteRule));
   return syncSettingsV2Schema.parse({
@@ -113,7 +119,13 @@ export function migrateWriteBackSettingsV1(stored: LegacyWriteBackSettings | und
 
 export function normalizeSyncSettings(stored: unknown, legacyEnabled = false): SyncSettingsV2 {
   if (stored && typeof stored === 'object' && 'version' in stored && (stored as { version?: unknown }).version === 2) {
-    return syncSettingsV2Schema.parse(stored);
+    const parsed = syncSettingsV2Schema.parse(stored);
+    return {
+      ...parsed,
+      writeRules: parsed.writeRules.map((rule) => rule.id === 'v1-description' && rule.source.kind === 'template' && rule.source.template === SHORT_DESCRIPTION_TEMPLATE
+        ? { ...rule, source: { kind: 'template' as const, template: DEFAULT_DESCRIPTION_TEMPLATE } }
+        : rule),
+    };
   }
   return migrateWriteBackSettingsV1(stored as LegacyWriteBackSettings | undefined, legacyEnabled);
 }

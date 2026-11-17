@@ -1,7 +1,11 @@
-import type { ComponentProps, ReactNode } from 'react';
-import { AlertCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import type { RoadmapWriteBackMode } from '@/entities/roadmap/api/roadmapApi';
+import { useId, type ComponentProps, type ReactNode } from 'react';
+import { AlertCircle, AlertTriangle, CheckCircle2, LoaderCircle, RefreshCw, RotateCcw, Save, Tag } from 'lucide-react';
+import type { RoadmapAzureField, RoadmapWriteBackMode } from '@/entities/roadmap/api/roadmapApi';
 import { getErrorMessage } from '@/shared/lib/error-message';
+import { cn } from '@/shared/lib/utils';
+import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
+import { SearchableSelect } from '@/shared/ui/searchable-select';
 import { AdminCard } from '../AdminLayout';
 
 export const integrationColors = '[html:not(.dark)_&]:[--primary:239_75%_56%] [html:not(.dark)_&]:[--destructive:0_72%_44%] dark:[--destructive:0_80%_72%] dark:[--destructive-foreground:0_0%_5%]';
@@ -69,4 +73,83 @@ export function Chip({ tone = 'muted', label, count, title }: { tone?: keyof typ
 
 export function errorText(error: unknown) {
   return getErrorMessage(error);
+}
+
+/** A titled block inside a panel; one topic per block, with a one-line hint under the title. */
+export function Section({ title, hint, action, children }: { title: string; hint?: string; action?: ReactNode; children: ReactNode }) {
+  const headingId = useId();
+  return (
+    <section aria-labelledby={headingId} className="px-4 py-5 sm:px-5">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-64">
+          <h3 id={headingId} className="text-sm font-semibold text-foreground">{title}</h3>
+          {hint ? <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p> : null}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+export function OptionCard({ selected, disabled, children }: { selected: boolean; disabled?: boolean; children: ReactNode }) {
+  return <label className={cn('rounded-lg border p-3.5 transition-colors', disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer', selected ? 'border-primary bg-primary/[0.05] ring-1 ring-primary/30' : 'border-border hover:border-primary/40')}>{children}</label>;
+}
+
+/** The only save control of a panel: shows what state the edits are in and keeps the button next to it. */
+export function SaveBar({ dirty, saving, notice, error, onSave, onDefaults, defaultsTitle }: {
+  dirty: boolean;
+  saving: boolean;
+  notice: string | null;
+  error?: unknown;
+  onSave: () => void;
+  onDefaults?: () => void;
+  defaultsTitle?: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5">
+      <p role={error ? 'alert' : 'status'} className={cn('text-xs', error ? 'text-destructive' : 'text-muted-foreground')}>
+        {error ? errorText(error) : notice ?? (dirty ? 'Есть несохранённые изменения.' : 'Все изменения сохранены.')}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {onDefaults ? <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 rounded-lg shadow-none active:scale-100" disabled={saving} title={defaultsTitle} onClick={onDefaults}><RotateCcw aria-hidden="true" className="size-3.5" />По умолчанию</Button> : null}
+        <Button type="button" size="sm" className={cn(FLAT_PRIMARY, 'gap-1.5')} disabled={!dirty || saving} onClick={onSave}>
+          {saving ? <LoaderCircle aria-hidden="true" className="size-3.5 motion-safe:animate-spin" /> : <Save aria-hidden="true" className="size-3.5" />}
+          {saving ? 'Сохраняем…' : 'Сохранить'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Picks an Azure field by its display name; falls back to a text input until the project's field list is loaded. */
+export function FieldPicker({ value, fields, onChange, writableOnly = false }: { value: string; fields: RoadmapAzureField[]; onChange: (value: string) => void; writableOnly?: boolean }) {
+  if (!fields.length) return <Input className={FLAT_INPUT} value={value} onChange={(event) => onChange(event.target.value)} />;
+  const hasCurrent = fields.some((field) => field.referenceName === value);
+  return <SearchableSelect className={FLAT_SELECT} value={value} onChange={onChange} options={[
+    ...(!hasCurrent ? [{ value, label: value, leading: <Tag aria-hidden="true" className="size-4" />, triggerDescription: null }] : []),
+    ...fields.filter((field) => !writableOnly || !field.readOnly || field.referenceName === value).map((field) => ({ value: field.referenceName, label: field.name, description: field.referenceName, triggerDescription: null, leading: <Tag aria-hidden="true" className="size-4" /> })),
+  ]} />;
+}
+
+/** Which project's Azure fields fill the pickers below. */
+export function FieldSourcePicker({ projects, projectId, onChange, loading, onRefresh }: {
+  projects: { id: string; name: string }[];
+  projectId: string;
+  onChange: (id: string) => void;
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  if (!projects.length) return <p className="text-xs text-muted-foreground">Добавьте проект на вкладке «Проекты», чтобы выбирать поля из списка Azure.</p>;
+  return (
+    <div className="flex flex-wrap items-end gap-3">
+      <label className="grid w-full max-w-xs min-w-0 gap-1.5 text-xs font-medium text-muted-foreground">
+        Брать список полей из проекта
+        <SearchableSelect className={FLAT_SELECT} value={projectId} onChange={onChange} options={projects.map((project) => ({ value: project.id, label: project.name }))} />
+      </label>
+      <Button type="button" variant="outline" size="sm" className={cn(FLAT_OUTLINE, 'gap-1.5')} onClick={onRefresh} disabled={loading}>
+        <RefreshCw aria-hidden="true" className={cn('size-3.5', loading && 'motion-safe:animate-spin')} />Обновить
+      </Button>
+    </div>
+  );
 }

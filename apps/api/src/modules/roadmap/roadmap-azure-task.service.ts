@@ -6,8 +6,8 @@ import {
   RoadmapIntegrationService,
 } from './roadmap-integration.service';
 import { AzureWorkItem } from './roadmap-work-item-import.service';
+import { textToHtml } from './azure-html';
 import {
-  quarterLabel,
   renderWriteBackTags,
   renderWriteBackTemplate,
   WriteBackSettings,
@@ -69,9 +69,12 @@ export class RoadmapAzureTaskService {
     credentials: AzureDevOpsCredentials,
     attemptId?: string,
   ) {
-    const { workItem, role } = allocation;
+    const { workItem } = allocation;
     const project = workItem.project;
-    const values = this.templateValues(allocation);
+    const values = {
+      ...this.templateValues(allocation),
+      personEmail: assignee,
+    };
     const operations: PatchOperation[] = [
       {
         op: 'add',
@@ -114,13 +117,6 @@ export class RoadmapAzureTaskService {
         path: '/fields/System.AssignedTo',
         value: assignee,
       });
-    if (settings.fields.description) {
-      operations.push({
-        op: 'add',
-        path: '/fields/System.Description',
-        value: `<p>Создано из Roadmap. Роль: ${escapeHtml(role.name)}, квартал: ${quarterLabel(allocation.quarterKey)}. Оценку и исполнителя меняйте в Roadmap — они перезаписываются при отправке плана. Фактическое время списывайте в Completed Work этой задачи.</p>`,
-      });
-    }
     if (settings.fields.areaPath) {
       const parent = await this.integration.requestJson<AzureWorkItem>(
         `${credentials.organizationUrl}/_apis/wit/workitems/${encodeURIComponent(workItem.externalId)}?fields=System.AreaPath&api-version=${this.apiVersion}`,
@@ -170,7 +166,11 @@ export class RoadmapAzureTaskService {
             (operation) => operation.path === `/fields/${targetField}`,
           )
         )
-          operations.push({ op: 'add', path: `/fields/${targetField}`, value });
+          operations.push({
+            op: 'add',
+            path: `/fields/${targetField}`,
+            value: toAzureValue(targetField, value),
+          });
       }
     }
     return operations;
@@ -261,7 +261,7 @@ export class RoadmapAzureTaskService {
             operations.push({
               op: 'add',
               path: `/fields/${targetField}`,
-              value,
+              value: toAzureValue(targetField, value),
             });
         }
       }
@@ -374,12 +374,9 @@ export class RoadmapAzureTaskService {
   }
 }
 
-function escapeHtml(value: string) {
-  return value.replace(
-    /[&<>"']/g,
-    (char) =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
-        char
-      ]!,
-  );
+/** Description is an HTML field in Azure DevOps; template text is plain, so it is escaped and split into paragraphs. */
+function toAzureValue(field: string, value: string | number | boolean) {
+  return field === 'System.Description' && typeof value === 'string'
+    ? textToHtml(value)
+    : value;
 }

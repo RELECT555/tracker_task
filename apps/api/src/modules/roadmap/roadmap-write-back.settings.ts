@@ -1,7 +1,11 @@
 import {
   migrateWriteBackSettingsV1,
   normalizeSyncSettings,
+  quarterLabel,
+  renderSyncTags,
+  renderSyncTemplate,
   type SyncSettingsV2,
+  type TemplateContext,
   type WriteRule,
 } from '@tracker/shared';
 
@@ -62,51 +66,27 @@ export const DEFAULT_WRITE_BACK_SETTINGS: WriteBackSettings = {
   projectIds: null,
 };
 
-export type WriteBackTemplateValues = {
-  role: string;
-  title: string;
-  quarterKey: string;
-  person: string;
-  id: string;
-};
+export type WriteBackTemplateValues = TemplateContext;
 
-export function quarterLabel(quarterKey: string) {
-  return quarterKey.replace(/^(\d{4})-(Q\d)$/, '$2 $1');
-}
+export { quarterLabel };
 
+/** One renderer for every template: the same tokens work in the title, tags and field values. */
 export function renderWriteBackTemplate(
   template: string,
   values: WriteBackTemplateValues,
 ) {
-  const tokens: Record<string, string> = {
-    role: values.role,
-    title: values.title,
-    quarter: quarterLabel(values.quarterKey),
-    quarterKey: values.quarterKey,
-    person: values.person,
-    id: values.id,
-  };
-  return template
-    .replace(/\{(\w+)\}/g, (match, token: string) => tokens[token] ?? match)
-    .trim();
+  return renderSyncTemplate(template, values);
 }
 
+/** Returns the individual tags; Azure DevOps separates them with ";", which renderSyncTags keeps out of values. */
 export function renderWriteBackTags(
   template: string,
   values: WriteBackTemplateValues,
 ) {
-  // Azure DevOps separates tags with ";", so a semicolon inside a value would split it.
-  const safe = Object.fromEntries(
-    Object.entries(values).map(([key, value]) => [
-      key,
-      value.replace(/;/g, ','),
-    ]),
-  ) as WriteBackTemplateValues;
-  return renderWriteBackTemplate(template, safe)
+  return renderSyncTags(template, values)
     .split(';')
     .map((tag) => tag.trim())
-    .filter(Boolean)
-    .join('; ');
+    .filter(Boolean);
 }
 
 /** Merges stored settings with defaults; `writeBackEnabled: true` from the first version means automatic mode. */

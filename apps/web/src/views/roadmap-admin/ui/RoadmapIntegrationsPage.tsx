@@ -10,19 +10,27 @@ import { AzureConnectionPanel } from './integrations/AzureConnectionPanel';
 import { ConnectionSkeleton, ProjectsOverviewSkeleton } from './integrations/IntegrationSkeletons';
 import { AzureSyncGuide } from './integrations/AzureSyncGuide';
 import { FaqSection } from './integrations/faq';
-import { FieldMappingPanel } from './integrations/FieldMappingPanel';
 import { integrationColors } from './integrations/parts';
 import { SyncProjectsPanel } from './integrations/SyncProjectsPanel';
 import { WebhookPanel } from './integrations/WebhookPanel';
-import { WriteBackSettingsPanel } from './integrations/WriteBackSettingsPanel';
+import { AzureDataPanel } from './integrations/AzureDataPanel';
+import { SendingSettingsPanel } from './integrations/SendingSettingsPanel';
+import { TaskTemplatePanel } from './integrations/TaskTemplatePanel';
 
 const SECTIONS = [
   { id: 'azure-projects', label: 'Проекты' },
-  { id: 'azure-write-back', label: 'Запись в Azure' },
-  { id: 'azure-mapping', label: 'Поля задач' },
+  { id: 'azure-write-back', label: 'Отправка' },
+  { id: 'azure-templates', label: 'Шаблоны задач' },
+  { id: 'azure-data', label: 'Данные из Azure' },
   { id: 'azure-webhook', label: 'Webhook' },
   { id: 'azure-help', label: 'Справка' },
 ] as const;
+
+/** Section ids from before the tabs were reorganised keep working in saved links. */
+const LEGACY_SECTIONS: Record<string, (typeof SECTIONS)[number]['id']> = { 'azure-mapping': 'azure-templates' };
+
+type EditorSection = 'azure-write-back' | 'azure-templates' | 'azure-data';
+const EDITOR_SECTIONS: readonly string[] = ['azure-write-back', 'azure-templates', 'azure-data'] satisfies EditorSection[];
 
 export function RoadmapIntegrationsPage() {
   const settingsQuery = useQuery({
@@ -33,10 +41,10 @@ export function RoadmapIntegrationsPage() {
   const configured = Boolean(settings?.configured);
   const [fragment, setFragment] = useState('');
   const [focusProjects, setFocusProjects] = useState(false);
-  const [visitedEditors, setVisitedEditors] = useState({ writeBack: false, mapping: false });
+  const [visitedEditors, setVisitedEditors] = useState<Record<EditorSection, boolean>>({ 'azure-write-back': false, 'azure-templates': false, 'azure-data': false });
   const section = fragment.startsWith('faq-') ? 'azure-help'
-    : SECTIONS.find(({ id }) => id === fragment)?.id ?? 'azure-projects';
-  const needsOverview = section === 'azure-projects' || section === 'azure-write-back' || section === 'azure-mapping';
+    : SECTIONS.find(({ id }) => id === fragment)?.id ?? LEGACY_SECTIONS[fragment] ?? 'azure-projects';
+  const needsOverview = section === 'azure-projects' || EDITOR_SECTIONS.includes(section);
   const overviewQuery = useQuery({
     queryKey: ['roadmap', 'write-back-overview'],
     queryFn: roadmapApi.writeBackOverview,
@@ -60,11 +68,8 @@ export function RoadmapIntegrationsPage() {
 
   useEffect(() => {
     if (!configured || !overviewReady) return;
-    if (section === 'azure-write-back' && !visitedEditors.writeBack) {
-      setVisitedEditors((visited) => ({ ...visited, writeBack: true }));
-    }
-    if (section === 'azure-mapping' && !visitedEditors.mapping) {
-      setVisitedEditors((visited) => ({ ...visited, mapping: true }));
+    if (EDITOR_SECTIONS.includes(section) && !visitedEditors[section as EditorSection]) {
+      setVisitedEditors((visited) => ({ ...visited, [section]: true }));
     }
   }, [configured, overviewReady, section, visitedEditors]);
 
@@ -107,7 +112,6 @@ export function RoadmapIntegrationsPage() {
 
   const loadingOverview = needsOverview && overviewQuery.isLoading;
   const integrationQueries = [settingsQuery, ...(configured && needsOverview ? [overviewQuery] : [])];
-  const mappingShowsErrors = configured && overviewReady && section === 'azure-mapping';
 
   return (
     <AdminPage className={integrationColors}>
@@ -117,10 +121,10 @@ export function RoadmapIntegrationsPage() {
       />
 
       {settingsQuery.isLoading ? <ConnectionSkeleton /> : null}
-      {!mappingShowsErrors && <QueryErrorNotice
+      <QueryErrorNotice
         title="Не удалось загрузить данные интеграции"
         queries={integrationQueries}
-      />}
+      />
 
       {settings ? (
         <AzureConnectionPanel
@@ -164,11 +168,14 @@ export function RoadmapIntegrationsPage() {
         <div id={section} ref={contentRef} tabIndex={-1} className="scroll-mt-4 space-y-4 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
           {loadingOverview ? <ProjectsOverviewSkeleton /> : null}
           {section === 'azure-projects' && overview ? <SyncProjectsPanel overview={overview} /> : null}
-          {configured && overview && (visitedEditors.writeBack || section === 'azure-write-back') ? (
-            <div hidden={section !== 'azure-write-back'}><WriteBackSettingsPanel settings={settings.writeBack} overview={overview} /></div>
+          {configured && overview && (visitedEditors['azure-write-back'] || section === 'azure-write-back') ? (
+            <div hidden={section !== 'azure-write-back'}><SendingSettingsPanel overview={overview} /></div>
           ) : null}
-          {configured && overview && (visitedEditors.mapping || section === 'azure-mapping') ? (
-            <div hidden={section !== 'azure-mapping'}><FieldMappingPanel overview={overview} queries={mappingShowsErrors ? integrationQueries : undefined} /></div>
+          {configured && overview && (visitedEditors['azure-templates'] || section === 'azure-templates') ? (
+            <div hidden={section !== 'azure-templates'}><TaskTemplatePanel overview={overview} /></div>
+          ) : null}
+          {configured && overview && (visitedEditors['azure-data'] || section === 'azure-data') ? (
+            <div hidden={section !== 'azure-data'}><AzureDataPanel overview={overview} /></div>
           ) : null}
           {section === 'azure-webhook' ? <WebhookPanel webhookConfigured={settings.webhookConfigured} /> : null}
           {section === 'azure-help' ? (
