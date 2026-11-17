@@ -961,8 +961,28 @@ export function RoadmapPage() {
     [plannedItems, quarterIterationPath, summary, createdExternalIds, showAllCards],
   );
   const hiddenByIteration = iteration.filtered && plannedItems.some((item) => ['epic', 'feature'].includes(item.type.toLowerCase()));
-  const epics = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'epic' && iteration.visibleIds.has(item.id)), [plannedItems, iteration]);
-  const features = useMemo(() => plannedItems.filter((item) => item.type.toLowerCase() === 'feature' && iteration.visibleIds.has(item.id)), [plannedItems, iteration]);
+  // In a month only cards with plan or fact in it are listed. Until the month's fact loads, nothing is hidden,
+  // so rows do not flicker away and back. The quarter view keeps every card so unplanned ones can still be planned.
+  // The quarter works the same way when Azure gives no iteration to filter by (with one, the iteration decides what
+  // is listed and unplanned cards of it must stay for planning). «Все карточки» turns it off. A quarter that has
+  // not started has no fact to wait for.
+  const quarterStarted = Date.UTC(quarterSelection.year, (quarterSelection.quarter - 1) * 3, 1) <= Date.now();
+  const quarterFilterAvailable = view === 'roles' && !selectedMonth && !isAllProjects && !iteration.filtered
+    && (demoMode || !quarterStarted || quarterFact !== undefined);
+  const periodActiveIds = selectedMonth
+    ? monthlyFact ? summary?.activeItemIds ?? null : null
+    : quarterFilterAvailable && !showAllCards ? summary?.activeItemIds ?? null : null;
+  const features = useMemo(
+    () => plannedItems.filter((item) => item.type.toLowerCase() === 'feature' && iteration.visibleIds.has(item.id) && (!periodActiveIds || periodActiveIds.has(item.id))),
+    [plannedItems, iteration, periodActiveIds],
+  );
+  // An epic stays when it has activity itself or any of its listed features does.
+  const epics = useMemo(
+    () => plannedItems.filter((item) => item.type.toLowerCase() === 'epic' && iteration.visibleIds.has(item.id)
+      && (!periodActiveIds || periodActiveIds.has(item.id) || features.some((feature) => feature.parentExternalId === item.externalId))),
+    [plannedItems, iteration, periodActiveIds, features],
+  );
+  const hiddenByPeriod = Boolean(periodActiveIds) && plannedItems.some((item) => ['epic', 'feature'].includes(item.type.toLowerCase()));
   const outsideIterationBadge = (item: RoadmapWorkItem, className?: string) => iteration.outsideIds.has(item.id)
     ? <span data-plan-outside-iteration title={item.iterationPath ? `Итерация: ${item.iterationPath}` : 'Итерация не задана'} className={cn('justify-self-start rounded-full bg-amber-500/10 px-2 py-px text-[10.5px] leading-4 whitespace-nowrap text-amber-800 ring-1 ring-inset ring-amber-500/30 dark:text-amber-200', className)}>вне итерации</span>
     : null;
@@ -1549,11 +1569,13 @@ export function RoadmapPage() {
                     {view === 'periods' && focusMode ? <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => expandEverything(!allEpicsExpanded)}>{allEpicsExpanded ? 'Свернуть всё' : 'Развернуть всё'}</Button> : null}
                     {view === 'periods' ? <Button type="button" variant={showUnassignedPeriods ? 'secondary' : 'outline'} size="sm" className="h-8" onClick={() => setShowUnassignedPeriods((value) => !value)}>{showUnassignedPeriods ? 'Скрыть без назначений' : 'Показать без назначений'}</Button> : null}
                     {periodControls}
-                    {iteration.filtered ? <div role="group" aria-label="Итерация" className={switchGroupClass}>
+                    {iteration.filtered || quarterFilterAvailable ? <div role="group" aria-label={iteration.filtered ? 'Итерация' : 'Карточки квартала'} className={switchGroupClass}>
                       <RoadmapToolbarSwitch
                         label="Все карточки"
                         icon={<Layers />}
-                        hint={`Показать и карточки других итераций, у которых нет плана или факта в периоде. Итерация квартала: ${quarterIterationPath}. Карточки вне неё отмечены «вне итерации».`}
+                        hint={iteration.filtered
+                          ? `Показать и карточки других итераций, у которых нет плана или факта в периоде. Итерация квартала: ${quarterIterationPath}. Карточки вне неё отмечены «вне итерации».`
+                          : 'Показать и карточки, у которых нет плана или факта в этом квартале. Выключено — в таблице только карточки с планом или фактом квартала.'}
                         checked={showAllCards}
                         onChange={setShowAllCards}
                       />
@@ -1617,10 +1639,14 @@ export function RoadmapPage() {
 
                 {!epics.length && !features.length ? (
                   <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-                    <p>{hiddenByIteration
-                      ? `В итерации ${quarterIterationPath} пока нет эпиков и фич, и у карточек других итераций нет плана или факта в этом периоде.`
+                    <p>{hiddenByPeriod
+                      ? selectedMonth
+                        ? 'В выбранном месяце нет эпиков и фич с планом или фактом. Выберите «Весь квартал», чтобы увидеть все карточки.'
+                        : 'В этом квартале нет эпиков и фич с планом или фактом. Включите «Все карточки», чтобы увидеть и запланировать остальные.'
+                      : hiddenByIteration
+                      ?`В итерации ${quarterIterationPath} пока нет эпиков и фич, и у карточек других итераций нет плана или факта в этом периоде.`
                       : `В проекте пока нет эпиков или фич.${canImportProject ? ' Загрузите проект из Azure DevOps.' : ''}`}</p>
-                    {canCreateWorkItem ? <Button ref={createEpicTrigger} type="button" variant="outline" size="sm" className="mt-4" aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)}><Plus aria-hidden="true" className="size-4" />Создать эпик</Button> : null}
+                    {canCreateWorkItem && !(hiddenByPeriod && selectedMonth) ?<Button ref={createEpicTrigger} type="button" variant="outline" size="sm" className="mt-4" aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)}><Plus aria-hidden="true" className="size-4" />Создать эпик</Button> : null}
                   </div>
                 ) : (
                   <div className={focusMode ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : fitTable ? 'flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-hidden' : undefined}>
