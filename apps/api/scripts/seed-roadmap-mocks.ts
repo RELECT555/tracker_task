@@ -1,10 +1,18 @@
 import { PrismaClient } from '@prisma/client';
+import { createPrismaAdapter } from '../src/shared/infrastructure/prisma/prisma-adapter';
 
 if (process.env.NODE_ENV === 'production') {
   throw new Error('Roadmap mock data can only be seeded outside production.');
 }
 
-const prisma = new PrismaClient();
+// Prisma 7 не читает .env сам.
+try {
+  process.loadEnvFile('.env');
+} catch {
+  // .env нет — переменные берутся из окружения
+}
+
+const prisma = new PrismaClient({ adapter: createPrismaAdapter() });
 
 const people = [
   { externalId: 'mock:anna-smirnova', name: 'Анна Смирнова', email: 'anna.smirnova@example.test' },

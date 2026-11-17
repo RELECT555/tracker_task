@@ -91,7 +91,7 @@ kubectl apply -k deploy/k8s/overlays/example
 
 ### Миграции
 
-Миграции применяет init-контейнер `migrate` в поде API перед каждым стартом. `prisma migrate deploy` берёт advisory-lock в PostgreSQL, поэтому параллельный запуск безопасен. Если миграция упала, новый под не стартует, а старый продолжает работать. Если у вас GitOps с хуками (Argo CD `PreSync`, Helm hook), init-контейнер можно заменить на Job с тем же образом и командой `prisma migrate deploy --schema /app/prisma/schema.prisma`.
+Миграции применяет init-контейнер `migrate` в поде API перед каждым стартом. `prisma migrate deploy` берёт advisory-lock в PostgreSQL, поэтому параллельный запуск безопасен. Если миграция упала, новый под не стартует, а старый продолжает работать. Если у вас GitOps с хуками (Argo CD `PreSync`, Helm hook), init-контейнер можно заменить на Job с тем же образом (команда по умолчанию уже `prisma migrate deploy`, конфигурация в `prisma.config.ts`, нужна только переменная `DATABASE_URL`).
 
 Откат миграций Prisma не делает: откатывайте приложение на предыдущий образ, а схему меняйте только обратно совместимыми миграциями.
 
@@ -101,7 +101,7 @@ kubectl apply -k deploy/k8s/overlays/example
 
 | Переменная | Где | Обязательна | Описание |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | Secret | да | строка подключения к PostgreSQL, в production `sslmode=require` |
+| `DATABASE_URL` | Secret | да | строка подключения к PostgreSQL. Параметры `schema` и `connection_limit` (размер пула) поддерживаются, `pgbouncer` игнорируется. В production `sslmode=require`: драйвер `pg` трактует его как проверку сертификата (verify-full); если БД использует собственный CA, добавьте `uselibpqcompat=true` или `sslrootcert` |
 | `JWT_SECRET` | Secret | да | подпись JWT, не короче 32 символов, API не стартует с коротким |
 | `AUTH_PROVIDER` | ConfigMap | нет | `local` (по умолчанию) или `entra` |
 | `LOCAL_ADMIN_PASSWORD` | Secret | при `local` | пароль `admin@tracker.local`, не короче 12 символов |
@@ -132,13 +132,13 @@ bash scripts/trivy-scan.sh --images   # плюс сборка и скан трё
 
 - Dockerfile: закреплённые мажорные теги (не `latest`), непривилегированный пользователь, `HEALTHCHECK`, секреты только через BuildKit, `apk upgrade` для патчей ОС, в рантайме нет dev-зависимостей и компилятора;
 - манифесты: `runAsNonRoot`, `readOnlyRootFilesystem`, `allowPrivilegeEscalation: false`, `drop: [ALL]`, `seccompProfile: RuntimeDefault`, requests и limits по CPU и памяти, явный namespace, токен ServiceAccount не монтируется, образы без `latest`;
-- зависимости: в `package-lock.json` обновлены `@nestjs/platform-express`, `body-parser`, `multer`, `proxy-addr` (была критическая), `undici` и `qs` до исправленных версий.
+- зависимости: в `package-lock.json` обновлены `@nestjs/platform-express`, `body-parser`, `multer`, `proxy-addr` (была критическая), `undici` и `qs` до исправленных версий, а также zod 3 → 4 и Prisma 6 → 7 (см. ниже).
 
-### Известные замечания (не закрыты)
+### Обновлённые зависимости
 
 `zod` обновлён до 4.6.7 (схемы в `packages/shared` переведены на zod 4). Для `@vercel/cli-config`, который жёстко закрепляет старый `zod` 4.1.11, в корневом `package.json` стоит `overrides`; из-за этого `npm ls zod` пишет `invalid`, на `npm ci` и сборку это не влияет.
 
-`npm audit --omit=dev` показывает ещё 3 пакета уровня high: `prisma`, `@prisma/config`, `deepmerge-ts` (зацикливание при слиянии рекурсивных объектов). Они попадут в скан образа `api-migrate` (prisma CLI) и репозитория, в образ API не входят. Исправление есть только в Prisma 7+ (мажорное обновление). Варианты: обновить Prisma или принять риск через `.trivyignore`: конфиг читается из файлов репозитория, а не из пользовательского ввода.
+Prisma обновлён до 7.10.1 (клиент работает через драйвер-адаптер `@prisma/adapter-pg`, подключение описано в `apps/api/src/shared/infrastructure/prisma/prisma-adapter.ts`). После этого `npm audit --omit=dev` чист: уровней high и critical не осталось.
 
 Исключения добавляйте в [`.trivyignore`](../.trivyignore) только с причиной, владельцем и сроком пересмотра.
 

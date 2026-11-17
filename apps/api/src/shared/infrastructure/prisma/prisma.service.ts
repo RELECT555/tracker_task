@@ -5,6 +5,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
+import { createPrismaAdapter } from './prisma-adapter';
 
 const CONNECTIVITY_ERROR_CODES = new Set(['P1001', 'P1002', 'P1008', 'P1017']);
 
@@ -23,6 +24,18 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   private readonly logger = new Logger(PrismaService.name);
+
+  constructor() {
+    super({
+      adapter: createPrismaAdapter(undefined, (error) =>
+        // Idle connections dropped by PostgreSQL or a pooler must not crash the process.
+        Logger.warn(
+          `PostgreSQL pool error: ${error.message}`,
+          PrismaService.name,
+        ),
+      ),
+    });
+  }
 
   /** The API starts without a database; Prisma reconnects lazily on the first query. */
   async onModuleInit(): Promise<void> {

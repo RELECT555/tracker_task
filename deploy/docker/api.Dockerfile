@@ -18,7 +18,7 @@ ARG NODE_IMAGE=node:22-alpine
 # ---------------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS base
 WORKDIR /app
-# openssl нужен Prisma-движку; apk upgrade подтягивает патчи ОС, чтобы Trivy не ругался на них.
+# openssl нужен движку миграций Prisma (schema-engine); apk upgrade подтягивает патчи ОС, чтобы Trivy не ругался на них.
 RUN apk upgrade --no-cache && apk add --no-cache openssl
 
 # ---------------------------------------------------------------------------
@@ -37,9 +37,12 @@ FROM deps AS build
 COPY tsconfig.base.json ./
 COPY packages/shared packages/shared
 COPY apps/api apps/api
+# prisma.config.ts требует DATABASE_URL даже для generate (к базе при этом не подключается),
+# поэтому подставляем заглушку только на время этой команды: в образ она не попадает.
 RUN npm run build --workspace=@tracker/shared \
- && npx --no-install prisma generate --schema apps/api/prisma/schema.prisma \
- && npm run build --workspace=@tracker/api
+ && cd apps/api \
+ && DATABASE_URL="postgresql://build:build@localhost:5432/build" npx --no-install prisma generate \
+ && npm run build
 
 # ---------------------------------------------------------------------------
 # Только production-зависимости (без dev, без prisma CLI).
@@ -72,14 +75,17 @@ ENV NODE_ENV=production \
     HOME=/tmp \
     CHECKPOINT_DISABLE=1 \
     PRISMA_HIDE_UPDATE_MESSAGE=1
+# Конфиг и схема лежат рядом с node_modules утилиты: prisma.config.ts импортирует `prisma/config`.
 COPY --from=migrate-tools /opt/prisma /opt/prisma
-COPY apps/api/prisma /app/prisma
+COPY apps/api/prisma /opt/prisma/prisma
+COPY apps/api/prisma.config.ts /opt/prisma/prisma.config.ts
+WORKDIR /opt/prisma
 USER 10001:10001
 # Разовая задача, а не сервис: проверка здоровья не нужна.
 HEALTHCHECK NONE
 ENTRYPOINT ["/opt/prisma/node_modules/.bin/prisma"]
-# DATABASE_URL берётся из окружения.
-CMD ["migrate", "deploy", "--schema", "/app/prisma/schema.prisma"]
+# DATABASE_URL берётся из окружения; схема и миграции — из prisma.config.ts.
+CMD ["migrate", "deploy"]
 
 # ---------------------------------------------------------------------------
 # Целевой образ по умолчанию (должен быть последним в файле).
