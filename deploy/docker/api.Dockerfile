@@ -55,6 +55,11 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
       --workspace=@tracker/api --workspace=@tracker/shared \
  && npm cache clean --force
+# npm ставит prisma CLI и typescript как необязательные peer-зависимости @prisma/client, хотя
+# сервису в рантайме они не нужны (клиент уже сгенерирован). Убираем: легче образ и меньше
+# поверхность для Trivy. Миграции идут отдельным образом (target migrate).
+RUN rm -rf node_modules/prisma node_modules/typescript \
+          node_modules/.bin/prisma node_modules/.bin/tsc node_modules/.bin/tsserver
 # Сгенерированный Prisma Client (на той же ОС/openssl, что и рантайм).
 COPY --from=build /app/node_modules/.prisma node_modules/.prisma
 
