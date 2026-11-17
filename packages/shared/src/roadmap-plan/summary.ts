@@ -1,3 +1,4 @@
+import { roadmapQuarterContains, roadmapQuarterScope, type RoadmapQuarterIterations } from './iteration';
 import { getRoadmapRolePlan, type RoadmapMetricsItem, type RoadmapMetricsRole } from './role-plan';
 
 export interface RoadmapSummaryOptions {
@@ -13,6 +14,12 @@ export interface RoadmapSummaryOptions {
    * as active, so the quarter never shows fewer cards than one of its months. Omitted while it is loading.
    */
   quarterFact?: { workItems: Record<string, number> }[];
+  /**
+   * Quarter view only: the Azure iterations (sprints) that make up the quarter. When given, the role hours written
+   * in Azure count only for cards sitting in them, so a quarter does not repeat the estimates of every card.
+   * Cards elsewhere count through their own assignments and fact. Omit it when Azure has no such iterations.
+   */
+  quarterIterations?: RoadmapQuarterIterations;
   plannedRolesOnly?: boolean;
   /** Roll child epics into their parent epic. Off by default: an epic counts only its own features. */
   includeChildEpics?: boolean;
@@ -97,7 +104,16 @@ export function getRoadmapSummary<Item extends RoadmapMetricsItem, Role extends 
       }),
     };
   });
-  const rolePlan = getRoadmapRolePlan(items, plan.roles, !monthKey, includeChildEpics);
+  // Same condition as the table's iteration filter: with sprints known but no card in any iteration, nothing is scoped.
+  const quarterScope = monthKey ? { paths: [], scoped: false } : roadmapQuarterScope(options.quarterIterations);
+  const quarterPaths = quarterScope.paths;
+  const scopedToIterations = quarterScope.scoped && items.some((item) => isPlanItem(item) && item.iterationPath);
+  const rolePlan = getRoadmapRolePlan(
+    items,
+    plan.roles,
+    monthKey ? false : scopedToIterations ? (item) => roadmapQuarterContains(quarterPaths, item.iterationPath) : true,
+    includeChildEpics,
+  );
   const visibleRoles = plannedRolesOnly
     ? plan.roles.filter((role) => (rolePlan.byProject.get(role.id) ?? 0) > 0)
     : plan.roles;

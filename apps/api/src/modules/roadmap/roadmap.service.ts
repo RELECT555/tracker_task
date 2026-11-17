@@ -27,6 +27,7 @@ import {
   type RoadmapFactItem,
 } from './roadmap-fact-rollup';
 import { RoadmapRolesService } from './roadmap-roles.service';
+import { RoadmapAzureProcessService } from './roadmap-azure-process.service';
 
 /** Reads project plans, portfolio summaries and fact hours. */
 @Injectable()
@@ -37,6 +38,7 @@ export class RoadmapService {
     private readonly importer: RoadmapWorkItemImportService,
     private readonly writeBackAccess: RoadmapWriteBackAccessService,
     private readonly roles: RoadmapRolesService,
+    private readonly azureProcess: RoadmapAzureProcessService,
   ) {}
 
   connectionStatus() {
@@ -72,6 +74,7 @@ export class RoadmapService {
             parentExternalId: true,
             actualHours: true,
             azureCustomFields: true,
+            iterationPath: true,
             allocations: {
               where: monthKey ? undefined : { quarterKey },
               select: {
@@ -128,6 +131,17 @@ export class RoadmapService {
                 ),
               ).catch(() => undefined)
             : undefined;
+        // The quarter's sprints decide which cards carry their Azure estimates, exactly as in the project's own plan.
+        // Without them (or when Azure cannot answer) every card counts, as before.
+        const quarterIterations = monthKey
+          ? undefined
+          : await this.azureProcess
+              .findQuarterIteration(id, quarterKey)
+              .then((found) => ({
+                paths: found.iterationPaths,
+                scoped: found.scoped,
+              }))
+              .catch(() => undefined);
         const summary = getRoadmapSummary(
           {
             workItems: workItems.map((item) => ({
@@ -156,7 +170,7 @@ export class RoadmapService {
               })),
             })),
           },
-          { ...input, monthlyFact, quarterFact },
+          { ...input, monthlyFact, quarterFact, quarterIterations },
         );
         return { id, summary };
       }),

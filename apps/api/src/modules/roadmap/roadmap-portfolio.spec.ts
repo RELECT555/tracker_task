@@ -1,5 +1,6 @@
 import type { PrismaService } from '../../shared/infrastructure/prisma/prisma.service';
 import type { RoadmapRolesService } from './roadmap-roles.service';
+import type { RoadmapAzureProcessService } from './roadmap-azure-process.service';
 import type { RoadmapWriteBackAccessService } from './roadmap-write-back-access.service';
 import type { RoadmapIntegrationService } from './roadmap-integration.service';
 import { RoadmapService } from './roadmap.service';
@@ -49,6 +50,11 @@ function setup(projects: ReturnType<typeof project>[]) {
     { getCompletedWorkChanges } as unknown as RoadmapWorkItemImportService,
     {} as RoadmapWriteBackAccessService,
     {} as RoadmapRolesService,
+    {
+      findQuarterIteration: jest
+        .fn()
+        .mockResolvedValue({ iterationPath: null, iterationPaths: [] }),
+    } as unknown as RoadmapAzureProcessService,
   );
   return { service, findMany, getCompletedWorkChanges };
 }

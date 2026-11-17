@@ -224,13 +224,18 @@ export class RoadmapAzureProcessService {
   }
 
   /**
-   * The quarter's iteration for the plan filter, by the same rule Task write-back uses.
-   * Null when the integration is off or Azure cannot answer: the plan then shows every card.
+   * The quarter's iteration for the plan filter, by the same rule Task write-back uses (`iterationPath`), and
+   * every iteration that makes up the quarter (`iterationPaths`: the named one, else its sprints).
+   * Empty when the integration is off or Azure cannot answer: the plan then shows every card.
    */
   async findQuarterIteration(
     projectId: string,
     quarterKey: string,
-  ): Promise<{ iterationPath: string | null }> {
+  ): Promise<{
+    iterationPath: string | null;
+    iterationPaths: string[];
+    scoped: boolean;
+  }> {
     if (typeof quarterKey !== 'string' || !/^\d{4}-Q[1-4]$/.test(quarterKey)) {
       throw new BadRequestException('Quarter must use YYYY-Qn format');
     }
@@ -241,20 +246,18 @@ export class RoadmapAzureProcessService {
     if (!project) throw new NotFoundException('Roadmap project was not found');
     try {
       if (!(await this.integration.getPublicSettings()).configured)
-        return { iterationPath: null };
+        return { iterationPath: null, iterationPaths: [], scoped: false };
       const credentials = await this.integration.getCredentials();
-      return {
-        iterationPath: await this.quarterIterationPath(
-          project.externalId,
-          quarterKey,
-          credentials,
-        ),
-      };
+      return await this.quarterIterations(
+        project.externalId,
+        quarterKey,
+        credentials,
+      );
     } catch (error) {
       this.logger.warn(
         `Quarter iteration lookup failed for project ${projectId}: ${azureErrorMessage(error)}`,
       );
-      return { iterationPath: null };
+      return { iterationPath: null, iterationPaths: [], scoped: false };
     }
   }
 
@@ -265,13 +268,85 @@ export class RoadmapAzureProcessService {
     credentials: AzureDevOpsCredentials,
     fresh = false,
   ) {
-    const match = /^(\d{4})-Q([1-4])$/.exec(quarterKey);
-    if (!match) return null;
-    const year = Number(match[1]);
-    const quarter = Number(match[2]);
-    const quarterStart = Date.UTC(year, (quarter - 1) * 3, 1);
-    const quarterEnd = Date.UTC(year, quarter * 3, 0);
+    const choice = await this.quarterIterationChoice(
+      projectExternalId,
+      quarterKey,
+      credentials,
+      fresh,
+    );
+    return choice.named ?? choice.spanning;
+  }
 
+  /**
+   * Every sprint that belongs to a `YYYY-Qn` quarter. Teams that plan in monthly or two-week sprints have no
+   * iteration named after the quarter, so a sprint belongs to the quarter its dates fall into (by their midpoint).
+   * A sprint without dates is placed by a year and month in its name ("Sprint 26_10", "2026-10").
+   * Anything longer than a quarter is a container (a year, a release), not a sprint.
+   */
+  async quarterSprintPaths(
+    projectExternalId: string,
+    quarterKey: string,
+    credentials: AzureDevOpsCredentials,
+    fresh = false,
+  ): Promise<string[]> {
+    const match = /^(\d{4})-Q([1-4])$/.exec(quarterKey);
+    if (!match) return [];
+    const nodes = await this.iterationNodes(
+      projectExternalId,
+      credentials,
+      fresh,
+    );
+    return nodes
+      ? sprintNodesOfQuarter(nodes, Number(match[1]), Number(match[2]))
+          .map(workItemIterationPath)
+          .filter((path): path is string => Boolean(path))
+      : [];
+  }
+
+  /**
+   * The iterations that make up a quarter for the plan: the one named after it; otherwise its sprints;
+   * otherwise a single iteration spanning it. `named` and `spanning` are what Task write-back uses.
+   */
+  async quarterIterations(
+    projectExternalId: string,
+    quarterKey: string,
+    credentials: AzureDevOpsCredentials,
+  ) {
+    const choice = await this.quarterIterationChoice(
+      projectExternalId,
+      quarterKey,
+      credentials,
+    );
+    const sprints = await this.quarterSprintPaths(
+      projectExternalId,
+      quarterKey,
+      credentials,
+    );
+    const iterationPaths = choice.named
+      ? [choice.named]
+      : sprints.length
+        ? sprints
+        : choice.spanning
+          ? [choice.spanning]
+          : [];
+    // A project that plans by iteration has cards in other quarters' sprints, so a quarter with none of its own is
+    // empty rather than "unknown": its plan must not fall back to every card's estimate.
+    const nodes = iterationPaths.length
+      ? null
+      : await this.iterationNodes(projectExternalId, credentials, false);
+    return {
+      iterationPath: choice.named ?? choice.spanning,
+      iterationPaths,
+      scoped: iterationPaths.length > 0 || Boolean(nodes && usesIterationScheme(nodes)),
+    };
+  }
+
+  /** The classification tree of a project's iterations, flattened and cached; null when Azure cannot answer. */
+  private async iterationNodes(
+    projectExternalId: string,
+    credentials: AzureDevOpsCredentials,
+    fresh: boolean,
+  ) {
     let cached = this.iterationCache.get(projectExternalId);
     if (fresh || !cached || Date.now() - cached.loadedAt >= CACHE_TTL_MS) {
       const root = await this.integration
@@ -292,6 +367,28 @@ export class RoadmapAzureProcessService {
       node.children?.forEach(visit);
     };
     cached.value.children?.forEach(visit);
+    return nodes;
+  }
+
+  private async quarterIterationChoice(
+    projectExternalId: string,
+    quarterKey: string,
+    credentials: AzureDevOpsCredentials,
+    fresh = false,
+  ): Promise<{ named: string | null; spanning: string | null }> {
+    const match = /^(\d{4})-Q([1-4])$/.exec(quarterKey);
+    if (!match) return { named: null, spanning: null };
+    const year = Number(match[1]);
+    const quarter = Number(match[2]);
+    const quarterStart = Date.UTC(year, (quarter - 1) * 3, 1);
+    const quarterEnd = Date.UTC(year, quarter * 3, 0);
+
+    const nodes = await this.iterationNodes(
+      projectExternalId,
+      credentials,
+      fresh,
+    );
+    if (!nodes) return { named: null, spanning: null };
     const namePattern = new RegExp(
       `(^|\\D)(${year}\\W*Q${quarter}|Q${quarter}\\W*${year})(\\D|$)`,
       'i',
@@ -322,10 +419,71 @@ export class RoadmapAzureProcessService {
           (day(right.attributes!.finishDate!) -
             day(right.attributes!.startDate!)),
       );
-    const node = byName ?? spanning[0];
-    // Classification paths look like "\Project\Iteration\2026\Q4"; work items use "Project\2026\Q4".
-    return node?.path
-      ? node.path.replace(/^\\/, '').replace(/\\Iteration(?=\\|$)/, '')
-      : null;
+    return {
+      named: byName ? workItemIterationPath(byName) : null,
+      spanning: spanning[0] ? workItemIterationPath(spanning[0]) : null,
+    };
   }
+}
+
+/** Classification paths look like "\Project\Iteration\2026\Q4"; work items use "Project\2026\Q4". */
+function workItemIterationPath(node: IterationNode) {
+  return node.path
+    ? node.path.replace(/^\\/, '').replace(/\\Iteration(?=\\|$)/, '')
+    : null;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** A quarter is at most 92 days; anything much longer is a container, not a sprint. */
+const MAX_SPRINT_DAYS = 100;
+/** "Sprint 26_10", "2026-10", "26.10": a year (two or four digits) and a month, never a bare number like "026". */
+const SPRINT_MONTH_NAME = /(?:^|\D)(\d{4}|\d{2})\s*[_.\-/]\s*(0[1-9]|1[0-2])(?:\D|$)/;
+
+/** A year with a quarter ("2026 Q4", "Q4-2026"): the quarter-named scheme `quarterIterationChoice` looks for. */
+const QUARTER_NAME = /(^|\D)(\d{4}\W*Q[1-4]|Q[1-4]\W*\d{4})(\D|$)/i;
+
+/** True when any iteration looks like a quarter or a sprint, i.e. the team plans by iteration. */
+export function usesIterationScheme(nodes: IterationNode[]) {
+  return nodes.some((node) => {
+    if (QUARTER_NAME.test(node.path ?? node.name ?? '')) return true;
+    const start = node.attributes?.startDate
+      ? Date.parse(node.attributes.startDate)
+      : NaN;
+    const finish = node.attributes?.finishDate
+      ? Date.parse(node.attributes.finishDate)
+      : NaN;
+    if (Number.isFinite(start) && Number.isFinite(finish))
+      return finish >= start && finish - start <= MAX_SPRINT_DAYS * DAY_MS;
+    return SPRINT_MONTH_NAME.test(node.name ?? '');
+  });
+}
+
+/** The nodes that are sprints of the given quarter, see `quarterSprintPaths`. */
+export function sprintNodesOfQuarter(
+  nodes: IterationNode[],
+  year: number,
+  quarter: number,
+) {
+  const quarterStart = Date.UTC(year, (quarter - 1) * 3, 1);
+  const quarterEnd = Date.UTC(year, quarter * 3, 1) - 1;
+  return nodes.filter((node) => {
+    const start = node.attributes?.startDate
+      ? Date.parse(node.attributes.startDate)
+      : NaN;
+    const finish = node.attributes?.finishDate
+      ? Date.parse(node.attributes.finishDate)
+      : NaN;
+    if (Number.isFinite(start) && Number.isFinite(finish)) {
+      if (finish < start || finish - start > MAX_SPRINT_DAYS * DAY_MS)
+        return false;
+      const middle = start + (finish - start) / 2;
+      return middle >= quarterStart && middle <= quarterEnd;
+    }
+    const named = SPRINT_MONTH_NAME.exec(node.name ?? '');
+    if (!named) return false;
+    const nameYear = named[1].length === 2 ? 2000 + Number(named[1]) : Number(named[1]);
+    return (
+      nameYear === year && Math.floor((Number(named[2]) - 1) / 3) + 1 === quarter
+    );
+  });
 }

@@ -15,6 +15,8 @@ export interface RoadmapMetricsItem {
   type: string;
   actualHours: number | string | null;
   azureCustomFields: Record<string, unknown> | null;
+  /** Azure DevOps System.IterationPath; decides which quarter an Azure estimate belongs to. */
+  iterationPath?: string | null;
   allocations: RoadmapMetricsAllocation[];
 }
 
@@ -40,8 +42,16 @@ export function azureRoleEstimate(item: RoadmapMetricsItem, role: RoadmapMetrics
  * Uses the same role totals for cells, collapsed epics, the project total and filtering.
  * Without `includeChildEpics` every epic is a root of its own: a parent epic sums only its own features,
  * and a child epic's plan counts once, in that epic and in the project total.
+ *
+ * `includeAzureEstimates` can be a predicate: the role hours written in Azure carry no period, so a quarter view
+ * that knows its sprints counts them only for cards that sit in those sprints.
  */
-export function getRoadmapRolePlan(items: RoadmapMetricsItem[], roles: RoadmapMetricsRole[], includeAzureEstimates = true, includeChildEpics = false) {
+export function getRoadmapRolePlan(
+  items: RoadmapMetricsItem[],
+  roles: RoadmapMetricsRole[],
+  includeAzureEstimates: boolean | ((item: RoadmapMetricsItem) => boolean) = true,
+  includeChildEpics = false,
+) {
   const byItem = new Map<string, RoleHours>();
   const byProject: RoleHours = new Map();
   const byUnattached: RoleHours = new Map();
@@ -99,9 +109,10 @@ export function getRoadmapRolePlan(items: RoadmapMetricsItem[], roles: RoadmapMe
       for (const roleId of explicitRolesByItem.get(child.id) ?? []) explicitRoles.add(roleId);
     }
     const totals: RoleHours = new Map();
+    const useAzure = typeof includeAzureEstimates === 'function' ? includeAzureEstimates(item) : includeAzureEstimates;
     for (const role of roles) {
       const localHours = localHoursByItem.get(item.id)?.get(role.id);
-      const ownEstimate = includeAzureEstimates ? azureRoleEstimate(item, role) : null;
+      const ownEstimate = useAzure ? azureRoleEstimate(item, role) : null;
       // Distinct local assignments are additive. Even an explicit zero replaces
       // the imported estimate and keeps that decision when rolling up ancestors.
       if (localHours !== undefined) totals.set(role.id, localHours + (childTotals.get(role.id) ?? 0));

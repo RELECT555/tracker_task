@@ -340,10 +340,23 @@ function ProjectPlanDetails({
     previousImport.current = syncedAt ?? null;
   }, [client, demoMode, projectId, syncedAt]);
 
+  // The same quarter iterations as the project's own plan, so an expanded project adds up to its row.
+  const iterationQuery = useQuery({
+    queryKey: ['roadmap', 'iteration', projectId, quarterKey],
+    queryFn: ({ signal }) => roadmapApi.quarterIteration(projectId, quarterKey, signal),
+    enabled: Boolean(plan && !monthKey && !demoMode),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const iterationData = iterationQuery.data;
+  const quarterIterations = useMemo(() => {
+    const paths = iterationData?.iterationPaths ?? (iterationData?.iterationPath ? [iterationData.iterationPath] : []);
+    return { paths, scoped: iterationData?.scoped ?? paths.length > 0 };
+  }, [iterationData]);
   const monthlyFact = factQuery.data;
   const summary = useMemo(() => plan ? getRoadmapSummary(plan, {
-    quarterKey, monthKey, monthlyFact, plannedRolesOnly, includeChildEpics,
-  }) : undefined, [plan, quarterKey, monthKey, monthlyFact, plannedRolesOnly, includeChildEpics]);
+    quarterKey, monthKey, monthlyFact, quarterIterations, plannedRolesOnly, includeChildEpics,
+  }) : undefined, [plan, quarterKey, monthKey, monthlyFact, quarterIterations, plannedRolesOnly, includeChildEpics]);
   const messageRow = (content: ReactNode, className = 'px-4 py-3') => <tr className={ROW_CLASS.feature}>
     <td colSpan={columns} className={className}>{content}</td>
   </tr>;

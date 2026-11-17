@@ -330,9 +330,12 @@ const liveRoadmapApi = {
     ),
   plan: (projectId: string, includeChildEpics = false) =>
     apiFetch<RoadmapProjectPlan>(`/roadmap/projects/${projectId}/plan${includeChildEpics ? '?includeChildEpics=1' : ''}`),
-  /** Azure iteration of a `YYYY-Qn` quarter; null means the plan is not filtered by iteration. */
+  /**
+   * Azure iterations of a `YYYY-Qn` quarter: the one named after it, else its sprints (`iterationPaths`).
+   * Empty means the plan is not filtered by iteration.
+   */
   quarterIteration: (projectId: string, quarterKey: string, signal?: AbortSignal) =>
-    apiFetch<{ iterationPath: string | null }>(`/roadmap/projects/${encodeURIComponent(projectId)}/iteration?quarterKey=${encodeURIComponent(quarterKey)}`, { signal }),
+    apiFetch<{ iterationPath: string | null; iterationPaths?: string[]; scoped?: boolean }>(`/roadmap/projects/${encodeURIComponent(projectId)}/iteration?quarterKey=${encodeURIComponent(quarterKey)}`, { signal }),
   createWorkItem: (externalProjectId: string, input: CreateAzureWorkItemInput) =>
     apiFetch<CreatedAzureWorkItem>(`/roadmap/azure-projects/${encodeURIComponent(externalProjectId)}/work-items`, {
       method: 'POST',

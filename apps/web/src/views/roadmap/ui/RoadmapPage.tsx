@@ -909,9 +909,28 @@ export function RoadmapPage() {
     onSettled: refreshAfterAllocationWrite,
   });
   const monthKey = selectedMonth?.monthKey;
+  // The quarter is the Azure iteration named after it or, for teams planning in monthly or two-week sprints, its sprints.
+  // Until they load, or when Azure has none, every card counts and is shown.
+  const quarterIterationQuery = useQuery({
+    queryKey: ['roadmap', 'iteration', roadmapProjectId, currentQuarterKey],
+    queryFn: ({ signal }) => roadmapApi.quarterIteration(roadmapProjectId, currentQuarterKey, signal),
+    enabled: Boolean(plan && !isAllProjects),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const quarterIterationData = quarterIterationQuery.data;
+  const quarterIterationPaths = useMemo(
+    () => quarterIterationData?.iterationPaths ?? (quarterIterationData?.iterationPath ? [quarterIterationData.iterationPath] : []),
+    [quarterIterationData],
+  );
+  // Scoped: the project plans by iteration, so a quarter without any is empty rather than unfiltered.
+  const quarterIterations = useMemo(
+    () => ({ paths: quarterIterationPaths, scoped: quarterIterationData?.scoped ?? quarterIterationPaths.length > 0 }),
+    [quarterIterationPaths, quarterIterationData],
+  );
   const summary = useMemo(() => plan ? getRoadmapSummary(plan, {
-    quarterKey: currentQuarterKey, monthKey, monthlyFact, quarterFact, plannedRolesOnly, includeChildEpics,
-  }) : undefined, [plan, currentQuarterKey, monthKey, monthlyFact, quarterFact, plannedRolesOnly, includeChildEpics]);
+    quarterKey: currentQuarterKey, monthKey, monthlyFact, quarterFact, quarterIterations, plannedRolesOnly, includeChildEpics,
+  }) : undefined, [plan, currentQuarterKey, monthKey, monthlyFact, quarterFact, quarterIterations, plannedRolesOnly, includeChildEpics]);
   const overviewProjects = isAllProjects
     ? azureProjects.filter((project): project is AzureProject & { roadmapId: string } => Boolean(project.imported && project.roadmapId))
     : [];
@@ -943,22 +962,17 @@ export function RoadmapPage() {
     !overviewLoading && !projectsQuery.isError && !overviewProjects.length ? EMPTY_OVERVIEW : undefined
   );
   const plannedItems = useMemo(() => summary?.items ?? [], [summary]);
-  // Rows follow the quarter's Azure iteration. Until it loads, or when Azure has none, every card is shown.
-  const quarterIterationQuery = useQuery({
-    queryKey: ['roadmap', 'iteration', roadmapProjectId, currentQuarterKey],
-    queryFn: ({ signal }) => roadmapApi.quarterIteration(roadmapProjectId, currentQuarterKey, signal),
-    enabled: Boolean(plan && !isAllProjects),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
-  const quarterIterationPath = quarterIterationQuery.data?.iterationPath ?? null;
+  // Short label for messages: the one iteration's path, or the sprints by name.
+  const quarterIterationLabel = quarterIterationPaths.length === 1
+    ? quarterIterationPaths[0]
+    : quarterIterationPaths.map((path) => path.split('\\').pop()).join(', ');
   // Azure files a card created here under its default iteration; it must not vanish from the table it was created in.
   const [createdExternalIds, setCreatedExternalIds] = useState<ReadonlySet<string>>(() => new Set());
   // Lets a planner find cards of other iterations (e.g. work carried over but not moved in Azure) to plan them.
   const [showAllCards, setShowAllCards] = useState(false);
   const iteration = useMemo(
-    () => getRoadmapIterationVisibility(plannedItems, quarterIterationPath, summary?.activeItemIds ?? new Set<string>(), createdExternalIds, showAllCards),
-    [plannedItems, quarterIterationPath, summary, createdExternalIds, showAllCards],
+    () => getRoadmapIterationVisibility(plannedItems, quarterIterations, summary?.activeItemIds ?? new Set<string>(), createdExternalIds, showAllCards),
+    [plannedItems, quarterIterations, summary, createdExternalIds, showAllCards],
   );
   const hiddenByIteration = iteration.filtered && plannedItems.some((item) => ['epic', 'feature'].includes(item.type.toLowerCase()));
   // In a month only cards with plan or fact in it are listed. Until the month's fact loads, nothing is hidden,
@@ -1003,6 +1017,13 @@ export function RoadmapPage() {
   const rolePlan = summary?.rolePlan ?? getRoadmapRolePlan([], []);
   const visibleRoles = summary?.visibleRoles ?? [];
   const totalHours = summary?.planHours ?? 0;
+  // The quarter's plan falls back to the role hours written in Azure DevOps, which carry no quarter or month, so they
+  // repeat in every quarter and are absent from the month view. Say so when they make up (part of) the plan.
+  const localPlanHours = useMemo(
+    () => summary && plan ? Array.from(getRoadmapRolePlan(summary.items, plan.roles, false, includeChildEpics).byProject.values()).reduce((sum, hours) => sum + hours, 0) : 0,
+    [summary, plan, includeChildEpics],
+  );
+  const azureEstimateHours = selectedMonth ? 0 : Math.max(0, Math.round((totalHours - localPlanHours) * 100) / 100);
   const unattachedPlanHours = Array.from(rolePlan.byUnattached.values()).reduce((sum, hours) => sum + hours, 0);
   const factRoots = getRoadmapFactRoots(plannedItems, includeChildEpics);
   const totalActualHours = summary?.actualHours ?? (selectedMonth ? null : 0);
@@ -1575,8 +1596,10 @@ export function RoadmapPage() {
                       <RoadmapToolbarSwitch
                         label="Все карточки"
                         icon={<Layers />}
-                        hint={iteration.filtered
-                          ? `Показать и карточки других итераций, у которых нет плана или факта в периоде. Итерация квартала: ${quarterIterationPath}. Карточки вне неё отмечены «вне итерации».`
+                        hint={iteration.filtered && quarterIterationPaths.length === 0
+                          ? 'Показать и карточки без плана и факта в этом квартале. В Azure нет спринтов этого квартала, поэтому карточек «в итерации» нет.'
+                          : iteration.filtered
+                          ? `Показать и карточки других итераций, у которых нет плана или факта в периоде. ${quarterIterationPaths.length > 1 ? 'Спринты квартала' : 'Итерация квартала'}: ${quarterIterationLabel}. Карточки вне ${quarterIterationPaths.length > 1 ? 'них' : 'неё'} отмечены «вне итерации».`
                           : 'Показать и карточки, у которых нет плана или факта в этом квартале. Выключено — в таблице только карточки с планом или фактом квартала.'}
                         checked={showAllCards}
                         onChange={setShowAllCards}
@@ -1628,8 +1651,22 @@ export function RoadmapPage() {
                   {!demoMode && monthlyFactQuery.isError ? <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => void monthlyFactQuery.refetch()}>Повторить</Button> : null}
                 </div> : null}
 
-                {!demoMode && configured && quarterIterationQuery.isSuccess && quarterIterationPath === null ? <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+                {!demoMode && configured && quarterIterationQuery.isSuccess && !quarterIterations.scoped ? <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
                   <p role="status">Итерация квартала в Azure не найдена — показаны все карточки</p>
+                </div> : null}
+
+                {!demoMode && configured && quarterIterationQuery.isSuccess && quarterIterations.scoped && quarterIterationPaths.length === 0 && !selectedMonth ? <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+                  <p role="status">В Azure нет спринтов этого квартала — в таблице карточки с планом или фактом в нём</p>
+                </div> : null}
+
+                {azureEstimateHours > 0 ? <div data-plan-azure-estimate className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+                  <p role="status">{iteration.filtered
+                    ? localPlanHours > 0
+                      ? `Часть плана (${displayHours(azureEstimateHours)}) — оценки Azure DevOps карточек из ${quarterIterationPaths.length > 1 ? 'спринтов' : 'итерации'} квартала. Назначений на месяцы по ним нет.`
+                      : `План квартала (${displayHours(azureEstimateHours)}) — оценки Azure DevOps карточек из ${quarterIterationPaths.length > 1 ? 'спринтов' : 'итерации'} квартала. Назначений на месяцы нет, поэтому в месяцах пусто.`
+                    : localPlanHours > 0
+                      ? `Часть плана (${displayHours(azureEstimateHours)}) — оценки Azure DevOps без привязки к кварталу. Назначения на месяцы есть только у остальной части.`
+                      : `План квартала (${displayHours(azureEstimateHours)}) — оценки Azure DevOps. Они не привязаны к кварталу, поэтому одинаковы во всех кварталах, а в месяцах пусто: назначений на месяцы нет.`}</p>
                 </div> : null}
 
                 {roles.length > 0 && needsPeopleSync && (configured || (canEditPlan && !selectedMonth)) ? (
@@ -1646,7 +1683,9 @@ export function RoadmapPage() {
                         ? 'В выбранном месяце нет эпиков и фич с планом или фактом. Выберите «Весь квартал», чтобы увидеть все карточки.'
                         : 'В этом квартале нет эпиков и фич с планом или фактом. Включите «Все карточки», чтобы увидеть и запланировать остальные.'
                       : hiddenByIteration
-                      ? `В итерации ${quarterIterationPath} пока нет эпиков и фич, и у карточек других итераций нет плана или факта в этом периоде.`
+                      ? quarterIterationPaths.length === 0
+                        ? 'В Azure нет спринтов этого квартала, и ни у одной карточки нет плана или факта в нём. Включите «Все карточки», чтобы увидеть и запланировать остальные.'
+                        : `В ${quarterIterationPaths.length > 1 ? 'спринтах' : 'итерации'} ${quarterIterationLabel} пока нет эпиков и фич, и у карточек других итераций нет плана или факта в этом периоде.`
                       : `В проекте пока нет эпиков или фич.${canImportProject ? ' Загрузите проект из Azure DevOps.' : ''}`}</p>
                     {canCreateWorkItem && !(hiddenByPeriod && selectedMonth) ? <Button ref={createEpicTrigger} type="button" variant="outline" size="sm" className="mt-4" aria-haspopup="dialog" onClick={(event) => openCreateWorkItem(event.currentTarget)}><Plus aria-hidden="true" className="size-4" />Создать эпик</Button> : null}
                   </div>
