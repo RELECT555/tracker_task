@@ -1,10 +1,19 @@
 import { z } from 'zod';
 
 const tintSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable();
+const FORBIDDEN_COLUMN_IDS = ['__proto__', 'constructor', 'prototype'];
 const columnIdSchema = z.string().min(1).max(160).refine(
-  (value) => !['__proto__', 'constructor', 'prototype'].includes(value),
+  (value) => !FORBIDDEN_COLUMN_IDS.includes(value),
   'Invalid column identifier',
 );
+
+function hasForbiddenKey(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Object.getOwnPropertyNames(value).some((key) => FORBIDDEN_COLUMN_IDS.includes(key))
+  );
+}
 
 /** A complete, versioned snapshot of one user's table appearance across projects. */
 export const roadmapTablePreferencesSchema = z.object({
@@ -30,8 +39,14 @@ export const roadmapTablePreferencesSchema = z.object({
   plannedRolesOnly: z.boolean(),
   /** Added after v1 shipped: off, an epic sums only its own features and child epics count on their own. */
   includeChildEpics: z.boolean().default(false),
-  columnWidths: z.record(columnIdSchema, z.number().finite().min(80).max(2400))
-    .refine((value) => Object.keys(value).length <= 500, 'Too many column widths'),
+  // zod 4 silently drops an own "__proto__" key from records instead of failing, so reject it
+  // on the raw input first: a payload carrying it is malformed, not merely trimmed.
+  columnWidths: z.unknown()
+    .refine((value) => !hasForbiddenKey(value), 'Invalid column identifier')
+    .pipe(
+      z.record(columnIdSchema, z.number().finite().min(80).max(2400))
+        .refine((value) => Object.keys(value).length <= 500, 'Too many column widths'),
+    ),
 }).strict();
 
 export type RoadmapTablePreferences = z.infer<typeof roadmapTablePreferencesSchema>;

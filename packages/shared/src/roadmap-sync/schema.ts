@@ -5,7 +5,7 @@ export const fieldSourceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('template'), template: z.string().max(500) }),
   z.object({ kind: z.literal('roadmap'), value: z.enum(['estimate', 'remaining', 'assignee', 'roleName', 'quarterKey', 'quarterStart', 'quarterEnd', 'iterationPath', 'parentAreaPath']) }),
   z.object({ kind: z.literal('parentField'), field: z.string().min(1).max(255) }),
-  z.object({ kind: z.literal('byRole'), values: z.record(z.union([z.string(), z.number()])), fallback: z.union([z.string(), z.number()]).optional() }),
+  z.object({ kind: z.literal('byRole'), values: z.record(z.string(), z.union([z.string(), z.number()])), fallback: z.union([z.string(), z.number()]).optional() }),
 ]);
 
 export const writeRuleSchema = z.object({
@@ -45,7 +45,8 @@ export const syncSettingsV2Schema = z.object({
   tagsTemplate: z.string().default('Roadmap; Roadmap {quarterKey}; {role}'),
   writeRules: z.array(writeRuleSchema).default([]),
   readRules: z.array(readRuleSchema).default([]),
-  fact: factSourceSchema.default({}),
+  // zod 4: .default() must already be a complete value; .prefault() runs {} through the schema to fill its defaults.
+  fact: factSourceSchema.prefault({}),
   roleFields: z.array(roleFieldLinkSchema).default([]),
   writeFeatureAggregates: z.boolean().default(false),
   conflictPolicy: z.enum(['overwrite', 'skip-field', 'stop']).default('overwrite'),
