@@ -1,0 +1,38 @@
+# Пример overlay для одного стенда. Скопируйте папку (например, overlays/prod) и поправьте значения.
+#
+#   kubectl kustomize deploy/k8s/overlays/example      # посмотреть итоговые манифесты
+#   kubectl apply -k deploy/k8s/overlays/example       # применить
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  # В CI подставляйте тег/дайджест из сборки: `kustomize edit set image ...`.
+  # Дайджест (@sha256:...) надёжнее тега.
+  - name: registry.example.com/tracker/api
+    newName: registry.example.com/tracker/api
+    newTag: "1.0.0"
+  - name: registry.example.com/tracker/api-migrate
+    newName: registry.example.com/tracker/api-migrate
+    newTag: "1.0.0"
+  - name: registry.example.com/tracker/web
+    newName: registry.example.com/tracker/web
+    newTag: "1.0.0"
+patches:
+  - target:
+      kind: ConfigMap
+      name: tracker-api-config
+    patch: |-
+      - op: replace
+        path: /data/CORS_ORIGIN
+        value: "https://roadmap.example.org"
+  - target:
+      kind: Ingress
+      name: tracker
+    patch: |-
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: roadmap.example.org
+      - op: replace
+        path: /spec/rules/0/host
+        value: roadmap.example.org

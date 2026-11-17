@@ -1,0 +1,36 @@
+# Единый конфиг Trivy для репозитория и образов (`trivy --config trivy.yaml ...`).
+# Подхватывается автоматически, если запускать trivy из корня репозитория.
+# Запуск целиком: scripts/trivy-scan.sh. Подробности: docs/deploy.md.
+
+# Любая найденная проблема из списка severity => код возврата 1 (падает пайплайн).
+exit-code: 1
+severity:
+  - HIGH
+  - CRITICAL
+# Уязвимости без доступного исправления не блокируют релиз: чинить там нечего.
+ignore-unfixed: true
+ignorefile: .trivyignore
+
+scan:
+  scanners:
+    - vuln
+    - secret
+    - misconfig
+  skip-dirs:
+    - "**/node_modules"
+    - "**/dist"
+    - output
+    - .playwright-cli
+    - .superpowers
+    - .claude
+    - .cursor
+    - .21st
+    - .impeccable
+    - .vercel
+    - .turbo
+  skip-files:
+    # Локальные файлы окружения (в Git не попадают, в чистом checkout CI их нет).
+    - "**/.env"
+    - "**/.env.local"
+    # Шаблон Secret с заглушками вместо значений.
+    - deploy/k8s/secret.example.yaml

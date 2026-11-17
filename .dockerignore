@@ -1,0 +1,51 @@
+# Контекст сборки образов = корень репозитория. Всё лишнее и секретное остаётся снаружи.
+
+# Секреты и локальные окружения
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.production.example
+!.env.docker.example
+.npmrc.local
+**/.npmrc.local
+
+# Зависимости и результаты сборки (в образе всё ставится и собирается заново)
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/*.tsbuildinfo
+**/coverage
+
+# Git и локальные инструменты
+.git
+.gitignore
+.gitattributes
+.claude
+.cursor
+.21st
+.impeccable
+.superpowers
+.playwright-cli
+.vercel
+.vercelignore
+.idea
+.vscode
+
+# Локальные артефакты и тесты
+output
+playwright-report
+test-results
+**/*.log
+scripts/test-*
+apps/api/test
+
+# Документация и инфраструктура, которым не место в образе
+docs
+deploy/k8s
+native
+*.md
+Dockerfile*
+docker-compose*.yml

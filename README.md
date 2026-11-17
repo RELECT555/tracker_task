@@ -9,6 +9,8 @@
 - `apps/api/prisma` — схема базы данных и миграции
 - `docs/13-roadmap.md` — планирование и синхронизация с Azure DevOps
 - `docs/coder.md` — как поднять и обновить стенд на Coder
+- `docs/deploy.md` — образы, Kubernetes-манифесты, health-эндпоинты и проверка Trivy для DevOps
+- `deploy/` — Dockerfile'ы (`deploy/docker`) и манифесты Kubernetes (`deploy/k8s`)
 
 ## Запуск
 

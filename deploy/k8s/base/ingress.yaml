@@ -1,0 +1,37 @@
+# Один домен на всё: /api/v1 уходит в API, остальное — во фронт.
+# Поэтому фронт собран с VITE_API_URL=/api/v1 и CORS не нужен.
+#
+# ВАЖНО: Azure DevOps шлёт service hooks на POST /api/v1/roadmap/webhooks/azure-devops
+# (авторизация по секретному заголовку), этот путь должен быть доступен из Azure DevOps.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tracker
+  namespace: tracker
+  labels:
+    app.kubernetes.io/name: tracker
+spec:
+  # Класс и аннотации (cert-manager, ограничение размера тела и т.п.) задаются в overlay.
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - tracker.example.com
+      secretName: tracker-tls
+  rules:
+    - host: tracker.example.com
+      http:
+        paths:
+          - path: /api/v1
+            pathType: Prefix
+            backend:
+              service:
+                name: tracker-api
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tracker-web
+                port:
+                  name: http

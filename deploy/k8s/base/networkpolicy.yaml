@@ -1,0 +1,73 @@
+# Сетевая изоляция: по умолчанию в namespace запрещено всё, дальше открываем нужное.
+# Namespace Ingress-контроллера подставьте под свой кластер (по умолчанию ingress-nginx).
+# Пробы kubelet этими политиками не блокируются.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: tracker
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tracker-web-ingress
+  namespace: tracker
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: tracker-web
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tracker-api
+  namespace: tracker
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: tracker-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 3001
+          protocol: TCP
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # PostgreSQL (управляемая БД вне кластера). Сузьте до CIDR вашей БД.
+    - ports:
+        - port: 5432
+          protocol: TCP
+    # Azure DevOps, Microsoft Entra ID (JWKS), LLM-провайдер: исходящий HTTPS.
+    - ports:
+        - port: 443
+          protocol: TCP

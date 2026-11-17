@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tracker-api
+  namespace: tracker
+  labels:
+    app.kubernetes.io/name: tracker-api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tracker-api
+  ports:
+    - name: http
+      port: 3001
+      targetPort: http
+      protocol: TCP

@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: tracker
+resources:
+  - namespace.yaml
+  - serviceaccounts.yaml
+  - configmap.yaml
+  - api-deployment.yaml
+  - api-service.yaml
+  - web-deployment.yaml
+  - web-service.yaml
+  - ingress.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: tracker
+    includeSelectors: false
+# Образы заменяются в overlay (раздел images). Тег 0.0.0 — заглушка, чтобы случайно не выкатить её.
+images:
+  - name: registry.example.com/tracker/api
+  - name: registry.example.com/tracker/api-migrate
+  - name: registry.example.com/tracker/web

@@ -1,0 +1,34 @@
+# Несекретные настройки API. Секреты (пароли, ключи, DATABASE_URL) — в Secret tracker-api-secrets,
+# шаблон: deploy/k8s/secret.example.yaml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tracker-api-config
+  namespace: tracker
+  labels:
+    app.kubernetes.io/name: tracker-api
+data:
+  NODE_ENV: "production"
+  PORT: "3001"
+  # Фронт и API отдаются с одного домена через Ingress, CORS по сути не используется.
+  # Значение — публичный адрес фронта (меняется в overlay).
+  CORS_ORIGIN: "https://tracker.example.com"
+
+  # Способ входа: "local" (локальный админ + свои JWT) или "entra" (Microsoft Entra ID).
+  # Для entra заполните три переменные ниже, LOCAL_ADMIN_PASSWORD тогда не нужен.
+  AUTH_PROVIDER: "local"
+  # ENTRA_TENANT_ID: "00000000-0000-0000-0000-000000000000"
+  # ENTRA_CLIENT_ID: ""
+  # ENTRA_API_AUDIENCE: ""
+  # ENTRA_API_SCOPE: ""
+  JWT_ACCESS_EXPIRES: "15m"
+  JWT_REFRESH_EXPIRES: "7d"
+
+  # Интеграция с Azure DevOps (PAT лежит в Secret). Организацию можно задать и из админки приложения.
+  AZURE_DEVOPS_ORG_URL: ""
+
+  # AI-ассистент (OpenAI-совместимый API). Ключ HRNNG_API_KEY — в Secret.
+  HRNNG_API_URL: ""
+  HRNNG_MODEL: ""
+  AGENT_TOOL_MODE: "native"
+  AGENT_MAX_STEPS: "12"

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tracker
+  labels:
+    app.kubernetes.io/part-of: tracker
+    # Pod Security Standards: все манифесты ниже проходят профиль restricted.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest

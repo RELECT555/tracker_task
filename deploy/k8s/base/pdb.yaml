@@ -1,0 +1,14 @@
+# Не даём drain узлов убрать все реплики веба сразу.
+# Для API PDB не нужен: реплика одна, minAvailable=1 заблокировал бы обслуживание узла.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tracker-web
+  namespace: tracker
+  labels:
+    app.kubernetes.io/name: tracker-web
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tracker-web
