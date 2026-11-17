@@ -36,12 +36,27 @@ export class PrismaService
     }
   }
 
-  async ping(): Promise<boolean> {
+  /**
+   * Readiness check. A hung connection counts as "down" after `timeoutMs`, so the
+   * probe answers 503 instead of keeping the request open until Kubernetes gives up.
+   */
+  async ping(timeoutMs = 3000): Promise<boolean> {
+    let timer: NodeJS.Timeout | undefined;
     try {
-      await this.$queryRaw`SELECT 1`;
+      await Promise.race([
+        this.$queryRaw`SELECT 1`,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('Database ping timed out')),
+            timeoutMs,
+          );
+        }),
+      ]);
       return true;
     } catch {
       return false;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
